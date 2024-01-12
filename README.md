@@ -18,6 +18,8 @@ restore a test db dump:
     psql -U admin -h db -p 5432 < /home/db/dump/schema.sql
 (pass: root)
 
+    exit
+
 execute the code in the api container:
 
     docker exec api python main.py
