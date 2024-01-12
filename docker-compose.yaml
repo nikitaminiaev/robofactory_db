@@ -10,6 +10,9 @@ services:
       - POSTGRES_USER=admin
       - PGHOST=db
     image: postgres:16-alpine
+    volumes:
+      - ./db/dump:/home/db/dump
+      - ./db/storage:/var/lib/postgresql/data:rw
   api:
     container_name: api
     build:
