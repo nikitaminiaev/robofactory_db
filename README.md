@@ -39,5 +39,8 @@ To make a db dump:
 
     docker exec -e PGPASSWORD=root db pg_dump --create -U admin -h db -p 5432 -d robofactory > ./db/dump/schema.sql
 
+to exit the container:
+    
+    exit
 
     
