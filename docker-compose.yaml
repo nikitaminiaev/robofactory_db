@@ -1,0 +1,20 @@
+version: '3.5'
+
+services:
+  db:
+    container_name: db
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_PASSWORD=root
+      - POSTGRES_USER=admin
+      - PGHOST=db
+    image: postgres:16-alpine
+  api:
+    container_name: api
+    build:
+      context: ./docker/api
+      dockerfile: ./Dockerfile
+    volumes:
+        - ./api:/usr/src/api
+    tty: true
