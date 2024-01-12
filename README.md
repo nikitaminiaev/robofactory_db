@@ -8,13 +8,17 @@ Before up container:
 
 	docker-compose up -d
 
-To restore a test db dump:
+check that the containers are running:
+
+    docker ps
+
+restore a test db dump:
 
     docker exec -ti db bash
     psql -U admin -h db -p 5432 < /home/db/dump/schema.sql
 (pass: root)
 
-To execute the code in the api container:
+execute the code in the api container:
 
     docker exec api python main.py
 
@@ -25,22 +29,25 @@ or:
 
 ### other useful commands:
 
-To enter the db container and to postgres terminal:
+enter the db container and to postgres terminal:
 
     docker exec -ti db bash
     psql postgres://admin:root@localhost:5432
     \connect robofactory;
 
-To enter the container with the python:
+enter the container with the python:
 
     docker exec -ti api bash
 
-To make a db dump:
+make a db dump:
 
     docker exec -e PGPASSWORD=root db pg_dump --create -U admin -h db -p 5432 -d robofactory > ./db/dump/schema.sql
 
-to exit the container:
+exit the container:
     
     exit
 
+stop container:
+
+    docker stop api
     
