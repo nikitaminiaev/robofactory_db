@@ -52,4 +52,17 @@ exit the container:
 stop container:
 
     docker stop api
-    
+
+### migrations
+
+create migration
+
+    alembic revision --autogenerate -m "Create parts_cad table"
+
+execute all new migrations:
+
+    alembic upgrade head
+
+roll back migration:
+
+    alembic downgrade -1
