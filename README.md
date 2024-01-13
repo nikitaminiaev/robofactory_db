@@ -54,7 +54,7 @@ stop container:
     docker stop api
 
 ### migrations
-
+all commands execute from the api/database directory   
 create migration
 
     alembic revision --autogenerate -m "Create parts_cad table"
