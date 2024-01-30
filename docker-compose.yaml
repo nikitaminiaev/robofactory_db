@@ -15,9 +15,12 @@ services:
       - ./db/storage:/var/lib/postgresql/data:rw
   api:
     container_name: api
+    ports:
+      - 8000:8000
     build:
       context: ./docker/api
       dockerfile: ./Dockerfile
     volumes:
         - ./api:/usr/src/api
+    command: sh -c "uvicorn main:app --host 0.0.0.0 --reload"
     tty: true

@@ -1,10 +1,31 @@
 from repository.parts_repository import PartRepository
-import sys
+from fastapi import FastAPI
+from pydantic import BaseModel
 
 
-if __name__ == '__main__':
+class Item(BaseModel):
+    name: str
+
+
+app = FastAPI()
+
+
+@app.get("/parts")
+def get_all():
     repo = PartRepository()
-    # r = repo.create_part(sys.argv[1])
-    # r = repo.get_part(sys.argv[1])
-    r = repo.get_all_parts()
-    print(r)
+    return repo.get_all_parts()
+
+@app.get("/part")
+def get_part(name: str):
+    repo = PartRepository()
+    return repo.get_part(name)
+
+@app.post("/part/")
+def create_part(item: Item):
+    repo = PartRepository()
+    return repo.create_part(item.name)
+
+
+@app.get("/")
+def m():
+    return "hello"
