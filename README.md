@@ -1,3 +1,8 @@
+## Clone repo
+
+    git clone https://github.com/nikitaminiaev/robofactory_db.git
+    cd robofactory_db
+
 ## Install
 
 	docker-compose build
