@@ -1,7 +1,8 @@
 from sqlalchemy import ForeignKey, Boolean
 from sqlalchemy import Integer, Column, JSON
-from sqlalchemy.orm import relationship, backref
+from sqlalchemy.orm import relationship, Mapped, mapped_column
 
+from . import BasicObject
 from .base import Base
 
 
@@ -9,8 +10,11 @@ class BoundingContour(Base):
     __tablename__ = "bounding_contours"
 
     id = Column(Integer, primary_key=True)
-    basic_object_id = Column(Integer, ForeignKey('basic_objects.id'), unique=True, nullable=False)
-    basic_object = relationship("BasicObject", backref=backref("bounding_contour", uselist=False))
+
+
+    # Связь с BasicObject (1 к 1)
+    basic_object_id: Mapped[int] = mapped_column(ForeignKey("basic_objects.id"))
+    basic_object: Mapped["BasicObject"] = relationship(back_populates="bounding_contour")
 
     is_assembly = Column(Boolean, nullable=False)
     brep_files = Column(JSON, nullable=True)  # Список BREP файлов или ссылок на них

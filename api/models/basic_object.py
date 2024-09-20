@@ -1,9 +1,16 @@
-from sqlalchemy import DateTime
+from sqlalchemy import DateTime, ForeignKey, Table
 from sqlalchemy import Integer, Column, String, Text, JSON
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, Mapped, mapped_column
 from sqlalchemy.sql import func
+
+from . import BoundingContour
 from .base import Base
 
+parent_child_association = Table(
+    'parent_child_association', Base.metadata,
+    Column('parent_id', Integer, ForeignKey('basic_objects.id'), primary_key=True),
+    Column('child_id', Integer, ForeignKey('basic_objects.id'), primary_key=True)
+)
 
 class BasicObject(Base):
     __tablename__ = "basic_objects"
@@ -16,8 +23,28 @@ class BasicObject(Base):
     role = Column(Text, nullable=True)
     role_description = Column(Text, nullable=True)
 
-    # Связь с InterfaceObject
-    interface_objects = relationship("InterfaceObject", backref="basic_object")
+    # Связь с InterfaceObject (1 ко многим)
+    # interface_objects = relationship("InterfaceObject", backref="basic_object")
+    interface_object_id: Mapped[int] = mapped_column(ForeignKey("interface_objects.id"))
+
+    # Связь с BoundingContour (1 к 1)
+    bounding_contour: Mapped["BoundingContour"] = relationship(back_populates="basic_object")
+
+    # Связь многие ко многим с самим собой
+    children = relationship(
+        "BasicObject",
+        secondary=parent_child_association,
+        primaryjoin=id == parent_child_association.c.parent_id,
+        secondaryjoin=id == parent_child_association.c.child_id,
+        back_populates="parents"
+    )
+    parents = relationship(
+        "BasicObject",
+        secondary=parent_child_association,
+        primaryjoin=id == parent_child_association.c.child_id,
+        secondaryjoin=id == parent_child_association.c.parent_id,
+        back_populates="children"
+    )
 
     created_ts = Column(DateTime(timezone=True), server_default=func.now())
     updated_ts = Column(DateTime(timezone=True), onupdate=func.now())
@@ -27,26 +54,3 @@ class BasicObject(Base):
 
     def __str__(self):
         return f"BasicObject(id={self.id!r}, name={self.name!r}, author={self.author!r})"
-
-
-# class BasicObject(Base):
-#     __tablename__ = 'basic_objects'
-#
-#     id = Column(Integer, primary_key=True)
-#     name = Column(String(255), nullable=False)
-#     author = Column(String(100), nullable=False, default="")  # Автор ставится автоматически в приложении
-#     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-#     explanatory_note = Column(Text, nullable=True)
-#
-#     file_path = Column(String(255), nullable=False)
-#     link_type = Column(String(100), nullable=False)  # Тип ссылки для автоматической обработки
-#
-#     # Связи с другими таблицами
-#     bounding_contours = relationship("BoundingContour", back_populates="basic_object", cascade="all, delete-orphan")
-#     child_objects = relationship("ChildObject", back_populates="parent_object", cascade="all, delete-orphan")
-#     interface_objects = relationship("InterfaceObject", back_populates="parent_object", cascade="all, delete-orphan")
-#     connections = relationship("Connection", back_populates="parent_object", cascade="all, delete-orphan")
-#     file_data = relationship("FileData", back_populates="parent_object", cascade="all, delete-orphan")
-#
-#     def __repr__(self):
-#         return f"BasicObject(id={self.id}, name={self.name})"
