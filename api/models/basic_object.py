@@ -3,7 +3,7 @@ from sqlalchemy import Integer, Column, String, Text, JSON
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from sqlalchemy.sql import func
 
-from . import BoundingContour
+from .bounding_contour import BoundingContour
 from .base import Base
 
 parent_child_association = Table(
@@ -24,11 +24,10 @@ class BasicObject(Base):
     role_description = Column(Text, nullable=True)
 
     # Связь с InterfaceObject (1 ко многим)
-    # interface_objects = relationship("InterfaceObject", backref="basic_object")
     interface_object_id: Mapped[int] = mapped_column(ForeignKey("interface_objects.id"))
 
     # Связь с BoundingContour (1 к 1)
-    bounding_contour: Mapped["BoundingContour"] = relationship(back_populates="basic_object")
+    bounding_contour: Mapped["BoundingContour"] = relationship(back_populates="basic_object", uselist=False)
 
     # Связь многие ко многим с самим собой
     children = relationship(

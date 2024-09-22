@@ -1,9 +1,9 @@
 from typing import List
 
-from sqlalchemy import Column, Integer, Text, JSON
+from sqlalchemy import Column, Integer, Text, JSON, DateTime, func
 from sqlalchemy.orm import relationship, Mapped
 
-from . import BasicObject
+from .basic_object import BasicObject
 from .base import Base
 
 
@@ -14,6 +14,9 @@ class InterfaceObject(Base):
     basic_objects: Mapped[List["BasicObject"]] = relationship()
     coordinates = Column(JSON, nullable=True)  # Координаты XYZ и три угла
     description = Column(Text, nullable=True)
+
+    created_ts = Column(DateTime(timezone=True), server_default=func.now())
+    updated_ts = Column(DateTime(timezone=True), onupdate=func.now())
 
     def __repr__(self) -> str:
         return str(self)

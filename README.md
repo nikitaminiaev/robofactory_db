@@ -74,3 +74,7 @@ execute all new migrations:
 roll back migration:
 
     alembic downgrade -1
+
+### scheme db 
+
+    eralchemy2 -i postgresql://myuser:mypassword@localhost:5432/mydatabase -o db_diagram.png
