@@ -1,10 +1,6 @@
 from sqlalchemy import ForeignKey, Boolean, DateTime, func
 from sqlalchemy import Integer, Column, JSON
 from sqlalchemy.orm import relationship, Mapped, mapped_column
-
-# if 'BasicObject' not in globals():
-        # from .basic_object import BasicObject # круговой импорт
-# from .basic_object import BasicObject
 from .base import Base
 
 

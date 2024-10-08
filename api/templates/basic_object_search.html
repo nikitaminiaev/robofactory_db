@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Search Basic Object</title>
+</head>
+<body>
+    <h1>Search Basic Object</h1>
+    <form action="/basic_object" method="get">
+        <label for="name">Object Name:</label>
+        <input type="text" id="name" name="name" required>
+        <button type="submit">Search</button>
+    </form>
+
+    {% if search_performed %}
+        {% if error_message %}
+            <p style="color: red;">{{ error_message }}</p>
+        {% elif basic_object %}
+            <h2>Search Result:</h2>
+            <p>ID: {{ basic_object.id }}</p>
+            <p>Name: {{ basic_object.name }}</p>
+            <p>Author: {{ basic_object.author }}</p>
+            <p>Description: {{ basic_object.description }}</p>
+            <!-- Add more fields as needed -->
+        {% endif %}
+    {% endif %}
+</body>
+</html>

@@ -1,31 +1,17 @@
-from repository.parts_repository import PartRepository
+
 from fastapi import FastAPI
-from pydantic import BaseModel
-
-
-class Item(BaseModel):
-    name: str
+from fastapi.staticfiles import StaticFiles
+from routes import get_all_basic_objects, get_basic_object, create_basic_object
 
 
 app = FastAPI()
 
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
-@app.get("/parts")
-def get_all():
-    repo = PartRepository()
-    return repo.get_all_parts()
-
-@app.get("/part")
-def get_part(name: str):
-    repo = PartRepository()
-    return repo.get_part(name)
-
-@app.post("/part/")
-def create_part(item: Item):
-    repo = PartRepository()
-    return repo.create_part(item.name)
-
+app.include_router(get_all_basic_objects.router)
+app.include_router(get_basic_object.router)
+app.include_router(create_basic_object.router)
 
 @app.get("/")
-def m():
-    return "hello"
+def root():
+    return {"message": "Welcome to the Basic Object API"}
