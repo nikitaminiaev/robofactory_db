@@ -13,4 +13,4 @@ class BasicObjectCreate(BaseModel):
 
 @router.post("/basic_object/")
 def create_basic_object(item: BasicObjectCreate, repo: BasicObjectRepository = Depends()):
-    return repo.create_basic_object(**item.dict())
+    return repo.create_basic_object(**item.model_dump())
