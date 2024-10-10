@@ -29,3 +29,14 @@ class BoundingContour(Base):
 
     def __str__(self):
         return f"BoundingContour(id={self.id!r}, is_assembly={self.is_assembly!r})"
+
+    def to_dict(self):
+        return {
+            "id": str(self.id),
+            "basic_object_id": str(self.basic_object_id) if self.basic_object_id else None,
+            "is_assembly": self.is_assembly,
+            "brep_files": self.brep_files,
+            "parent_id": str(self.parent_id) if self.parent_id else None,
+            "created_ts": self.created_ts.isoformat() if self.created_ts else None,
+            "updated_ts": self.updated_ts.isoformat() if self.updated_ts else None,
+        }
