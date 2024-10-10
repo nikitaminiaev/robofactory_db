@@ -3,6 +3,7 @@ from repository.basic_repository import BasicObjectRepository
 
 router = APIRouter()
 
+
 @router.get("/basic_objects")
 def get_all_basic_objects(repo: BasicObjectRepository = Depends()):
     basic_objects = repo.get_all_basic_objects()
