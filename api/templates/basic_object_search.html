@@ -4,26 +4,38 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Search Basic Object</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 </head>
 <body>
     <h1>Search Basic Object</h1>
-    <form action="/basic_object" method="get">
+    <form id="searchForm">
         <label for="name">Object Name:</label>
         <input type="text" id="name" name="name" required>
         <button type="submit">Search</button>
     </form>
 
-    {% if search_performed %}
-        {% if error_message %}
-            <p style="color: rgb(94, 10, 10);">{{ error_message }}</p>
-        {% elif basic_object %}
-            <h2>Search Result:</h2>
-            <p>ID: {{ basic_object.id }}</p>
-            <p>Name: {{ basic_object.name }}</p>
-            <p>Author: {{ basic_object.author }}</p>
-            <p>Description: {{ basic_object.description }}</p>
-            <!-- Add more fields as needed -->
-        {% endif %}
-    {% endif %}
+    <div id="result"></div>
+
+    <script>
+    $(document).ready(function() {
+        $('#searchForm').submit(function(e) {
+            e.preventDefault();
+            var name = $('#name').val();
+            $.getJSON('/api/basic_object?name=' + encodeURIComponent(name), function(data) {
+                var resultHtml = '';
+                if (data.error_message) {
+                    resultHtml = '<p style="color: rgb(94, 10, 10);">' + data.error_message + '</p>';
+                } else if (data.basic_object) {
+                    resultHtml = '<h2>Search Result:</h2>' +
+                                 '<p>ID: ' + data.basic_object.id + '</p>' +
+                                 '<p>Name: ' + data.basic_object.name + '</p>' +
+                                 '<p>Author: ' + data.basic_object.author + '</p>' +
+                                 '<p>Description: ' + data.basic_object.description + '</p>';
+                }
+                $('#result').html(resultHtml);
+            });
+        });
+    });
+    </script>
 </body>
 </html>

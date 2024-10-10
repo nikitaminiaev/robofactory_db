@@ -4,41 +4,51 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Basic Object Details</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 </head>
 <body>
     <h1>Basic Object Details</h1>
-    <p>ID: {{ basic_object.id }}</p>
-    <p>Name: {{ basic_object.name }}</p>
-    <p>Author: {{ basic_object.author }}</p>
-    <p>Description: {{ basic_object.description }}</p>
-    <p>Coordinates: {{ basic_object.coordinates }}</p>
-    <p>Role: {{ basic_object.role }}</p>
-    <p>Role Description: {{ basic_object.role_description }}</p>
-    <p>Created: {{ basic_object.created_ts }}</p>
-    <p>Updated: {{ basic_object.updated_ts }}</p>
-    
-    {% if basic_object.bounding_contour is defined %}
-    <h2>Bounding Contour</h2>
-    <p>Is Assembly: {{ basic_object.bounding_contour.is_assembly if basic_object.bounding_contour else 'N/A' }}</p>
-    <p>BREP Files: {{ basic_object.bounding_contour.brep_files if basic_object.bounding_contour else 'N/A' }}</p>
-    {% endif %}
+    <div id="objectDetails"></div>
 
-    {% if basic_object.children is defined and basic_object.children %}
-    <h2>Children</h2>
-    <ul>
-    {% for child in basic_object.children %}
-        <li><a href="/basic_object/{{ child.id }}">{{ child.name }}</a></li>
-    {% endfor %}
-    </ul>
-    {% endif %}
+    <script>
+    $(document).ready(function() {
+        var id = window.location.pathname.split('/').pop();
+        $.getJSON('/api/basic_object/' + id, function(data) {
+            var detailsHtml = '<p>ID: ' + data.id + '</p>' +
+                              '<p>Name: ' + data.name + '</p>' +
+                              '<p>Author: ' + data.author + '</p>' +
+                              '<p>Description: ' + data.description + '</p>' +
+                              '<p>Coordinates: ' + JSON.stringify(data.coordinates) + '</p>' +
+                              '<p>Role: ' + data.role + '</p>' +
+                              '<p>Role Description: ' + data.role_description + '</p>' +
+                              '<p>Created: ' + data.created_ts + '</p>' +
+                              '<p>Updated: ' + data.updated_ts + '</p>';
 
-    {% if basic_object.parents is defined and basic_object.parents %}
-    <h2>Parents</h2>
-    <ul>
-    {% for parent in basic_object.parents %}
-        <li><a href="/basic_object/{{ parent.id }}">{{ parent.name }}</a></li>
-    {% endfor %}
-    </ul>
-    {% endif %}
+            if (data.bounding_contour) {
+                detailsHtml += '<h2>Bounding Contour</h2>' +
+                               '<p>Is Assembly: ' + data.bounding_contour.is_assembly + '</p>' +
+                               '<p>BREP Files: ' + data.bounding_contour.brep_files + '</p>';
+            }
+
+            if (data.children && data.children.length > 0) {
+                detailsHtml += '<h2>Children</h2><ul>';
+                data.children.forEach(function(child) {
+                    detailsHtml += '<li><a href="/basic_object/' + child + '">' + child + '</a></li>';
+                });
+                detailsHtml += '</ul>';
+            }
+
+            if (data.parents && data.parents.length > 0) {
+                detailsHtml += '<h2>Parents</h2><ul>';
+                data.parents.forEach(function(parent) {
+                    detailsHtml += '<li><a href="/basic_object/' + parent + '">' + parent + '</a></li>';
+                });
+                detailsHtml += '</ul>';
+            }
+
+            $('#objectDetails').html(detailsHtml);
+        });
+    });
+    </script>
 </body>
 </html>

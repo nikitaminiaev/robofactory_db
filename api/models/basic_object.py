@@ -54,3 +54,20 @@ class BasicObject(Base):
 
     def __str__(self):
         return f"BasicObject(id={self.id!r}, name={self.name!r}, author={self.author!r})"
+    
+    def to_dict(self):
+        return {
+            "id": str(self.id),
+            "name": self.name,
+            "author": self.author,
+            "description": self.description,
+            "coordinates": self.coordinates,
+            "role": self.role,
+            "role_description": self.role_description,
+            "interface_object_id": str(self.interface_object_id) if self.interface_object_id else None,
+            "bounding_contour": self.bounding_contour.to_dict() if self.bounding_contour else None,
+            "children": [str(child.id) for child in self.children],
+            "parents": [str(parent.id) for parent in self.parents],
+            "created_ts": self.created_ts.isoformat() if self.created_ts else None,
+            "updated_ts": self.updated_ts.isoformat() if self.updated_ts else None,
+        }
