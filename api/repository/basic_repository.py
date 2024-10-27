@@ -10,8 +10,12 @@ class BasicObjectRepository:
         self.db_session = Db_session()
 
     def get_all_basic_objects(self) -> list[BasicObject]:
-        with self.db_session.session() as db:
-            basic_objects = db.query(BasicObject).all()
+        with (self.db_session.session() as db):
+            basic_objects = db.query(BasicObject).options(
+                joinedload(BasicObject.bounding_contour),
+                joinedload(BasicObject.children),
+                joinedload(BasicObject.parents)
+            ).all()
         return basic_objects
 
     def get_basic_object(self, name: str) -> BasicObject:
