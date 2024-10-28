@@ -1,4 +1,6 @@
 import uuid
+from typing import Optional, List, Dict
+
 from sqlalchemy import DateTime, ForeignKey, Table, UUID
 from sqlalchemy import Column, String, Text, JSON
 from sqlalchemy.orm import relationship, Mapped, mapped_column
@@ -48,6 +50,40 @@ class BasicObject(Base):
 
     created_ts = Column(DateTime(timezone=True), server_default=func.now())
     updated_ts = Column(DateTime(timezone=True), onupdate=func.now())
+
+    @classmethod
+    def create(
+            cls,
+            name: str,
+            author: str,
+            description: Optional[str] = None,
+            coordinates: Optional[Dict] = None,
+            role: Optional[str] = None,
+            role_description: Optional[str] = None,
+            interface_object_id: UUID = None,
+            children: Optional[List["BasicObject"]] = None,
+            parents: Optional[List["BasicObject"]] = None
+    ) -> "BasicObject":
+        """
+        Factory method for creating a BasicObject instance.
+        """
+        instance = cls(
+            name=name,
+            author=author,
+            description=description,
+            coordinates=coordinates,
+            role=role,
+            role_description=role_description,
+            interface_object_id=interface_object_id,
+        )
+
+        # Add children and parents if provided
+        if children:
+            instance.children.extend(children)
+        if parents:
+            instance.parents.extend(parents)
+
+        return instance
 
     def __repr__(self) -> str:
         return str(self)

@@ -1,4 +1,5 @@
 import uuid
+from typing import Optional, Dict
 
 from sqlalchemy import Column, JSON
 from sqlalchemy import ForeignKey, Boolean, DateTime, func, UUID
@@ -23,6 +24,19 @@ class BoundingContour(Base):
 
     created_ts = Column(DateTime(timezone=True), server_default=func.now())
     updated_ts = Column(DateTime(timezone=True), onupdate=func.now())
+
+    @classmethod
+    def create(cls, is_assembly: bool, brep_files: Dict[str, str] = None,
+               basic_object_id: Optional[UUID] = None, parent_id: Optional[UUID] = None) -> "BoundingContour":
+        """
+        Factory method for creating a BoundingContour instance.
+        """
+        return cls(
+            is_assembly=is_assembly,
+            brep_files=brep_files or {},
+            basic_object_id=basic_object_id,
+            parent_id=parent_id
+        )
 
     def __repr__(self) -> str:
         return str(self)
