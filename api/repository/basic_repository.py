@@ -32,7 +32,10 @@ class BasicObjectRepository(BaseRepository):
         with self.db_session.session() as db:
             basic_object = db.query(BasicObject).filter_by(id=id).first()
         return basic_object
-    
+
+    def get_basic_object_for_update(self, id: UUID, db_session) -> BasicObject:
+        return db_session.query(BasicObject).filter_by(id=id).first()
+
     def get_basic_object_with_relations_by_id(self, id: UUID) -> BasicObject:
         with self.db_session.session() as db:
             basic_object = db.query(BasicObject).options(
