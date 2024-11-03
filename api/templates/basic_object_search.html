@@ -1,0 +1,33 @@
+<!-- templates/search.html -->
+{% extends "base.html" %}
+
+{% block title %}Search Basic Object{% endblock %}
+
+{% block content %}
+<h1>Search Basic Object</h1>
+<form id="searchForm">
+    <label for="name">Object Name:</label>
+    <input type="text" id="name" name="name" required>
+    <button type="submit">Search</button>
+</form>
+
+<div id="result"></div>
+
+<script>
+$(document).ready(function() {
+    $('#searchForm').submit(function(e) {
+        e.preventDefault();
+        var name = $('#name').val();
+        $.getJSON('/api/basic_object?name=' + encodeURIComponent(name), function(data) {
+            var resultHtml = '';
+            if (data.error_message) {
+                resultHtml = '<div class="error-message">' + data.error_message + '</div>';
+            } else if (data.basic_object) {
+                resultHtml = '<h2>Search Result:</h2>' + renderObjectDetails(data.basic_object);
+            }
+            $('#result').html(resultHtml);
+        });
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,28 @@
+<!-- templates/object_details.html -->
+{% extends "base.html" %}
+
+{% block title %}Basic Object Details{% endblock %}
+
+{% block content %}
+<h1>Basic Object Details</h1>
+<div id="objectDetails"></div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const id = window.location.pathname.split('/').pop();
+
+    fetch('/api/basic_object/' + id)
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('objectDetails').innerHTML = renderObjectDetails(data);
+        })
+        .catch(error => {
+            console.error('Error loading object details:', error);
+            document.getElementById('objectDetails').innerHTML = `
+                <div class="error-message">
+                    Error loading object details. Please try again later.
+                </div>`;
+        });
+});
+</script>
+{% endblock %}

@@ -1,31 +1,26 @@
-from repository.parts_repository import PartRepository
-from fastapi import FastAPI
-from pydantic import BaseModel
 
-
-class Item(BaseModel):
-    name: str
-
+from fastapi import FastAPI, Request
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from routes import get_all_basic_objects, get_basic_object, create_basic_object
 
 app = FastAPI()
 
+app.mount("/static", StaticFiles(directory="static"), name="static")
+templates = Jinja2Templates(directory="templates")
 
-@app.get("/parts")
-def get_all():
-    repo = PartRepository()
-    return repo.get_all_parts()
-
-@app.get("/part")
-def get_part(name: str):
-    repo = PartRepository()
-    return repo.get_part(name)
-
-@app.post("/part/")
-def create_part(item: Item):
-    repo = PartRepository()
-    return repo.create_part(item.name)
-
+app.include_router(get_all_basic_objects.router)
+app.include_router(get_basic_object.router)
+app.include_router(create_basic_object.router)
 
 @app.get("/")
-def m():
-    return "hello"
+def root():
+    return {"message": "Welcome to the Basic Object API"}
+
+@app.get("/basic_object")
+async def root(request: Request):
+    return templates.TemplateResponse("basic_object_search.html", {"request": request})
+
+@app.get("/basic_object/{id}")
+async def basic_object_details(request: Request, id: str):
+    return templates.TemplateResponse("basic_object_details.html", {"request": request, "id": id})

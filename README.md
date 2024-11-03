@@ -58,6 +58,9 @@ stop container:
 
     docker stop api
 
+generating a db diagram:
+    eralchemy2 -i postgresql://admin:root@db:5432/robofactory -o diagram.png --exclude-tables alembic_version
+
 ### migrations
 all commands execute from the api/database directory   
 create migration
@@ -71,3 +74,7 @@ execute all new migrations:
 roll back migration:
 
     alembic downgrade -1
+
+### scheme db 
+
+    eralchemy2 -i postgresql://myuser:mypassword@localhost:5432/mydatabase -o db_diagram.png

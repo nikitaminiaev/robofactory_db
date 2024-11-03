@@ -1,3 +1,4 @@
 from .base import Base
-from .part import Part
-from .part_cad import PartCad
+from .basic_object import BasicObject
+from .bounding_contour import BoundingContour
+from .interface_object import InterfaceObject
