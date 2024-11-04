@@ -14,8 +14,8 @@ app.include_router(get_basic_object.router)
 app.include_router(create_basic_object.router)
 
 @app.get("/")
-def root():
-    return {"message": "Welcome to the Basic Object API"}
+def root(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request})
 
 @app.get("/basic_object")
 async def root(request: Request):
