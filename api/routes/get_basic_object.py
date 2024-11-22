@@ -32,3 +32,12 @@ def get_basic_object_by_id(request: Request, id: UUID, repo: BasicObjectReposito
         raise HTTPException(status_code=404, detail=f"Объект с ID '{id}' не найден")
 
     return JSONResponse(basic_object.to_dict())
+
+@router.get("/api/basic_object/{id}/parent_ids")
+def get_basic_object_by_id(request: Request, id: UUID, repo: BasicObjectRepository = Depends()):
+    basic_object = repo.get_basic_object_with_relations_by_id(id)
+    if not basic_object:
+        raise HTTPException(status_code=404, detail=f"Объект с ID '{id}' не найден")
+    #todo так плохо делать, нужен отдельный метод репо для парентов
+    return JSONResponse(basic_object.to_dict()['parents'])
+
