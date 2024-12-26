@@ -1,2 +1,7 @@
 /db/storage/
 /venv/
+.vscode/
+.idea/*
+api/routes/__pycache__/*
+api/database/alembic/versions/*
+api/repository/__pycache__/*
