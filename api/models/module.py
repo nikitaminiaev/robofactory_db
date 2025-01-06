@@ -9,7 +9,7 @@ from enum import Enum
 
 from .base import Base
 from .bounding_contour import BoundingContour
-from .associations import parent_child_module, module_stream, module_platform
+from .associations import parent_child_module, module_stream, module_platform, module_interface, module_boundary
 
 class ModuleStatus(Enum):
     SKETCH = "эскиз"
@@ -32,7 +32,6 @@ class Module(Base):
     
     # Связи с другими таблицами
     service_id = Column(UUID(as_uuid=True), ForeignKey('services.id'), nullable=True)
-    interface_object_id: Mapped[UUID] = mapped_column(ForeignKey("interface_objects.id"), nullable=True)
     bounding_contour: Mapped["BoundingContour"] = relationship(back_populates="basic_object", uselist=False)
 
     # Связь parent-child с координатами
@@ -60,6 +59,12 @@ class Module(Base):
     platforms = relationship(
         "Platform",
         secondary=module_platform,
+        back_populates="modules"
+    )
+
+    boundaries = relationship(
+        "ModuleBoundary",
+        secondary=module_boundary,
         back_populates="modules"
     )
 
@@ -132,6 +137,15 @@ class Module(Base):
             ],
             "created_ts": self.created_ts.isoformat() if self.created_ts else None,
             "updated_ts": self.updated_ts.isoformat() if self.updated_ts else None,
+            "boundaries": [
+                {
+                    "id": str(boundary.id),
+                    "coordinates": boundary.coordinates,
+                    "interface_in": str(boundary.interface_id_in),
+                    "interface_out": str(boundary.interface_id_out),
+                    "stream_id": str(boundary.stream_id)
+                } for boundary in self.boundaries
+            ],
         }
 
     def get_child_coordinates(self, child_id):

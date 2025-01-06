@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from repository.basic_repository import BasicObjectRepository
+from api.repository.module_repository import ModuleRepository
 from typing import Optional, Dict
-from models import BoundingContour, BasicObject
+from models import BoundingContour, Module
 
 router = APIRouter()
 
@@ -22,7 +22,7 @@ class BasicObjectCreate(BaseModel):
 @router.post("/api/basic_object/")
 def create_basic_object(
         item: BasicObjectCreate,
-        basic_repo: BasicObjectRepository = Depends()
+        basic_repo: ModuleRepository = Depends()
 ):
     existing_object = basic_repo.get_basic_object(item.name)
     if existing_object:
@@ -50,7 +50,7 @@ def create_basic_object(
 
         # Execute all operations in one session
         with basic_repo.db_session.session() as db:
-            basic_object = BasicObject.create(**basic_object_data)
+            basic_object = Module.create(**basic_object_data)
             # Add basic object
             db.add(basic_object)
             db.flush()  # Get basic object ID
@@ -92,7 +92,7 @@ class BasicObjectUpdate(BaseModel):
 def update_basic_object(
         object_id: str,
         item: BasicObjectUpdate,
-        basic_repo: BasicObjectRepository = Depends()
+        basic_repo: ModuleRepository = Depends()
 ):
     try:
         with basic_repo.db_session.session() as db:

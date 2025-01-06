@@ -1,12 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
-from repository.basic_repository import BasicObjectRepository
+from api.repository.module_repository import ModuleRepository
 
 router = APIRouter()
 
 
 @router.get("/api/basic_objects")
-def get_all_basic_objects(repo: BasicObjectRepository = Depends()):
+def get_all_basic_objects(repo: ModuleRepository = Depends()):
     basic_objects = repo.get_all_basic_objects()
     if not basic_objects:
         raise HTTPException(status_code=404, detail="Объекты не найдены")

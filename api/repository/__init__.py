@@ -1,3 +1,3 @@
 from .base_repository import BaseRepository
-from .basic_repository import BasicObjectRepository
+from .module_repository import ModuleRepository
 from .bounding_contour_repository import BoundingContourRepository
