@@ -6,33 +6,38 @@ from sqlalchemy.orm import relationship, Mapped, mapped_column
 from sqlalchemy.sql import func
 
 from enum import Enum
+from sqlalchemy import Enum as SQLAlchemyEnum
 
 from .base import Base
 from .bounding_contour import BoundingContour
-from .associations import parent_child_module, module_stream, module_platform, module_interface, module_boundary
+from .associations import parent_child_module, module_stream, module_platform, module_boundary
 
-class ModuleStatus(Enum):
+
+class ModuleStatus(str, Enum):
     SKETCH = "эскиз"
     PROTOTYPE = "прототип"
     RELEASE = "релиз"
+
 
 class Module(Base):
     __tablename__ = "modules"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    name = Column(String, unique=True, nullable=False)
+    name = Column(String, unique=False, nullable=False, index=True)
     abbreviation = Column(String, nullable=True)
     author = Column(String, nullable=False, server_default=func.user())
     description = Column(Text, nullable=True)  # Пояснительная записка
     ttx = Column(Text, nullable=True)
     version = Column(String, nullable=True)
     implementation = Column(String, nullable=True)  # Исполнение
-    status = Column(Enum(ModuleStatus), nullable=False)
+    status = Column(SQLAlchemyEnum(ModuleStatus), nullable=False)
     is_lts = Column(Boolean, default=False)
-    
+
     # Связи с другими таблицами
     service_id = Column(UUID(as_uuid=True), ForeignKey('services.id'), nullable=True)
-    bounding_contour: Mapped["BoundingContour"] = relationship(back_populates="basic_object", uselist=False)
+    service: Mapped["Service"] = relationship(back_populates="modules")
+    interface_object_id: Mapped[UUID] = mapped_column(ForeignKey("interface_objects.id"), nullable=True)
+    bounding_contour: Mapped["BoundingContour"] = relationship(back_populates="module", uselist=False)
 
     # Связь parent-child с координатами
     children = relationship(
@@ -55,11 +60,10 @@ class Module(Base):
         secondary=module_stream,
         back_populates="modules"
     )
-    
+
     platforms = relationship(
         "Platform",
         secondary=module_platform,
-        back_populates="modules"
     )
 
     boundaries = relationship(
@@ -77,12 +81,12 @@ class Module(Base):
             name: str,
             author: str,
             description: Optional[str] = None,
-            coordinates: Optional[Dict] = None,
             role: Optional[str] = None,
             role_description: Optional[str] = None,
             interface_object_id: UUID = None,
             children: Optional[List["Module"]] = None,
-            parents: Optional[List["Module"]] = None
+            parents: Optional[List["Module"]] = None,
+            status: ModuleStatus = ModuleStatus.SKETCH
     ) -> "Module":
         """
         Factory method for creating a Module instance.
@@ -91,10 +95,8 @@ class Module(Base):
             name=name,
             author=author,
             description=description,
-            coordinates=coordinates,
-            role=role,
-            role_description=role_description,
             interface_object_id=interface_object_id,
+            status=status,
         )
 
         # Add children and parents if provided
@@ -110,7 +112,7 @@ class Module(Base):
 
     def __str__(self):
         return f"Module(id={self.id!r}, name={self.name!r}, author={self.author!r})"
-    
+
     def to_dict(self):
         return {
             "id": str(self.id),
@@ -123,18 +125,8 @@ class Module(Base):
             "implementation": self.implementation,
             "status": self.status.value if self.status else None,
             "is_lts": self.is_lts,
-            "children": [
-                {
-                    "id": str(child.id),
-                    "coordinates": self.get_child_coordinates(child.id)
-                } for child in self.children
-            ],
-            "parents": [
-                {
-                    "id": str(parent.id),
-                    "coordinates": self.get_parent_coordinates(parent.id)
-                } for parent in self.parents
-            ],
+            "children": [{"id": str(child.id)} for child in self.children],
+            "parents": [{"id": str(parent.id)} for parent in self.parents],
             "created_ts": self.created_ts.isoformat() if self.created_ts else None,
             "updated_ts": self.updated_ts.isoformat() if self.updated_ts else None,
             "boundaries": [
@@ -147,19 +139,3 @@ class Module(Base):
                 } for boundary in self.boundaries
             ],
         }
-
-    def get_child_coordinates(self, child_id):
-        """Получить координаты для конкретного дочернего модуля"""
-        result = db.session.query(parent_child_module.c.coordinates).filter(
-            parent_child_module.c.parent_id == self.id,
-            parent_child_module.c.child_id == child_id
-        ).first()
-        return result[0] if result else None
-
-    def get_parent_coordinates(self, parent_id):
-        """Получить координаты для конкретного родительского модуля"""
-        result = db.session.query(parent_child_module.c.coordinates).filter(
-            parent_child_module.c.child_id == self.id,
-            parent_child_module.c.parent_id == parent_id
-        ).first()
-        return result[0] if result else None

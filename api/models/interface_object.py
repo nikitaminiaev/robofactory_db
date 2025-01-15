@@ -1,5 +1,5 @@
 import uuid
-from typing import List
+# from typing import List
 
 from sqlalchemy import Column, Text, JSON, DateTime, func, UUID
 # from sqlalchemy.orm import relationship, Mapped
@@ -12,7 +12,7 @@ class InterfaceObject(Base):
     __tablename__ = "interface_objects"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    # basic_objects: Mapped[List["Module"]] = relationship()
+
     coordinates = Column(JSON, nullable=True)  # Координаты XYZ и три угла
     description = Column(Text, nullable=True)
     ttx = Column(Text, nullable=True)

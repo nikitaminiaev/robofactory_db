@@ -3,7 +3,7 @@ from typing import List
 
 from fastapi import APIRouter, Depends, Request, HTTPException
 from fastapi.responses import JSONResponse
-from api.repository.module_repository import ModuleRepository
+from repository.module_repository import ModuleRepository
 from schemas import BasicObjectDTO
 
 
@@ -16,7 +16,7 @@ def get_basic_object(request: Request, name: str = None, repo: ModuleRepository 
     basic_object = None
 
     if name:
-        basic_object = repo.get_basic_object_with_relations(name)
+        basic_object = repo.get_module_with_relations(name)
         if not basic_object:
             error_message = f"Объект с именем '{name}' не найден"
 
@@ -32,7 +32,7 @@ def get_basic_object(request: Request, name: str = None, repo: ModuleRepository 
 
 @router.get("/api/basic_object/{id}", response_model=BasicObjectDTO)
 def get_basic_object_by_id(request: Request, id: UUID, repo: ModuleRepository = Depends()):
-    basic_object = repo.get_basic_object_with_relations_by_id(id)
+    basic_object = repo.get_module_with_relations_by_id(id)
     if not basic_object:
         raise HTTPException(status_code=404, detail=f"Объект с ID '{id}' не найден")
 
@@ -41,7 +41,7 @@ def get_basic_object_by_id(request: Request, id: UUID, repo: ModuleRepository = 
 
 @router.get("/api/basic_object/{id}/parent_ids", response_model=List[str])
 def get_basic_object_parents(request: Request, id: UUID, repo: ModuleRepository = Depends()):
-    basic_object = repo.get_basic_object_with_relations_by_id(id)
+    basic_object = repo.get_module_with_relations_by_id(id)
     if not basic_object:
         raise HTTPException(status_code=404, detail=f"Объект с ID '{id}' не найден")
     # todo так плохо делать, нужен отдельный метод репо для парентов

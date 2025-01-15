@@ -13,9 +13,6 @@ class Platform(Base):
     description = Column(Text, nullable=True)
     ttx = Column(Text, nullable=True)
     
-  
-    services = relationship("Service", back_populates="platform")
-
     created_ts = Column(DateTime(timezone=True), server_default=func.now())
     updated_ts = Column(DateTime(timezone=True), onupdate=func.now())
 

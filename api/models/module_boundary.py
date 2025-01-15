@@ -7,6 +7,7 @@ from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.types import JSON
 
 from .base import Base
+from .associations import module_boundary
 
 class ModuleBoundary(Base):
     __tablename__ = "module_boundaries"

@@ -11,8 +11,8 @@ class Service(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     description = Column(Text, nullable=True)
     platform_id = Column(UUID(as_uuid=True), ForeignKey('platforms.id'), nullable=False)
-    
-    platform = relationship("Platform", back_populates="services")
+
+    # platform = relationship("Platform", back_populates="services")
     modules = relationship("Module", back_populates="service")
 
     created_ts = Column(DateTime(timezone=True), server_default=func.now())
