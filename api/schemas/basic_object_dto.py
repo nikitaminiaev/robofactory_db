@@ -17,5 +17,23 @@ class BasicObjectDTO(BaseModel):
     created_ts: Optional[str] = None
     updated_ts: Optional[str] = None
 
+    @classmethod
+    def from_module(cls, module):
+        """
+        Фабричный метод для создания DTO из модели Module
+        """
+        module_dict = module.to_dict()
+        
+        module_dict["children"] = [str(child["id"]) for child in module_dict.get("children", [])]
+        module_dict["parents"] = [str(parent["id"]) for parent in module_dict.get("parents", [])]
+        
+        # Если есть bounding_contour, создаем для него DTO
+        if module.bounding_contour:
+            contour_dict = module.bounding_contour.to_dict()
+            contour_dict["basic_object_id"] = str(module.id) 
+            module_dict["bounding_contour"] = BoundingContourDTO(**contour_dict)
+
+        return cls(**module_dict)
+
     class Config:
         orm_mode = True 

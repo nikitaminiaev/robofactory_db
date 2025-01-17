@@ -35,13 +35,6 @@ def create_basic_object(
         # Логируем входящий объект
         logger.info(f"Получен запрос на создание объекта: {item}")
         
-        existing_object = basic_repo.get_module(item.name)
-        if existing_object:
-            raise HTTPException(
-                status_code=400,
-                detail="Объект с таким именем уже существует"
-            )
-
         basic_object_data = {
             "name": item.name,
             "author": item.author,

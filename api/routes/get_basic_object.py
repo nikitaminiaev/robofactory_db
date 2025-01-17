@@ -21,7 +21,7 @@ def get_basic_object(request: Request, name: str = None, repo: ModuleRepository 
             error_message = f"Объект с именем '{name}' не найден"
 
     if basic_object:
-        return BasicObjectDTO(**basic_object.to_dict())
+        return BasicObjectDTO.from_module(basic_object)
     else:
         return JSONResponse({
             "basic_object": None,
@@ -36,7 +36,7 @@ def get_basic_object_by_id(request: Request, id: UUID, repo: ModuleRepository = 
     if not basic_object:
         raise HTTPException(status_code=404, detail=f"Объект с ID '{id}' не найден")
 
-    return BasicObjectDTO(**basic_object.to_dict())
+    return BasicObjectDTO.from_module(basic_object)
 
 
 @router.get("/api/basic_object/{id}/parent_ids", response_model=List[str])

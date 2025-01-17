@@ -11,7 +11,8 @@ class ModuleRepository(BaseRepository):
             modules = db.query(Module).options(
                 joinedload(Module.bounding_contour),
                 joinedload(Module.children),
-                joinedload(Module.parents)
+                joinedload(Module.parents),
+                joinedload(Module.boundaries)
             ).all()
         return modules
 
@@ -25,7 +26,8 @@ class ModuleRepository(BaseRepository):
             module = db.query(Module).options(
                 joinedload(Module.bounding_contour),
                 joinedload(Module.children),
-                joinedload(Module.parents)
+                joinedload(Module.parents),
+                joinedload(Module.boundaries)
             ).filter_by(name=name).first()
         return module
     
@@ -42,7 +44,8 @@ class ModuleRepository(BaseRepository):
             module = db.query(Module).options(
                 joinedload(Module.bounding_contour),
                 joinedload(Module.children),
-                joinedload(Module.parents)
+                joinedload(Module.parents),
+                joinedload(Module.boundaries)
             ).filter_by(id=id).first()
         return module
 

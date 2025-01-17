@@ -81,8 +81,6 @@ class Module(Base):
             name: str,
             author: str,
             description: Optional[str] = None,
-            role: Optional[str] = None,
-            role_description: Optional[str] = None,
             interface_object_id: UUID = None,
             children: Optional[List["Module"]] = None,
             parents: Optional[List["Module"]] = None,
