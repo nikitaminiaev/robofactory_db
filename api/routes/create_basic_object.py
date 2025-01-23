@@ -9,8 +9,20 @@ from models.module import ModuleStatus
 
 router = APIRouter()
 
-# Добавляем настройку логгера
+# Настраиваем логгер
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+# Создаем обработчик для вывода в консоль
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)
+
+# Создаем форматтер для логов
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+console_handler.setFormatter(formatter)
+
+# Добавляем обработчик к логгеру
+logger.addHandler(console_handler)
 
 
 class BasicObjectCreate(BaseModel):
@@ -32,9 +44,6 @@ def create_basic_object(
         basic_repo: ModuleRepository = Depends()
 ):
     try:
-        # Логируем входящий объект
-        logger.info(f"Получен запрос на создание объекта: {item}")
-        
         basic_object_data = {
             "name": item.name,
             "author": item.author,
@@ -42,11 +51,11 @@ def create_basic_object(
             "status": item.status if item.status else ModuleStatus.SKETCH
         }
 
-        # Prepare bounding contour data
+        # Prepare bounding contour data - удаляем parent_id из данных контура
         contour_data = {
             "is_assembly": item.is_assembly,
             "brep_files": item.brep_files,
-            "parent_id": item.parent_id,
+            # Удалено: "parent_id": item.parent_id, тут нужно искать родительский контур по bounding_contours.id
         }
 
         # Execute all operations in one session
@@ -54,9 +63,19 @@ def create_basic_object(
             basic_object = Module.create(**basic_object_data)
             db.add(basic_object)
             db.flush()  # Получаем ID созданного объекта
+            # Логируем parent_id и coordinates для отладки
+            logger.info(f"parent_id: {item.parent_id}, coordinates: {item.coordinates}")
 
-            # Если есть parent_id и coordinates, создаем связь в parent_child_module
+            # Если есть parent_id и coordinates, проверяем существование родителя и создаем связь
             if item.parent_id and item.coordinates:
+                # Проверяем существование родительского модуля
+                parent_module = db.query(Module).filter(Module.id == item.parent_id).first()
+                if not parent_module:
+                    raise HTTPException(
+                        status_code=404,
+                        detail=f"Родительский модуль с ID {item.parent_id} не найден"
+                    )
+                
                 parent_child = parent_child_module.insert().values(
                     parent_id=item.parent_id,
                     child_id=basic_object.id,

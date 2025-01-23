@@ -12,7 +12,9 @@ class ModuleRepository(BaseRepository):
                 joinedload(Module.bounding_contour),
                 joinedload(Module.children),
                 joinedload(Module.parents),
-                joinedload(Module.boundaries)
+                joinedload(Module.boundaries),
+                joinedload(Module.streams),
+                joinedload(Module.platforms)
             ).all()
         return modules
 
@@ -27,7 +29,9 @@ class ModuleRepository(BaseRepository):
                 joinedload(Module.bounding_contour),
                 joinedload(Module.children),
                 joinedload(Module.parents),
-                joinedload(Module.boundaries)
+                joinedload(Module.boundaries),
+                joinedload(Module.streams),
+                joinedload(Module.platforms)
             ).filter_by(name=name).first()
         return module
     
@@ -45,7 +49,9 @@ class ModuleRepository(BaseRepository):
                 joinedload(Module.bounding_contour),
                 joinedload(Module.children),
                 joinedload(Module.parents),
-                joinedload(Module.boundaries)
+                joinedload(Module.boundaries),
+                joinedload(Module.streams),
+                joinedload(Module.platforms)
             ).filter_by(id=id).first()
         return module
 

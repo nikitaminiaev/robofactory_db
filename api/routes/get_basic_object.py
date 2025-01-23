@@ -44,6 +44,7 @@ def get_basic_object_parents(request: Request, id: UUID, repo: ModuleRepository 
     basic_object = repo.get_module_with_relations_by_id(id)
     if not basic_object:
         raise HTTPException(status_code=404, detail=f"Объект с ID '{id}' не найден")
-    # todo так плохо делать, нужен отдельный метод репо для парентов
-    return basic_object.to_dict()['parents']
+    
+    # Возвращаем список строковых ID родительских объектов
+    return [str(parent.id) for parent in basic_object.parents]
 
