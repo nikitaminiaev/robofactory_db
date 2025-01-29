@@ -1,5 +1,7 @@
-from sqlalchemy import Column, ForeignKey, Table, UUID, JSON, String, Text
+from sqlalchemy import Column, ForeignKey, Table, UUID, JSON, String, Text, DateTime
+from sqlalchemy.sql import func
 from .base import Base
+from .module_role import ModuleRole
 
 # Связь родитель-потомок для модулей с координатами
 parent_child_module = Table(
@@ -7,8 +9,7 @@ parent_child_module = Table(
     Column('parent_id', UUID(as_uuid=True), ForeignKey('modules.id'), primary_key=True),
     Column('child_id', UUID(as_uuid=True), ForeignKey('modules.id'), primary_key=True),
     Column('coordinates', JSON, nullable=True),  # Координаты XYZ и три угла
-    Column('child_role', String, nullable=True),
-    Column('child_role_description', Text, nullable=True),
+    Column('role_id', UUID(as_uuid=True), ForeignKey('module_roles.id'), nullable=True),
 )
 
 # Связь модулей и потоков

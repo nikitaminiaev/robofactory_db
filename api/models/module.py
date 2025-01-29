@@ -24,7 +24,7 @@ class Module(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(String, unique=False, nullable=False, index=True)
-    abbreviation = Column(String, nullable=True)
+    abbreviation = Column(String, nullable=True)  # Сокращение
     author = Column(String, nullable=False, server_default=func.user())
     description = Column(Text, nullable=True)  # Пояснительная записка
     ttx = Column(Text, nullable=True)

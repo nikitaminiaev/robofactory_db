@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from repository.module_repository import ModuleRepository
+from repository.role_repository import RoleRepository
 from typing import Optional, Dict
 from models import BoundingContour, Module
 import logging
@@ -41,7 +42,8 @@ class BasicObjectCreate(BaseModel):
 @router.post("/api/basic_object/")
 def create_basic_object(
         item: BasicObjectCreate,
-        basic_repo: ModuleRepository = Depends()
+        basic_repo: ModuleRepository = Depends(),
+        role_repo: RoleRepository = Depends()
 ):
     try:
         basic_object_data = {
@@ -51,7 +53,7 @@ def create_basic_object(
             "status": item.status if item.status else ModuleStatus.SKETCH
         }
 
-        # Prepare bounding contour data - удаляем parent_id из данных контура
+        # Prepare bounding contour data
         contour_data = {
             "is_assembly": item.is_assembly,
             "brep_files": item.brep_files,
@@ -62,8 +64,7 @@ def create_basic_object(
         with basic_repo.db_session.session() as db:
             basic_object = Module.create(**basic_object_data)
             db.add(basic_object)
-            db.flush()  # Получаем ID созданного объекта
-            # Логируем parent_id и coordinates для отладки
+            db.flush()
             logger.info(f"parent_id: {item.parent_id}, coordinates: {item.coordinates}")
 
             # Если есть parent_id и coordinates, проверяем существование родителя и создаем связь
@@ -76,12 +77,17 @@ def create_basic_object(
                         detail=f"Родительский модуль с ID {item.parent_id} не найден"
                     )
                 
+                # Получаем или создаем роль
+                role_id = None
+                if item.role:
+                    role = role_repo.get_or_create_role(db, item.role, item.role_description)
+                    role_id = role.id
+
                 parent_child = parent_child_module.insert().values(
                     parent_id=item.parent_id,
                     child_id=basic_object.id,
                     coordinates=item.coordinates,
-                    child_role=item.role,
-                    child_role_description=item.role_description
+                    role_id=role_id
                 )
                 db.execute(parent_child)
 
@@ -92,7 +98,6 @@ def create_basic_object(
             contour.basic_object_id = basic_object.id
             db.add(contour)
 
-            # Commit all changes
             db.commit()
             db.refresh(basic_object)
 
@@ -124,7 +129,8 @@ class BasicObjectUpdate(BaseModel):
 def update_basic_object(
         object_id: str,
         item: BasicObjectUpdate,
-        basic_repo: ModuleRepository = Depends()
+        basic_repo: ModuleRepository = Depends(),
+        role_repo: RoleRepository = Depends()
 ):
     try:
         with basic_repo.db_session.session() as db:
@@ -138,7 +144,7 @@ def update_basic_object(
             update_data = item.dict(exclude_unset=True)
 
             # Обновляем связь в parent_child_module если есть parent_id или coordinates
-            if "parent_id" in update_data or "coordinates" in update_data:
+            if "parent_id" in update_data or "coordinates" in update_data or "role" in update_data:
                 # Получаем текущие данные
                 current_relation = db.query(parent_child_module).filter(
                     parent_child_module.c.child_id == object_id
@@ -149,18 +155,26 @@ def update_basic_object(
                 new_role = update_data.get("role")
                 new_role_description = update_data.get("role_description")
 
+                # Обрабатываем роль
+                role_id = None
+                if new_role:
+                    role = role_repo.get_or_create_role(db, new_role, new_role_description)
+                    role_id = role.id
+                    if role.description != new_role_description:
+                        role.description = new_role_description
+                        db.commit()
+                        db.refresh(role)
+
                 if current_relation:    
                     # Обновляем существующую запись
-                    if new_parent_id or new_coordinates:
+                    if new_parent_id or new_coordinates or role_id:
                         update_values = {}
                         if new_parent_id:
                             update_values["parent_id"] = new_parent_id
                         if new_coordinates:
                             update_values["coordinates"] = new_coordinates
-                        if new_role:
-                            update_values["child_role"] = new_role
-                        if new_role_description:
-                            update_values["child_role_description"] = new_role_description
+                        if role_id:
+                            update_values["role_id"] = role_id
                         db.execute(
                             parent_child_module.update()
                             .where(parent_child_module.c.child_id == object_id)
@@ -173,8 +187,7 @@ def update_basic_object(
                             parent_id=new_parent_id,
                             child_id=object_id,
                             coordinates=new_coordinates,
-                            child_role=new_role,
-                            child_role_description=new_role_description
+                            role_id=role_id
                         )
                     )
 

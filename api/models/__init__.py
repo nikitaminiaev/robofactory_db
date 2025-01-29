@@ -11,4 +11,5 @@ from .associations import module_platform
 from .associations import module_stream
 from .associations import module_boundary
 from .associations import parent_child_module
+from .module_role import ModuleRole
 
