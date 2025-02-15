@@ -57,7 +57,6 @@ def create_basic_object(
         contour_data = {
             "is_assembly": item.is_assembly,
             "brep_files": item.brep_files,
-            # Удалено: "parent_id": item.parent_id, тут нужно искать родительский контур по bounding_contours.id
         }
 
         # Execute all operations in one session

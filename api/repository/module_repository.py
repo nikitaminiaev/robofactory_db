@@ -6,17 +6,29 @@ from models.associations import parent_child_module
 
 
 class ModuleRepository(BaseRepository):
-    def get_all_modules(self) -> list[Module]:
+    def get_modules_with_relations(self, limit: int = 10, offset: int = 0) -> list[Module]:
         with (self.db_session.session() as db):
-            modules = db.query(Module).options(
+            query = db.query(Module).options(
                 joinedload(Module.bounding_contour),
                 joinedload(Module.children),
                 joinedload(Module.parents),
                 joinedload(Module.boundaries),
                 joinedload(Module.streams),
                 joinedload(Module.platforms)
-            ).all()
+            ).order_by(
+                Module.id
+            )
+            
+            query = query.offset(offset)
+            query = query.limit(limit)
+                
+            modules = query.all()
         return modules
+
+    def get_count_of_modules(self) -> int:
+        with (self.db_session.session() as db):
+            count = db.query(Module).count()
+        return count
 
     def get_module(self, name: str) -> Module:
         with self.db_session.session() as db:
