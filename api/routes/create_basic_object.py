@@ -40,7 +40,7 @@ class BasicObjectCreate(BaseModel):
 
 
 @router.post("/api/basic_object/")
-def create_basic_object(
+async def create_basic_object(
         item: BasicObjectCreate,
         basic_repo: ModuleRepository = Depends(),
         role_repo: RoleRepository = Depends()
@@ -125,7 +125,7 @@ class BasicObjectUpdate(BaseModel):
 
 
 @router.patch("/api/basic_object/{object_id}", status_code=200)
-def update_basic_object(
+async def update_basic_object(
         object_id: str,
         item: BasicObjectUpdate,
         basic_repo: ModuleRepository = Depends(),

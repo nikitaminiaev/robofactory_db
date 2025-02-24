@@ -11,7 +11,7 @@ router = APIRouter()
 
 
 @router.get("/api/basic_object", response_model=BasicObjectDTO)
-def get_basic_object(request: Request, name: str = None, repo: ModuleRepository = Depends()):
+async def get_basic_object(request: Request, name: str = None, repo: ModuleRepository = Depends()):
     error_message = None
     basic_object = None
 
@@ -31,7 +31,7 @@ def get_basic_object(request: Request, name: str = None, repo: ModuleRepository 
 
 
 @router.get("/api/basic_object/{id}", response_model=BasicObjectDTO)
-def get_basic_object_by_id(request: Request, id: UUID, repo: ModuleRepository = Depends()):
+async def get_basic_object_by_id(request: Request, id: UUID, repo: ModuleRepository = Depends()):
     basic_object = repo.get_module_with_relations_by_id(id)
     if not basic_object:
         raise HTTPException(status_code=404, detail=f"Объект с ID '{id}' не найден")
@@ -40,7 +40,7 @@ def get_basic_object_by_id(request: Request, id: UUID, repo: ModuleRepository = 
 
 
 @router.get("/api/basic_object/{id}/parent_ids", response_model=List[str])
-def get_basic_object_parents(request: Request, id: UUID, repo: ModuleRepository = Depends()):
+async def get_basic_object_parents(request: Request, id: UUID, repo: ModuleRepository = Depends()):
     basic_object = repo.get_module_with_relations_by_id(id)
     if not basic_object:
         raise HTTPException(status_code=404, detail=f"Объект с ID '{id}' не найден")
