@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+
+{% block title %}WebSocket Test{% endblock %}
+
+{% block content %}
+<h1>WebSocket Test</h1>
+
+<div id="status">Статус: Отключено</div>
+<button id="connect">Подключиться</button>
+<button id="disconnect" disabled>Отключиться</button>
+
+<div style="margin-top: 20px;">
+    <input type="text" id="message" placeholder="Введите сообщение">
+    <button id="send" disabled>Отправить</button>
+</div>
+
+<div style="margin-top: 20px;">
+    <h3>Сообщения:</h3>
+    <div id="messages" style="border: 1px solid #ccc; padding: 10px; height: 200px; overflow-y: auto;"></div>
+</div>
+
+<script>
+    let socket = null;
+    
+    document.getElementById('connect').addEventListener('click', function() {
+        if (socket) {
+            addMessage('Уже подключено');
+            return;
+        }
+        
+        // Создаем WebSocket-соединение
+        socket = new WebSocket('ws://' + window.location.hostname + ':8765');
+        
+        // Обработчики событий WebSocket
+        socket.onopen = function(e) {
+            document.getElementById('status').textContent = 'Статус: Подключено';
+            document.getElementById('connect').disabled = true;
+            document.getElementById('disconnect').disabled = false;
+            document.getElementById('send').disabled = false;
+            addMessage('Соединение установлено');
+        };
+        
+        socket.onmessage = function(event) {
+            try {
+                // Пытаемся распарсить JSON
+                const jsonData = JSON.parse(event.data);
+                
+                // Форматируем JSON для отображения
+                const formattedJson = JSON.stringify(jsonData, null, 2);
+                
+                // Добавляем сообщение с форматированным JSON
+                addMessage('Получено JSON-сообщение:');
+                addJsonMessage(formattedJson);
+                
+                // Если это команда для FreeCad, показываем дополнительную информацию
+                if (jsonData.type === 'freecad_command') {
+                    addMessage('Команда FreeCad: ' + jsonData.python_code);
+                }
+            } catch (e) {
+                // Если это не JSON, отображаем как обычный текст
+                addMessage('Получено: ' + event.data);
+            }
+        };
+        
+        socket.onclose = function(event) {
+            if (event.wasClean) {
+                addMessage(`Соединение закрыто чисто, код=${event.code} причина=${event.reason}`);
+            } else {
+                addMessage('Соединение прервано');
+            }
+            document.getElementById('status').textContent = 'Статус: Отключено';
+            document.getElementById('connect').disabled = false;
+            document.getElementById('disconnect').disabled = true;
+            document.getElementById('send').disabled = true;
+            socket = null;
+        };
+        
+        socket.onerror = function(error) {
+            addMessage('Ошибка: ' + error.message);
+        };
+    });
+    
+    document.getElementById('disconnect').addEventListener('click', function() {
+        if (socket) {
+            socket.close();
+            socket = null;
+        }
+    });
+    
+    document.getElementById('send').addEventListener('click', function() {
+        if (!socket) {
+            addMessage('Нет подключения');
+            return;
+        }
+        
+        const message = document.getElementById('message').value;
+        if (!message) {
+            addMessage('Введите сообщение');
+            return;
+        }
+        
+        socket.send(message);
+        addMessage('Отправлено: ' + message);
+        document.getElementById('message').value = '';
+    });
+    
+    function addMessage(message) {
+        const messagesDiv = document.getElementById('messages');
+        const messageElement = document.createElement('div');
+        messageElement.textContent = new Date().toLocaleTimeString() + ' - ' + message;
+        messagesDiv.appendChild(messageElement);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+    
+    function addJsonMessage(jsonString) {
+        const messagesDiv = document.getElementById('messages');
+        const messageElement = document.createElement('pre');
+        messageElement.style.backgroundColor = '#f0f0f0';
+        messageElement.style.padding = '5px';
+        messageElement.style.borderRadius = '3px';
+        messageElement.style.overflow = 'auto';
+        messageElement.textContent = jsonString;
+        messagesDiv.appendChild(messageElement);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+</script>
+{% endblock %} 

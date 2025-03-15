@@ -7,6 +7,21 @@
 <h1>Basic Object Details</h1>
 <div id="objectDetails"></div>
 
+<style>
+    .load-freecad-btn {
+        margin-left: 10px;
+        padding: 3px 8px;
+        background-color: #4CAF50;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+    .load-freecad-btn:hover {
+        background-color: #45a049;
+    }
+</style>
+
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const id = window.location.pathname.split('/').pop();
@@ -15,6 +30,15 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(response => response.json())
         .then(data => {
             document.getElementById('objectDetails').innerHTML = renderObjectDetails(data);
+            
+            // Добавляем обработчики событий для кнопок загрузки во FreeCad
+            document.querySelectorAll('.load-freecad-btn').forEach(button => {
+                button.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const objectId = this.getAttribute('data-id');
+                    loadObjectToFreeCad(objectId);
+                });
+            });
         })
         .catch(error => {
             console.error('Error loading object details:', error);

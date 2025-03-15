@@ -17,6 +17,7 @@ services:
     container_name: api
     ports:
       - 8000:8000
+      - 8765:8765
     build:
       context: ./docker/api
       dockerfile: ./Dockerfile
