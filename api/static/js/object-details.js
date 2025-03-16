@@ -1,6 +1,6 @@
 function renderObjectDetails(data) {
     let detailsHtml = `<table>
-        <tr><th>ID</th><td>${data.id}</td></tr>
+        <tr><th>ID</th><td>${data.id} <button class="load-freecad-btn" data-id="${data.id}">Load FreeCad</button></td></tr>
         <tr><th>Name</th><td>${data.name}</td></tr>
         <tr><th>Author</th><td>${data.author}</td></tr>
         <tr><th>Description</th><td>${data.description}</td></tr>
@@ -45,36 +45,4 @@ function renderObjectDetails(data) {
     return detailsHtml;
 }
 
-// Функция для загрузки объекта во FreeCad
-function loadObjectToFreeCad(objectId) {
-    fetch(`/api/basic_object/${objectId}/load_freecad`, {
-        method: 'POST'
-    })
-    .then(response => {
-        if (!response.ok) {
-            throw new Error('Ошибка при загрузке объекта во FreeCad');
-        }
-        return response.json();
-    })
-    .then(data => {
-        let message = 'Объект успешно отправлен во FreeCad';
-        
-        // Добавляем информацию о статусе WebSocket-сервера
-        if (data.socket_server_running) {
-            message += '\nWebSocket-сервер запущен';
-            if (data.message_sent) {
-                message += '\nСообщение "hello" успешно отправлено';
-            } else {
-                message += '\nНе удалось отправить сообщение "hello"';
-            }
-        } else {
-            message += '\nWebSocket-сервер не запущен';
-        }
-        
-        alert(message);
-    })
-    .catch(error => {
-        console.error('Ошибка:', error);
-        alert('Произошла ошибка при загрузке объекта во FreeCad');
-    });
-}
+// Примечание: функция loadObjectToFreeCad перенесена в файл freecad-integration.js

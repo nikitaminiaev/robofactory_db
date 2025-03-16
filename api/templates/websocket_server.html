@@ -1,9 +1,9 @@
 {% extends "base.html" %}
 
-{% block title %}WebSocket Test{% endblock %}
+{% block title %}WebSocket Server{% endblock %}
 
 {% block content %}
-<h1>WebSocket Test</h1>
+<h1>WebSocket Server</h1>
 
 <div class="card mb-4">
     <div class="card-header">
@@ -18,76 +18,20 @@
 
 <div class="card mb-4">
     <div class="card-header">
-        <h3>WebSocket соединение</h3>
+        <div class="d-flex justify-content-between align-items-center">
+            <h3>Подключенные клиенты</h3>
+            <button id="refresh-clients" class="btn btn-sm btn-outline-primary">Обновить</button>
+        </div>
     </div>
     <div class="card-body">
-        <div id="connection-status" class="alert alert-secondary">Статус: Отключено</div>
-        <button id="connect" class="btn btn-primary">Подключиться</button>
-        <button id="disconnect" class="btn btn-secondary" disabled>Отключиться</button>
-        
-        <div class="mt-3">
-            <div class="d-flex justify-content-between align-items-center">
-                <h5>Подключенные клиенты</h5>
-                <button id="refresh-clients" class="btn btn-sm btn-outline-primary">Обновить</button>
-            </div>
-            <div id="clients-info" class="alert alert-info mt-2">
-                Нет информации о клиентах
-            </div>
+        <div id="clients-info" class="alert alert-info mt-2">
+            Нет информации о клиентах
         </div>
     </div>
 </div>
 
 <div class="row">
-    <div class="col-md-6">
-        <div class="card mb-4">
-            <div class="card-header">
-                <h3>Отправка сообщений</h3>
-            </div>
-            <div class="card-body">
-                <div class="mb-3">
-                    <label for="message-type" class="form-label">Тип сообщения:</label>
-                    <select id="message-type" class="form-select">
-                        <option value="text">Текстовое сообщение</option>
-                        <option value="json">JSON сообщение</option>
-                        <option value="freecad">FreeCad команда</option>
-                    </select>
-                </div>
-                
-                <div id="text-message-form">
-                    <div class="mb-3">
-                        <label for="text-message" class="form-label">Текстовое сообщение:</label>
-                        <input type="text" id="text-message" class="form-control" placeholder="Введите сообщение">
-                    </div>
-                </div>
-                
-                <div id="json-message-form" style="display: none;">
-                    <div class="mb-3">
-                        <label for="json-message" class="form-label">JSON сообщение:</label>
-                        <textarea id="json-message" class="form-control" rows="5" placeholder='{"key": "value"}'></textarea>
-                    </div>
-                </div>
-                
-                <div id="freecad-message-form" style="display: none;">
-                    <div class="mb-3">
-                        <label for="freecad-code" class="form-label">Python код для FreeCad:</label>
-                        <textarea id="freecad-code" class="form-control" rows="8">import FreeCAD
-import Part
-doc = FreeCAD.newDocument('Example')
-box = Part.makeBox(10, 10, 10)
-cube = doc.addObject('Part::Feature', 'Cube')
-cube.Shape = box
-doc.recompute()
-# Возвращаем результат
-result = {'object_created': cube.Name, 'dimensions': [10, 10, 10]}</textarea>
-                    </div>
-                </div>
-                
-                <button id="send" class="btn btn-primary" disabled>Отправить</button>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-md-6">
+    <div class="col-md-12">
         <div class="card mb-4">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h3>Сообщения</h3>
@@ -101,7 +45,6 @@ result = {'object_created': cube.Name, 'dimensions': [10, 10, 10]}</textarea>
 </div>
 
 <script>
-    let socket = null;
     let serverRunning = false;
     let clientsUpdateInterval = null;
     
@@ -149,11 +92,6 @@ result = {'object_created': cube.Name, 'dimensions': [10, 10, 10]}</textarea>
                 document.getElementById('server-status').className = 'alert alert-warning';
                 document.getElementById('start-server').disabled = false;
                 document.getElementById('stop-server').disabled = true;
-                
-                // Если есть активное соединение, закрываем его
-                if (socket) {
-                    socket.close();
-                }
                 
                 // Останавливаем автоматическое обновление
                 if (clientsUpdateInterval) {
@@ -256,161 +194,6 @@ result = {'object_created': cube.Name, 'dimensions': [10, 10, 10]}</textarea>
             addMessage('Ошибка при проверке статуса сервера: ' + error.message);
         }
     }
-    
-    // Функции для WebSocket соединения
-    document.getElementById('connect').addEventListener('click', function() {
-        if (!serverRunning) {
-            addMessage('Сервер не запущен. Сначала запустите сервер.');
-            return;
-        }
-        
-        if (socket) {
-            addMessage('Уже подключено');
-            return;
-        }
-        
-        // Создаем WebSocket-соединение
-        socket = new WebSocket('ws://' + window.location.hostname + ':8765');
-        
-        // Обработчики событий WebSocket
-        socket.onopen = function(e) {
-            document.getElementById('connection-status').textContent = 'Статус: Подключено';
-            document.getElementById('connection-status').className = 'alert alert-success';
-            document.getElementById('connect').disabled = true;
-            document.getElementById('disconnect').disabled = false;
-            document.getElementById('send').disabled = false;
-            addMessage('Соединение установлено');
-            
-            // Обновляем информацию о клиентах после подключения
-            setTimeout(updateClientsInfo, 500);
-        };
-        
-        socket.onmessage = function(event) {
-            try {
-                // Пытаемся распарсить JSON
-                const jsonData = JSON.parse(event.data);
-                
-                // Форматируем JSON для отображения
-                const formattedJson = JSON.stringify(jsonData, null, 2);
-                
-                // Добавляем сообщение с форматированным JSON
-                addMessage('Получено JSON-сообщение:');
-                addJsonMessage(formattedJson);
-                
-                // Если это команда для FreeCad, показываем дополнительную информацию
-                if (jsonData.python_code) {
-                    addMessage('Команда FreeCad получена');
-                }
-            } catch (e) {
-                // Если это не JSON, отображаем как обычный текст
-                addMessage('Получено: ' + event.data);
-            }
-        };
-        
-        socket.onclose = function(event) {
-            if (event.wasClean) {
-                addMessage(`Соединение закрыто чисто, код=${event.code} причина=${event.reason}`);
-            } else {
-                addMessage('Соединение прервано');
-            }
-            document.getElementById('connection-status').textContent = 'Статус: Отключено';
-            document.getElementById('connection-status').className = 'alert alert-secondary';
-            document.getElementById('connect').disabled = false;
-            document.getElementById('disconnect').disabled = true;
-            document.getElementById('send').disabled = true;
-            socket = null;
-            
-            // Обновляем информацию о клиентах после отключения
-            setTimeout(updateClientsInfo, 500);
-        };
-        
-        socket.onerror = function(error) {
-            addMessage('Ошибка: ' + error.message);
-        };
-    });
-    
-    document.getElementById('disconnect').addEventListener('click', function() {
-        if (socket) {
-            socket.close();
-            socket = null;
-        }
-    });
-    
-    // Переключение типа сообщения
-    document.getElementById('message-type').addEventListener('change', function() {
-        const messageType = this.value;
-        
-        document.getElementById('text-message-form').style.display = 'none';
-        document.getElementById('json-message-form').style.display = 'none';
-        document.getElementById('freecad-message-form').style.display = 'none';
-        
-        if (messageType === 'text') {
-            document.getElementById('text-message-form').style.display = 'block';
-        } else if (messageType === 'json') {
-            document.getElementById('json-message-form').style.display = 'block';
-        } else if (messageType === 'freecad') {
-            document.getElementById('freecad-message-form').style.display = 'block';
-        }
-    });
-    
-    // Отправка сообщения
-    document.getElementById('send').addEventListener('click', function() {
-        if (!socket) {
-            addMessage('Нет подключения');
-            return;
-        }
-        
-        const messageType = document.getElementById('message-type').value;
-        let message = '';
-        
-        if (messageType === 'text') {
-            message = document.getElementById('text-message').value;
-            if (!message) {
-                addMessage('Введите текстовое сообщение');
-                return;
-            }
-        } else if (messageType === 'json') {
-            const jsonText = document.getElementById('json-message').value;
-            if (!jsonText) {
-                addMessage('Введите JSON сообщение');
-                return;
-            }
-            
-            try {
-                // Проверяем, что это валидный JSON
-                const jsonObj = JSON.parse(jsonText);
-                message = JSON.stringify(jsonObj);
-            } catch (e) {
-                addMessage('Ошибка в формате JSON: ' + e.message);
-                return;
-            }
-        } else if (messageType === 'freecad') {
-            const code = document.getElementById('freecad-code').value;
-            if (!code) {
-                addMessage('Введите код для FreeCad');
-                return;
-            }
-            
-            const jsonObj = {
-                "python_code": code
-            };
-            message = JSON.stringify(jsonObj);
-        }
-        
-        socket.send(message);
-        
-        if (messageType === 'text') {
-            addMessage('Отправлено: ' + message);
-        } else {
-            addMessage('Отправлено JSON-сообщение:');
-            try {
-                const jsonObj = JSON.parse(message);
-                addJsonMessage(JSON.stringify(jsonObj, null, 2));
-            } catch (e) {
-                addMessage(message);
-            }
-        }
-    });
     
     // Очистка сообщений
     document.getElementById('clear-messages').addEventListener('click', function() {
