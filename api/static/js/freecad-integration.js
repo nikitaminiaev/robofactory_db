@@ -3,22 +3,132 @@
  * Обрабатывает взаимодействие с FreeCad на всех страницах приложения
  */
 
+// Глобальные переменные для отслеживания состояния сервера и клиентов
+let serverRunning = false;
+let connectedClientsCount = 0;
+let checkStatusInterval = null;
+
 // Функция для инициализации обработчиков событий кнопок FreeCad
 function initFreeCadButtons() {
+    // Сначала проверяем статус сервера и клиентов
+    checkServerAndClientsStatus();
+    
+    // Запускаем периодическую проверку статуса
+    if (!checkStatusInterval) {
+        checkStatusInterval = setInterval(checkServerAndClientsStatus, 3000); // Проверяем каждые 3 секунды
+    }
+    
+    console.log('FreeCad integration initialized');
+}
+
+// Функция для проверки статуса сервера и клиентов
+async function checkServerAndClientsStatus() {
+    try {
+        // Проверяем статус сервера
+        const serverResponse = await fetch('/api/websocket/status');
+        const serverData = await serverResponse.json();
+        
+        // Обновляем глобальную переменную
+        const previousServerRunning = serverRunning;
+        serverRunning = serverData.running;
+        
+        // Если сервер запущен, проверяем количество клиентов
+        if (serverRunning) {
+            const clientsResponse = await fetch('/api/websocket/clients');
+            const clientsData = await clientsResponse.json();
+            
+            // Обновляем глобальную переменную
+            const previousClientsCount = connectedClientsCount;
+            connectedClientsCount = clientsData.count || 0;
+            
+            // Логируем изменения в количестве клиентов
+            if (previousClientsCount !== connectedClientsCount) {
+                console.log(`Изменение количества клиентов: ${previousClientsCount} -> ${connectedClientsCount}`);
+            }
+        } else {
+            connectedClientsCount = 0;
+        }
+        
+        // Логируем изменения в статусе сервера
+        if (previousServerRunning !== serverRunning) {
+            console.log(`Изменение статуса сервера: ${previousServerRunning ? 'запущен' : 'остановлен'} -> ${serverRunning ? 'запущен' : 'остановлен'}`);
+        }
+        
+        // Обновляем видимость кнопок на основе полученной информации
+        updateFreeCadButtonsVisibility();
+        
+    } catch (error) {
+        console.error('Ошибка при проверке статуса сервера и клиентов:', error);
+        serverRunning = false;
+        connectedClientsCount = 0;
+        updateFreeCadButtonsVisibility();
+    }
+}
+
+// Функция для обновления видимости кнопок FreeCad
+function updateFreeCadButtonsVisibility() {
     // Находим все кнопки для загрузки во FreeCad на странице
     document.querySelectorAll('.load-freecad-btn').forEach(button => {
-        // Применяем единый стиль ко всем кнопкам
-        applyFreeCadButtonStyle(button);
-        
-        // Добавляем обработчик события клика
-        button.addEventListener('click', function(e) {
-            e.preventDefault();
-            const objectId = this.getAttribute('data-id');
-            loadObjectToFreeCad(objectId);
-        });
+        if (serverRunning && connectedClientsCount > 0) {
+            // Показываем кнопку и применяем стили
+            button.style.display = 'inline-block';
+            applyFreeCadButtonStyle(button);
+            
+            // Добавляем обработчик события клика, если его еще нет
+            if (!button.hasAttribute('data-initialized')) {
+                button.setAttribute('data-initialized', 'true');
+                button.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const objectId = this.getAttribute('data-id');
+                    loadObjectToFreeCad(objectId);
+                });
+            }
+        } else {
+            // Скрываем кнопку
+            button.style.display = 'none';
+        }
     });
     
-    console.log('FreeCad integration buttons initialized');
+    // Добавляем информационное сообщение о статусе сервера и клиентах
+    updateStatusMessage();
+}
+
+// Функция для добавления информационного сообщения о статусе сервера и клиентах
+function updateStatusMessage() {
+    // Проверяем, существует ли уже информационное сообщение
+    let statusMessage = document.getElementById('freecad-status-message');
+    
+    if (!statusMessage) {
+        // Создаем новый элемент для отображения статуса
+        statusMessage = document.createElement('div');
+        statusMessage.id = 'freecad-status-message';
+        statusMessage.style.position = 'fixed';
+        statusMessage.style.bottom = '10px';
+        statusMessage.style.left = '10px';
+        statusMessage.style.padding = '5px 10px';
+        statusMessage.style.borderRadius = '4px';
+        statusMessage.style.fontSize = '12px';
+        statusMessage.style.zIndex = '9999';
+        document.body.appendChild(statusMessage);
+    }
+    
+    // Обновляем содержимое и стиль сообщения в зависимости от статуса
+    if (!serverRunning) {
+        statusMessage.textContent = 'WebSocket-сервер не запущен';
+        statusMessage.style.backgroundColor = '#f8d7da';
+        statusMessage.style.color = '#721c24';
+        statusMessage.style.border = '1px solid #f5c6cb';
+    } else if (connectedClientsCount === 0) {
+        statusMessage.textContent = 'WebSocket-сервер запущен, но нет подключенных клиентов';
+        statusMessage.style.backgroundColor = '#fff3cd';
+        statusMessage.style.color = '#856404';
+        statusMessage.style.border = '1px solid #ffeeba';
+    } else {
+        statusMessage.textContent = `WebSocket-сервер запущен, подключено клиентов: ${connectedClientsCount}`;
+        statusMessage.style.backgroundColor = '#d4edda';
+        statusMessage.style.color = '#155724';
+        statusMessage.style.border = '1px solid #c3e6cb';
+    }
 }
 
 // Функция для стилизации кнопок FreeCad
@@ -44,6 +154,12 @@ function applyFreeCadButtonStyle(button) {
 
 // Функция для загрузки объекта во FreeCad
 function loadObjectToFreeCad(objectId) {
+    // Проверяем статус сервера и клиентов перед отправкой запроса
+    if (!serverRunning || connectedClientsCount === 0) {
+        alert('Невозможно загрузить объект во FreeCad: WebSocket-сервер не запущен или нет подключенных клиентов.');
+        return;
+    }
+    
     // Показываем индикатор загрузки или сообщение
     const loadingMessage = document.createElement('div');
     loadingMessage.className = 'loading-message';
@@ -114,25 +230,12 @@ function loadObjectToFreeCad(objectId) {
 document.addEventListener('DOMContentLoaded', function() {
     initFreeCadButtons();
     
-    // Можно добавить наблюдатель DOM для динамически добавляемых кнопок
-    // Это полезно, если контент загружается асинхронно
+    // Наблюдатель DOM для динамически добавляемых кнопок
     const observer = new MutationObserver(function(mutations) {
         mutations.forEach(function(mutation) {
             if (mutation.addedNodes && mutation.addedNodes.length > 0) {
-                // Проверяем, были ли добавлены новые кнопки
-                const newButtons = document.querySelectorAll('.load-freecad-btn:not([data-initialized])');
-                if (newButtons.length > 0) {
-                    newButtons.forEach(button => {
-                        button.setAttribute('data-initialized', 'true');
-                        applyFreeCadButtonStyle(button);
-                        button.addEventListener('click', function(e) {
-                            e.preventDefault();
-                            const objectId = this.getAttribute('data-id');
-                            loadObjectToFreeCad(objectId);
-                        });
-                    });
-                    console.log(`Initialized ${newButtons.length} new FreeCad buttons`);
-                }
+                // Если были добавлены новые элементы, обновляем видимость кнопок
+                updateFreeCadButtonsVisibility();
             }
         });
     });

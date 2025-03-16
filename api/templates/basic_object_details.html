@@ -15,7 +15,10 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(response => response.json())
         .then(data => {
             document.getElementById('objectDetails').innerHTML = renderObjectDetails(data);
-            // Инициализация кнопок происходит автоматически через скрипт freecad-integration.js
+            // Обновляем видимость кнопок FreeCad после загрузки деталей объекта
+            if (typeof updateFreeCadButtonsVisibility === 'function') {
+                updateFreeCadButtonsVisibility();
+            }
         })
         .catch(error => {
             console.error('Error loading object details:', error);
@@ -26,4 +29,8 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 });
 </script>
+
+<!-- Подключаем скрипты для работы с FreeCad -->
+<script src="/static/js/object-details.js"></script>
+<script src="/static/js/freecad-integration.js"></script>
 {% endblock %}

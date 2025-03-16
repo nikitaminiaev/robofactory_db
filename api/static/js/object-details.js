@@ -1,6 +1,6 @@
 function renderObjectDetails(data) {
     let detailsHtml = `<table>
-        <tr><th>ID</th><td>${data.id} <button class="load-freecad-btn" data-id="${data.id}">Load FreeCad</button></td></tr>
+        <tr><th>ID</th><td>${data.id} <button class="load-freecad-btn" data-id="${data.id}" style="display: none;">Load FreeCad</button></td></tr>
         <tr><th>Name</th><td>${data.name}</td></tr>
         <tr><th>Author</th><td>${data.author}</td></tr>
         <tr><th>Description</th><td>${data.description}</td></tr>
@@ -25,7 +25,7 @@ function renderObjectDetails(data) {
         data.children.forEach(child => {
             detailsHtml += `<li>
                 <a href="/basic_object/${child}">${child}</a>
-                <button class="load-freecad-btn" data-id="${child}">Load FreeCad</button>
+                <button class="load-freecad-btn" data-id="${child}" style="display: none;">Load FreeCad</button>
             </li>`;
         });
         detailsHtml += '</ul>';
@@ -36,7 +36,7 @@ function renderObjectDetails(data) {
         data.parents.forEach(parent => {
             detailsHtml += `<li>
                 <a href="/basic_object/${parent}">${parent}</a>
-                <button class="load-freecad-btn" data-id="${parent}">Load FreeCad</button>
+                <button class="load-freecad-btn" data-id="${parent}" style="display: none;">Load FreeCad</button>
             </li>`;
         });
         detailsHtml += '</ul>';

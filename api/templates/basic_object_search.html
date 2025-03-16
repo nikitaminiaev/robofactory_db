@@ -26,8 +26,17 @@ $(document).ready(function() {
                 resultHtml = '<h2>Search Result:</h2>' + renderObjectDetails(data);
             }
             $('#result').html(resultHtml);
+            
+            // Обновляем видимость кнопок FreeCad после загрузки результатов
+            if (typeof updateFreeCadButtonsVisibility === 'function') {
+                updateFreeCadButtonsVisibility();
+            }
         });
     });
 });
 </script>
+
+<!-- Подключаем скрипты для работы с FreeCad -->
+<script src="/static/js/object-details.js"></script>
+<script src="/static/js/freecad-integration.js"></script>
 {% endblock %}

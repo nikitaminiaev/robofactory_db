@@ -13,6 +13,8 @@
         <div id="server-status" class="alert alert-warning">Статус сервера: Неизвестно</div>
         <button id="start-server" class="btn btn-success">Запустить сервер</button>
         <button id="stop-server" class="btn btn-danger" disabled>Остановить сервер</button>
+        <button id="force-refresh-status" class="btn btn-info ml-2">Обновить статус</button>
+        <div id="status-error" class="alert alert-danger mt-2" style="display: none;"></div>
     </div>
 </div>
 
@@ -41,10 +43,6 @@
                 </div>
             </div>
             <div class="card-body">
-                <div class="alert alert-info mb-3">
-                    <strong>Примечание:</strong> Для просмотра сообщений между клиентами и сервером необходимо добавить API для мониторинга сообщений на сервере. 
-                    В текущей реализации сервер не сохраняет историю сообщений и не предоставляет API для их получения.
-                </div>
                 <div id="messages" style="height: 400px; overflow-y: auto; border: 1px solid #dee2e6; padding: 10px; border-radius: 4px;"></div>
             </div>
         </div>
@@ -55,48 +53,267 @@
     let serverRunning = false;
     let clientsUpdateInterval = null;
     let messagesUpdateInterval = null;
+    let statusCheckInterval = null;
+    let statusCheckRetries = 0;
+    const MAX_STATUS_CHECK_RETRIES = 3;
     
-    // Функции для управления сервером
-    document.getElementById('start-server').addEventListener('click', async function() {
+    // Функция для проверки статуса сервера
+    async function checkServerStatus() {
         try {
-            const response = await fetch('/api/websocket/start', {
-                method: 'POST'
+            console.log('Проверка статуса сервера...');
+            
+            // Показываем индикатор загрузки в статусе
+            const statusElement = document.getElementById('server-status');
+            const originalStatusText = statusElement.textContent;
+            statusElement.innerHTML = '<div class="spinner-border spinner-border-sm text-secondary" role="status"></div> Проверка статуса сервера...';
+            
+            // Скрываем сообщение об ошибке, если оно было
+            document.getElementById('status-error').style.display = 'none';
+            
+            // Делаем запрос с таймаутом
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 секунд таймаут
+            
+            const response = await fetch('/api/websocket/status', {
+                signal: controller.signal
             });
+            
+            clearTimeout(timeoutId);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ошибка: ${response.status} ${response.statusText}`);
+            }
             
             const data = await response.json();
             
-            if (data.success) {
-                serverRunning = true;
-                document.getElementById('server-status').textContent = 'Статус сервера: Запущен';
-                document.getElementById('server-status').className = 'alert alert-success';
-                document.getElementById('start-server').disabled = true;
-                document.getElementById('stop-server').disabled = false;
-                addMessage('Сервер успешно запущен');
-                
-                // Запускаем автоматическое обновление информации о клиентах
-                updateClientsInfo();
-                if (!clientsUpdateInterval) {
-                    clientsUpdateInterval = setInterval(updateClientsInfo, 5000);
-                }
-                
-                // Запускаем автоматическое обновление сообщений
-                updateMessages();
-                if (!messagesUpdateInterval) {
-                    messagesUpdateInterval = setInterval(updateMessages, 3000);
-                }
-            } else {
-                addMessage('Ошибка при запуске сервера: ' + data.message);
-            }
+            console.log('Статус сервера:', data);
+            serverRunning = data.running;
+            
+            // Сбрасываем счетчик повторных попыток
+            statusCheckRetries = 0;
+            
+            updateUIBasedOnServerStatus(data.running);
+            
+            return data.running;
         } catch (error) {
-            addMessage('Ошибка при запуске сервера: ' + error.message);
+            console.error('Ошибка при проверке статуса сервера:', error);
+            
+            // Восстанавливаем оригинальный текст статуса
+            const statusElement = document.getElementById('server-status');
+            statusElement.textContent = 'Статус сервера: Ошибка проверки';
+            statusElement.className = 'alert alert-danger';
+            
+            // Показываем сообщение об ошибке
+            const errorElement = document.getElementById('status-error');
+            errorElement.textContent = `Ошибка при проверке статуса сервера: ${error.message}`;
+            errorElement.style.display = 'block';
+            
+            // Увеличиваем счетчик повторных попыток
+            statusCheckRetries++;
+            
+            // Если превышено максимальное количество попыток, останавливаем проверку
+            if (statusCheckRetries >= MAX_STATUS_CHECK_RETRIES) {
+                console.error(`Превышено максимальное количество попыток (${MAX_STATUS_CHECK_RETRIES}). Остановка проверки статуса.`);
+                if (statusCheckInterval) {
+                    clearInterval(statusCheckInterval);
+                    statusCheckInterval = null;
+                }
+                addMessage(`Ошибка при проверке статуса сервера: ${error.message}. Проверка остановлена.`);
+            } else {
+                addMessage(`Ошибка при проверке статуса сервера: ${error.message}. Повторная попытка ${statusCheckRetries}/${MAX_STATUS_CHECK_RETRIES}.`);
+            }
+            
+            return false;
         }
+    }
+    
+    // Функция для обновления интерфейса на основе статуса сервера
+    function updateUIBasedOnServerStatus(isRunning) {
+        if (isRunning) {
+            document.getElementById('server-status').textContent = 'Статус сервера: Запущен';
+            document.getElementById('server-status').className = 'alert alert-success';
+            document.getElementById('start-server').disabled = true;
+            document.getElementById('stop-server').disabled = false;
+            
+            // Запускаем автоматическое обновление информации о клиентах
+            updateClientsInfo();
+            if (!clientsUpdateInterval) {
+                clientsUpdateInterval = setInterval(updateClientsInfo, 5000);
+            }
+            
+            // Запускаем автоматическое обновление сообщений
+            updateMessages();
+            if (!messagesUpdateInterval) {
+                messagesUpdateInterval = setInterval(updateMessages, 3000);
+            }
+        } else {
+            document.getElementById('server-status').textContent = 'Статус сервера: Остановлен';
+            document.getElementById('server-status').className = 'alert alert-warning';
+            document.getElementById('start-server').disabled = false;
+            document.getElementById('stop-server').disabled = true;
+            
+            // Останавливаем автоматическое обновление
+            if (clientsUpdateInterval) {
+                clearInterval(clientsUpdateInterval);
+                clientsUpdateInterval = null;
+            }
+            
+            // Останавливаем автоматическое обновление сообщений
+            if (messagesUpdateInterval) {
+                clearInterval(messagesUpdateInterval);
+                messagesUpdateInterval = null;
+            }
+            
+            document.getElementById('clients-info').textContent = 'Сервер не запущен';
+            document.getElementById('clients-info').className = 'alert alert-warning mt-2';
+        }
+    }
+    
+    // Функция для прямого запуска сервера через XMLHttpRequest
+    function directStartServer() {
+        console.log('Прямой запуск сервера через XMLHttpRequest...');
+        
+        // Отключаем кнопку на время запроса
+        document.getElementById('start-server').disabled = true;
+        document.getElementById('start-server').textContent = 'Запуск...';
+        
+        // Скрываем сообщение об ошибке, если оно было
+        document.getElementById('status-error').style.display = 'none';
+        
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '/api/websocket/start', true);
+        xhr.timeout = 10000; // 10 секунд таймаут
+        
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState === 4) {
+                console.log('Статус ответа:', xhr.status);
+                
+                if (xhr.status === 200) {
+                    try {
+                        const data = JSON.parse(xhr.responseText);
+                        console.log('Ответ сервера:', data);
+                        
+                        if (data.success) {
+                            console.log('Сервер успешно запущен');
+                            
+                            // Обновляем состояние интерфейса
+                            serverRunning = true;
+                            document.getElementById('server-status').textContent = 'Статус сервера: Запущен';
+                            document.getElementById('server-status').className = 'alert alert-success';
+                            document.getElementById('start-server').disabled = true;
+                            document.getElementById('start-server').textContent = 'Запустить сервер';
+                            document.getElementById('stop-server').disabled = false;
+                            addMessage('Сервер успешно запущен (через XMLHttpRequest)');
+                            
+                            // Запускаем автоматическое обновление информации о клиентах
+                            updateClientsInfo();
+                            if (!clientsUpdateInterval) {
+                                clientsUpdateInterval = setInterval(updateClientsInfo, 5000);
+                            }
+                            
+                            // Запускаем автоматическое обновление сообщений
+                            updateMessages();
+                            if (!messagesUpdateInterval) {
+                                messagesUpdateInterval = setInterval(updateMessages, 3000);
+                            }
+                        } else {
+                            console.error('Ошибка при запуске сервера:', data.message);
+                            document.getElementById('start-server').disabled = false;
+                            document.getElementById('start-server').textContent = 'Запустить сервер';
+                            
+                            // Показываем сообщение об ошибке
+                            const errorElement = document.getElementById('status-error');
+                            errorElement.textContent = `Ошибка при запуске сервера: ${data.message}`;
+                            errorElement.style.display = 'block';
+                            
+                            addMessage('Ошибка при запуске сервера: ' + data.message);
+                        }
+                    } catch (e) {
+                        console.error('Ошибка при разборе ответа:', e);
+                        document.getElementById('start-server').disabled = false;
+                        document.getElementById('start-server').textContent = 'Запустить сервер';
+                        
+                        // Показываем сообщение об ошибке
+                        const errorElement = document.getElementById('status-error');
+                        errorElement.textContent = `Ошибка при разборе ответа: ${e.message}`;
+                        errorElement.style.display = 'block';
+                        
+                        addMessage('Ошибка при разборе ответа: ' + e.message);
+                    }
+                } else {
+                    console.error('Ошибка HTTP:', xhr.status);
+                    document.getElementById('start-server').disabled = false;
+                    document.getElementById('start-server').textContent = 'Запустить сервер';
+                    
+                    // Показываем сообщение об ошибке
+                    const errorElement = document.getElementById('status-error');
+                    errorElement.textContent = `Ошибка HTTP: ${xhr.status}`;
+                    errorElement.style.display = 'block';
+                    
+                    addMessage('Ошибка HTTP: ' + xhr.status);
+                }
+            }
+        };
+        
+        xhr.ontimeout = function() {
+            console.error('Таймаут запроса');
+            document.getElementById('start-server').disabled = false;
+            document.getElementById('start-server').textContent = 'Запустить сервер';
+            
+            // Показываем сообщение об ошибке
+            const errorElement = document.getElementById('status-error');
+            errorElement.textContent = 'Таймаут запроса. Сервер не отвечает.';
+            errorElement.style.display = 'block';
+            
+            addMessage('Таймаут запроса. Сервер не отвечает.');
+        };
+        
+        xhr.onerror = function() {
+            console.error('Ошибка сети при запросе');
+            document.getElementById('start-server').disabled = false;
+            document.getElementById('start-server').textContent = 'Запустить сервер';
+            
+            // Показываем сообщение об ошибке
+            const errorElement = document.getElementById('status-error');
+            errorElement.textContent = 'Ошибка сети при запросе. Проверьте соединение.';
+            errorElement.style.display = 'block';
+            
+            addMessage('Ошибка сети при запросе. Проверьте соединение.');
+        };
+        
+        xhr.send();
+        console.log('Запрос на запуск сервера отправлен');
+    }
+    
+    // Функции для управления сервером
+    document.getElementById('start-server').addEventListener('click', function() {
+        // Используем прямой метод запуска сервера через XMLHttpRequest
+        directStartServer();
     });
     
     document.getElementById('stop-server').addEventListener('click', async function() {
         try {
+            // Отключаем кнопку на время запроса
+            document.getElementById('stop-server').disabled = true;
+            document.getElementById('stop-server').textContent = 'Остановка...';
+            
+            // Скрываем сообщение об ошибке, если оно было
+            document.getElementById('status-error').style.display = 'none';
+            
+            // Делаем запрос с таймаутом
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 секунд таймаут
+            
             const response = await fetch('/api/websocket/stop', {
-                method: 'POST'
+                method: 'POST',
+                signal: controller.signal
             });
+            
+            clearTimeout(timeoutId);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ошибка: ${response.status} ${response.statusText}`);
+            }
             
             const data = await response.json();
             
@@ -106,6 +323,7 @@
                 document.getElementById('server-status').className = 'alert alert-warning';
                 document.getElementById('start-server').disabled = false;
                 document.getElementById('stop-server').disabled = true;
+                document.getElementById('stop-server').textContent = 'Остановить сервер';
                 
                 // Останавливаем автоматическое обновление
                 if (clientsUpdateInterval) {
@@ -124,11 +342,38 @@
                 
                 addMessage('Сервер успешно остановлен');
             } else {
+                document.getElementById('stop-server').disabled = false;
+                document.getElementById('stop-server').textContent = 'Остановить сервер';
+                
+                // Показываем сообщение об ошибке
+                const errorElement = document.getElementById('status-error');
+                errorElement.textContent = `Ошибка при остановке сервера: ${data.message}`;
+                errorElement.style.display = 'block';
+                
                 addMessage('Ошибка при остановке сервера: ' + data.message);
             }
         } catch (error) {
+            console.error('Ошибка при остановке сервера:', error);
+            document.getElementById('stop-server').disabled = false;
+            document.getElementById('stop-server').textContent = 'Остановить сервер';
+            
+            // Показываем сообщение об ошибке
+            const errorElement = document.getElementById('status-error');
+            errorElement.textContent = `Ошибка при остановке сервера: ${error.message}`;
+            errorElement.style.display = 'block';
+            
             addMessage('Ошибка при остановке сервера: ' + error.message);
         }
+    });
+    
+    // Кнопка принудительного обновления статуса
+    document.getElementById('force-refresh-status').addEventListener('click', function() {
+        // Сбрасываем счетчик повторных попыток
+        statusCheckRetries = 0;
+        
+        // Проверяем статус
+        checkServerStatus();
+        addMessage('Статус сервера обновлен вручную');
     });
     
     // Функция для обновления информации о клиентах
@@ -140,7 +385,20 @@
         }
         
         try {
-            const response = await fetch('/api/websocket/clients');
+            // Делаем запрос с таймаутом
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 секунд таймаут
+            
+            const response = await fetch('/api/websocket/clients', {
+                signal: controller.signal
+            });
+            
+            clearTimeout(timeoutId);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ошибка: ${response.status} ${response.statusText}`);
+            }
+            
             const data = await response.json();
             
             if (data.error) {
@@ -180,7 +438,20 @@
         }
         
         try {
-            const response = await fetch('/api/websocket/messages');
+            // Делаем запрос с таймаутом
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 секунд таймаут
+            
+            const response = await fetch('/api/websocket/messages', {
+                signal: controller.signal
+            });
+            
+            clearTimeout(timeoutId);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ошибка: ${response.status} ${response.statusText}`);
+            }
+            
             const data = await response.json();
             
             if (data.error) {
@@ -257,57 +528,6 @@
     // Обновление сообщений при нажатии на кнопку
     document.getElementById('refresh-messages').addEventListener('click', updateMessages);
     
-    // Проверка статуса сервера при загрузке страницы
-    async function checkServerStatus() {
-        try {
-            const response = await fetch('/api/websocket/status');
-            const data = await response.json();
-            
-            serverRunning = data.running;
-            
-            if (data.running) {
-                document.getElementById('server-status').textContent = 'Статус сервера: Запущен';
-                document.getElementById('server-status').className = 'alert alert-success';
-                document.getElementById('start-server').disabled = true;
-                document.getElementById('stop-server').disabled = false;
-                
-                // Запускаем автоматическое обновление информации о клиентах
-                if (!clientsUpdateInterval) {
-                    updateClientsInfo();
-                    clientsUpdateInterval = setInterval(updateClientsInfo, 5000); // Обновляем каждые 5 секунд
-                }
-                
-                // Запускаем автоматическое обновление сообщений
-                if (!messagesUpdateInterval) {
-                    updateMessages();
-                    messagesUpdateInterval = setInterval(updateMessages, 3000); // Обновляем каждые 3 секунды
-                }
-            } else {
-                document.getElementById('server-status').textContent = 'Статус сервера: Остановлен';
-                document.getElementById('server-status').className = 'alert alert-warning';
-                document.getElementById('start-server').disabled = false;
-                document.getElementById('stop-server').disabled = true;
-                
-                // Останавливаем автоматическое обновление
-                if (clientsUpdateInterval) {
-                    clearInterval(clientsUpdateInterval);
-                    clientsUpdateInterval = null;
-                }
-                
-                // Останавливаем автоматическое обновление сообщений
-                if (messagesUpdateInterval) {
-                    clearInterval(messagesUpdateInterval);
-                    messagesUpdateInterval = null;
-                }
-                
-                document.getElementById('clients-info').textContent = 'Сервер не запущен';
-                document.getElementById('clients-info').className = 'alert alert-warning mt-2';
-            }
-        } catch (error) {
-            addMessage('Ошибка при проверке статуса сервера: ' + error.message);
-        }
-    }
-    
     // Очистка сообщений
     document.getElementById('clear-messages').addEventListener('click', function() {
         document.getElementById('messages').innerHTML = '';
@@ -337,9 +557,23 @@
         messagesDiv.scrollTop = messagesDiv.scrollHeight;
     }
     
-    // Проверяем статус сервера при загрузке страницы
+    // Инициализация при загрузке страницы
     window.addEventListener('load', function() {
-        checkServerStatus();
+        console.log('Страница загружена, проверка статуса сервера...');
+        
+        // Добавляем сообщение о загрузке страницы
+        addMessage('Страница управления WebSocket-сервером загружена');
+        
+        // Проверяем статус сервера при загрузке
+        // Используем setTimeout, чтобы дать странице полностью загрузиться
+        setTimeout(function() {
+            checkServerStatus();
+            
+            // Запускаем периодическую проверку статуса сервера
+            if (!statusCheckInterval) {
+                statusCheckInterval = setInterval(checkServerStatus, 5000); // Проверяем каждые 5 секунд
+            }
+        }, 500);
     });
     
     // Добавляем стили для сообщений
@@ -354,7 +588,26 @@
             color: #6c757d;
             font-size: 0.85rem;
         }
+        .ml-2 {
+            margin-left: 0.5rem;
+        }
+        .spinner-border {
+            display: inline-block;
+            width: 1rem;
+            height: 1rem;
+            vertical-align: text-bottom;
+            border: 0.2em solid currentColor;
+            border-right-color: transparent;
+            border-radius: 50%;
+            animation: spinner-border .75s linear infinite;
+        }
+        @keyframes spinner-border {
+            to { transform: rotate(360deg); }
+        }
     `;
     document.head.appendChild(style);
 </script>
+
+<!-- Подключаем отладочный скрипт -->
+<script src="/static/js/websocket-debug.js"></script>
 {% endblock %} 
