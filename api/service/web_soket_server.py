@@ -5,7 +5,7 @@ import threading
 import struct  
 import json
 
-def handle_client(client_socket, addr):
+def _handle_client(client_socket, addr):
     print(f"Подключение от {addr}")
     
     # Получение данных от клиента
@@ -45,7 +45,7 @@ def handle_client(client_socket, addr):
         client_socket.sendall(response.encode())
         
         # Обработка WebSocket-соединения
-        handle_websocket_connection(client_socket, addr)
+        _handle_websocket_connection(client_socket, addr)
     else:
         # Это простое сообщение без WebSocket-протокола
         try:
@@ -58,7 +58,7 @@ def handle_client(client_socket, addr):
                 print(f"Получен JSON-объект: {json_data}")
                 
                 # Транслируем сообщение всем подключенным WebSocket-клиентам
-                broadcast_message(message)
+                _broadcast_message(message)
                 
                 # Если это команда для FreeCad, можно добавить специальную обработку
                 if isinstance(json_data, dict) and json_data.get("type") == "freecad_command":
@@ -66,7 +66,7 @@ def handle_client(client_socket, addr):
             except json.JSONDecodeError:
                 # Если сообщение не является JSON, проверяем, является ли оно строкой "hello"
                 if message == "hello":
-                    broadcast_message("hello")
+                    _broadcast_message("hello")
                 
             # Отправляем подтверждение
             client_socket.sendall(b"OK")
@@ -75,11 +75,13 @@ def handle_client(client_socket, addr):
         finally:
             client_socket.close()
 
-def handle_websocket_connection(client_socket, addr):
+def _handle_websocket_connection(client_socket, addr):
     """Обрабатывает WebSocket-соединение после успешного handshake"""
     try:
         # Добавляем клиента в список подключенных клиентов
         connected_clients.append(client_socket)
+        client_info = (addr[0], addr[1])
+        connected_clients_info.append(client_info)
         print(f"WebSocket-клиент {addr} добавлен. Всего клиентов: {len(connected_clients)}")
         
         # Функция отправки сообщения клиенту
@@ -159,12 +161,15 @@ def handle_websocket_connection(client_socket, addr):
     finally:
         # Удаляем клиента из списка подключенных клиентов
         if client_socket in connected_clients:
+            index = connected_clients.index(client_socket)
             connected_clients.remove(client_socket)
+            if index < len(connected_clients_info):
+                connected_clients_info.pop(index)
             print(f"WebSocket-клиент {addr} удален. Осталось клиентов: {len(connected_clients)}")
         client_socket.close()
         print(f"Соединение с {addr} закрыто")
 
-def broadcast_message(message):
+def _broadcast_message(message):
     """Отправляет сообщение всем подключенным WebSocket-клиентам"""
     if not connected_clients:
         print("Нет подключенных WebSocket-клиентов для отправки сообщения")
@@ -207,6 +212,54 @@ def broadcast_message(message):
 
 # Глобальный список подключенных WebSocket-клиентов
 connected_clients = []
+connected_clients_info = []  # Список с информацией о клиентах (адрес, порт)
+
+def get_connected_clients_count():
+    """Возвращает количество подключенных клиентов и информацию о них"""
+    return {
+        "count": len(connected_clients),
+        "clients": connected_clients_info
+    }
+
+def is_socket_server_running(host="localhost", port=8765):
+    """Проверяет, запущен ли WebSocket-сервер"""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.settimeout(1)
+    result = False
+    try:
+        # Пытаемся подключиться к серверу
+        sock.connect((host, port))
+        result = True
+    except (socket.timeout, ConnectionRefusedError):
+        result = False
+    finally:
+        sock.close()
+    return result
+
+def send_message_to_websocket(message, host="localhost", port=8765):
+    """Отправляет сообщение через WebSocket-сервер"""
+    try:
+        # Создаем простой клиент для отправки сообщения
+        # Это упрощенная реализация, в реальном приложении 
+        # следует использовать полноценную библиотеку для WebSocket
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.connect((host, port))
+        
+        # Отправляем сообщение через WebSocket-сервер
+        # Здесь мы просто передаем сообщение серверу, который сам обработает его
+        # и отправит подключенным клиентам
+        print(f"Отправка сообщения на WebSocket-сервер: {message}")
+        sock.sendall(message.encode('utf-8'))
+        
+        # Ожидаем подтверждение от сервера
+        response = sock.recv(1024)
+        print(f"Получен ответ от WebSocket-сервера: {response.decode('utf-8')}")
+        
+        sock.close()
+        return True
+    except Exception as e:
+        print(f"Ошибка при отправке сообщения: {e}")
+        return False
 
 def start_server(host="0.0.0.0", port=8765):
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -220,7 +273,7 @@ def start_server(host="0.0.0.0", port=8765):
         while True:
             client_sock, addr = server.accept()
             client_thread = threading.Thread(
-                target=handle_client,
+                target=_handle_client,
                 args=(client_sock, addr)
             )
             client_thread.daemon = True
