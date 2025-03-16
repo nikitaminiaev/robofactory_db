@@ -181,7 +181,7 @@
                         
                         if (!data.error && data.messages && data.messages.length > 0) {
                             data.messages.forEach(msg => {
-                                const timestamp = new Date(msg.timestamp * 1000).toLocaleTimeString();
+                                const timestamp = new Date(msg.timestamp * 2000).toLocaleTimeString();
                                 let messageText = '';
                                 
                                 // Форматируем сообщение в зависимости от типа
@@ -266,7 +266,7 @@
                                 document.getElementById('messages').innerHTML = '';
                                 
                                 data.messages.forEach(msg => {
-                                    const timestamp = new Date(msg.timestamp * 1000).toLocaleTimeString();
+                                    const timestamp = new Date(msg.timestamp * 2000).toLocaleTimeString();
                                     let messageText = '';
                                     
                                     // Форматируем сообщение в зависимости от типа
@@ -583,7 +583,7 @@
                         
                         if (!data.error && data.messages && data.messages.length > 0) {
                             data.messages.forEach(msg => {
-                                const timestamp = new Date(msg.timestamp * 1000).toLocaleTimeString();
+                                const timestamp = new Date(msg.timestamp * 2000).toLocaleTimeString();
                                 let messageText = '';
                                 
                                 // Форматируем сообщение в зависимости от типа
@@ -734,7 +734,7 @@
             const messages = data.messages;
             if (messages && messages.length > 0) {
                 messages.forEach(msg => {
-                    const timestamp = new Date(msg.timestamp * 1000).toLocaleTimeString();
+                    const timestamp = new Date(msg.timestamp * 2000).toLocaleTimeString();
                     let messageText = '';
                     
                     // Форматируем сообщение в зависимости от типа
@@ -975,8 +975,238 @@
         @keyframes spinner-border {
             to { transform: rotate(360deg); }
         }
+        
+        /* Стили для панели отладки WebSocket */
+        #websocket-debug-panel {
+            position: fixed !important;
+            top: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            width: 400px !important;
+            height: 100vh !important;
+            z-index: 1000 !important;
+            background-color: rgba(0, 0, 0, 0.85) !important;
+            color: white !important;
+            padding: 10px !important;
+            padding-left: 50px !important;
+            transition: transform 0.3s ease !important;
+            overflow-y: auto !important;
+            display: flex !important;
+            flex-direction: column !important;
+            box-shadow: -2px 0 5px rgba(0, 0, 0, 0.2) !important;
+        }
+        
+        #websocket-debug-panel.hidden {
+            transform: translateX(calc(100% - 40px)) !important;
+        }
+        
+        #websocket-debug-panel button {
+            background-color: #343a40 !important;
+            color: white !important;
+            border: none !important;
+            border-radius: 4px !important;
+            padding: 5px 10px !important;
+            margin-right: 5px !important;
+            margin-bottom: 5px !important;
+        }
+        
+        /* Стиль для кнопки переключения панели */
+        #debug-toggle-panel {
+            position: absolute !important;
+            left: 5px !important;
+            top: 10px !important;
+            z-index: 1001 !important;
+            background-color: #343a40 !important;
+            color: white !important;
+            border: none !important;
+            border-radius: 4px !important;
+            padding: 5px 10px !important;
+            cursor: pointer !important;
+            width: 40px !important;
+            text-align: center !important;
+        }
+        
+        #websocket-debug-panel h5 {
+            color: white !important;
+            margin-top: 0 !important;
+            margin-bottom: 10px !important;
+        }
+        
+        #debug-log {
+            flex: 1 !important;
+            min-height: 200px !important;
+            max-height: none !important;
+            background-color: #1e1e1e !important;
+            color: #d4d4d4 !important;
+            padding: 10px !important;
+            border-radius: 4px !important;
+            margin-top: 10px !important;
+            overflow-y: auto !important;
+            font-family: monospace !important;
+        }
     `;
     document.head.appendChild(style);
+    
+    // Функция для применения стилей к панели отладки
+    function applyDebugPanelStyles() {
+        const debugPanel = document.getElementById('websocket-debug-panel');
+        if (debugPanel) {
+            console.log('Применение стилей к панели отладки WebSocket...');
+            
+            // НЕ скрываем панель по умолчанию
+            // debugPanel.classList.add('hidden');
+            
+            // Находим кнопку переключения
+            const toggleButton = document.getElementById('debug-toggle-panel');
+            if (toggleButton) {
+                // Изменяем текст кнопки на символ
+                toggleButton.innerHTML = '×';
+                toggleButton.style.fontSize = '20px';
+                
+                // Изменяем обработчик клика на кнопке
+                toggleButton.onclick = function(e) {
+                    // Добавляем/удаляем класс hidden для перемещения панели
+                    debugPanel.classList.toggle('hidden');
+                    this.innerHTML = debugPanel.classList.contains('hidden') ? '≡' : '×';
+                    
+                    // Предотвращаем стандартное поведение и всплытие события
+                    e.preventDefault();
+                    e.stopPropagation();
+                };
+            }
+            
+            // Находим лог отладки и убеждаемся, что он видим
+            const debugLog = document.getElementById('debug-log');
+            if (debugLog) {
+                debugLog.style.display = 'block';
+                
+                // Добавляем тестовое сообщение, чтобы убедиться, что лог работает
+                const entry = document.createElement('div');
+                entry.innerHTML = `<span style="color: #6c757d;">[${new Date().toLocaleTimeString()}]</span> Панель отладки инициализирована и видима`;
+                debugLog.appendChild(entry);
+                debugLog.scrollTop = debugLog.scrollHeight;
+            }
+            
+            console.log('Стили панели отладки WebSocket успешно применены');
+        } else {
+            // Создаем собственную панель отладки, если оригинальная не найдена
+            const customDebugPanel = document.createElement('div');
+            customDebugPanel.id = 'custom-websocket-debug-panel';
+            customDebugPanel.style.position = 'fixed';
+            customDebugPanel.style.top = '0';
+            customDebugPanel.style.right = '0';
+            customDebugPanel.style.bottom = '0';
+            customDebugPanel.style.width = '400px';
+            customDebugPanel.style.height = '100vh';
+            customDebugPanel.style.zIndex = '1000';
+            customDebugPanel.style.backgroundColor = 'rgba(0, 0, 0, 0.85)';
+            customDebugPanel.style.color = 'white';
+            customDebugPanel.style.padding = '10px';
+            customDebugPanel.style.overflowY = 'auto';
+            customDebugPanel.style.display = 'flex';
+            customDebugPanel.style.flexDirection = 'column';
+            customDebugPanel.style.boxShadow = '-2px 0 5px rgba(0, 0, 0, 0.2)';
+            
+            // Добавляем заголовок
+            const title = document.createElement('h5');
+            title.textContent = 'Отладка WebSocket (Пользовательская панель)';
+            title.style.color = 'white';
+            title.style.marginTop = '0';
+            title.style.marginBottom = '10px';
+            customDebugPanel.appendChild(title);
+            
+            // Добавляем кнопку закрытия
+            const closeButton = document.createElement('button');
+            closeButton.textContent = '×';
+            closeButton.style.position = 'absolute';
+            closeButton.style.right = '10px';
+            closeButton.style.top = '10px';
+            closeButton.style.backgroundColor = '#343a40';
+            closeButton.style.color = 'white';
+            closeButton.style.border = 'none';
+            closeButton.style.borderRadius = '4px';
+            closeButton.style.padding = '5px 10px';
+            closeButton.style.cursor = 'pointer';
+            closeButton.style.fontSize = '20px';
+            closeButton.onclick = function() {
+                customDebugPanel.classList.toggle('hidden');
+                this.textContent = customDebugPanel.classList.contains('hidden') ? '≡' : '×';
+            };
+            customDebugPanel.appendChild(closeButton);
+            
+            // Добавляем лог
+            const customLog = document.createElement('div');
+            customLog.id = 'custom-debug-log';
+            customLog.style.flex = '1';
+            customLog.style.minHeight = '200px';
+            customLog.style.backgroundColor = '#1e1e1e';
+            customLog.style.color = '#d4d4d4';
+            customLog.style.padding = '10px';
+            customLog.style.borderRadius = '4px';
+            customLog.style.marginTop = '10px';
+            customLog.style.overflowY = 'auto';
+            customLog.style.fontFamily = 'monospace';
+            customDebugPanel.appendChild(customLog);
+            
+            // Добавляем тестовое сообщение
+            const entry = document.createElement('div');
+            entry.innerHTML = `<span style="color: #6c757d;">[${new Date().toLocaleTimeString()}]</span> Пользовательская панель отладки создана`;
+            customLog.appendChild(entry);
+            
+            // Добавляем панель на страницу
+            document.body.appendChild(customDebugPanel);
+            
+            console.log('Создана пользовательская панель отладки');
+            
+            // Функция для добавления сообщений в пользовательский лог
+            window.customDebugLog = function(message) {
+                const entry = document.createElement('div');
+                entry.innerHTML = `<span style="color: #6c757d;">[${new Date().toLocaleTimeString()}]</span> ${message}`;
+                customLog.appendChild(entry);
+                customLog.scrollTop = customLog.scrollHeight;
+                console.log('[Custom Debug]', message);
+            };
+            
+            // Добавляем перехват консольных сообщений
+            const originalConsoleLog = console.log;
+            console.log = function() {
+                originalConsoleLog.apply(console, arguments);
+                const message = Array.from(arguments).map(arg => 
+                    typeof arg === 'object' ? JSON.stringify(arg) : arg
+                ).join(' ');
+                window.customDebugLog(message);
+            };
+            
+            window.customDebugLog('Перехват консольных сообщений активирован');
+        }
+    }
+    
+    // Добавляем обработчик для панели отладки WebSocket
+    window.addEventListener('load', function() {
+        // Ждем немного, чтобы дать отладочному скрипту создать панель
+        setTimeout(function() {
+            applyDebugPanelStyles();
+            
+            // Проверяем каждую секунду, не появилась ли панель
+            const checkInterval = setInterval(function() {
+                const panel = document.getElementById('websocket-debug-panel');
+                
+                if (panel) {
+                    // Если панель появилась, применяем стили
+                    applyDebugPanelStyles();
+                    clearInterval(checkInterval);
+                    console.log('Панель отладки обнаружена и стилизована');
+                    
+                    // Проверяем, скрыт ли лог
+                    const debugLog = document.getElementById('debug-log');
+                    if (debugLog && debugLog.style.display === 'none') {
+                        debugLog.style.display = 'block';
+                        console.log('Лог отладки принудительно отображен');
+                    }
+                }
+            }, 1000);
+        }, 1500); // Увеличиваем время ожидания для гарантированной загрузки отладочного скрипта
+    });
 </script>
 
 <!-- Подключаем отладочный скрипт -->
