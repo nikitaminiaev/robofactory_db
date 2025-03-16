@@ -22,7 +22,6 @@
     <div class="card-header">
         <div class="d-flex justify-content-between align-items-center">
             <h3>Подключенные клиенты</h3>
-            <button id="refresh-clients" class="btn btn-sm btn-outline-primary">Обновить</button>
         </div>
     </div>
     <div class="card-body">
@@ -38,7 +37,6 @@
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h3>Сообщения</h3>
                 <div>
-                    <button id="refresh-messages" class="btn btn-sm btn-outline-primary me-2">Обновить сообщения</button>
                     <button id="clear-messages" class="btn btn-sm btn-outline-secondary">Очистить</button>
                 </div>
             </div>
@@ -373,7 +371,12 @@
         
         // Проверяем статус
         checkServerStatus();
-        addMessage('Статус сервера обновлен вручную');
+        
+        // Обновляем информацию о клиентах и сообщениях
+        updateClientsInfo();
+        updateMessages();
+        
+        addMessage('Статус сервера, клиенты и сообщения обновлены вручную');
     });
     
     // Функция для обновления информации о клиентах
@@ -522,12 +525,6 @@
         }
     }
     
-    // Обновление информации о клиентах при нажатии на кнопку
-    document.getElementById('refresh-clients').addEventListener('click', updateClientsInfo);
-    
-    // Обновление сообщений при нажатии на кнопку
-    document.getElementById('refresh-messages').addEventListener('click', updateMessages);
-    
     // Очистка сообщений
     document.getElementById('clear-messages').addEventListener('click', function() {
         document.getElementById('messages').innerHTML = '';
@@ -568,6 +565,10 @@
         // Используем setTimeout, чтобы дать странице полностью загрузиться
         setTimeout(function() {
             checkServerStatus();
+            
+            // Принудительно обновляем информацию о клиентах и сообщениях
+            updateClientsInfo();
+            updateMessages();
             
             // Запускаем периодическую проверку статуса сервера
             if (!statusCheckInterval) {
