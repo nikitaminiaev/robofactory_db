@@ -6,7 +6,7 @@ import subprocess
 import os
 import signal
 import time
-from service.web_soket_server import get_server_instance
+from service.web_soket_server import get_server_instance, get_message_history
 
 router = APIRouter()
 
@@ -56,6 +56,29 @@ async def get_websocket_clients():
             "count": 0,
             "clients": [],
             "error": f"Ошибка при получении информации о клиентах: {str(e)}"
+        })
+
+@router.get("/api/websocket/messages")
+async def get_websocket_messages(limit: int = 10):
+    """
+    Возвращает историю сообщений WebSocket-сервера
+    """
+    server = get_server_instance()
+    if not server.is_running():
+        return JSONResponse({
+            "messages": [],
+            "error": "Сервер не запущен"
+        })
+    
+    try:
+        messages = get_message_history(limit)
+        return JSONResponse({
+            "messages": messages
+        })
+    except Exception as e:
+        return JSONResponse({
+            "messages": [],
+            "error": f"Ошибка при получении истории сообщений: {str(e)}"
         })
 
 def run_server_in_thread():

@@ -4,6 +4,8 @@ import hashlib
 import threading
 import struct  
 import json
+import time
+from collections import deque
 
 class WebSocketServer:
     _instance = None
@@ -25,6 +27,11 @@ class WebSocketServer:
         self.server = None
         self.connected_clients = []
         self.connected_clients_info = []
+        
+        # Добавляем хранилище для истории сообщений
+        self.message_history = deque(maxlen=10)  # Хранить последние 10 сообщений
+        self.message_history_lock = threading.Lock()  # Для потокобезопасного доступа
+        
         self._initialized = True
     
     def _handle_client(self, client_socket, addr):
@@ -66,6 +73,15 @@ class WebSocketServer:
             )
             client_socket.sendall(response.encode())
             
+            # Добавляем запись в историю сообщений о новом подключении
+            self._add_to_message_history({
+                "type": "connection",
+                "client": f"{addr[0]}:{addr[1]}",
+                "direction": "incoming",
+                "timestamp": time.time(),
+                "message": "Новое WebSocket-подключение"
+            })
+            
             # Обработка WebSocket-соединения
             self._handle_websocket_connection(client_socket, addr)
         else:
@@ -73,6 +89,15 @@ class WebSocketServer:
             try:
                 message = request.decode('utf-8')
                 print(f"Получено простое сообщение от {addr}: {message}")
+                
+                # Добавляем в историю сообщений
+                self._add_to_message_history({
+                    "type": "raw",
+                    "client": f"{addr[0]}:{addr[1]}",
+                    "direction": "incoming",
+                    "timestamp": time.time(),
+                    "message": message
+                })
                 
                 # Проверяем, является ли сообщение JSON-объектом
                 try:
@@ -92,6 +117,15 @@ class WebSocketServer:
                     
                 # Отправляем подтверждение
                 client_socket.sendall(b"OK")
+                
+                # Добавляем в историю сообщений ответ
+                self._add_to_message_history({
+                    "type": "raw",
+                    "client": f"{addr[0]}:{addr[1]}",
+                    "direction": "outgoing",
+                    "timestamp": time.time(),
+                    "message": "OK"
+                })
             except Exception as e:
                 print(f"Ошибка при обработке простого сообщения: {e}")
             finally:
@@ -122,6 +156,19 @@ class WebSocketServer:
                    header = struct.pack('!BBQ', 0x81, 127, length)
 
                client_socket.sendall(header + message)
+               
+               # Добавляем в историю сообщений
+               try:
+                   msg_text = message.decode('utf-8') if isinstance(message, bytes) else message
+                   self._add_to_message_history({
+                       "type": "websocket",
+                       "client": f"{addr[0]}:{addr[1]}",
+                       "direction": "outgoing",
+                       "timestamp": time.time(),
+                       "message": msg_text
+                   })
+               except Exception as e:
+                   print(f"Ошибка при логировании исходящего сообщения: {e}")
                 
             def receive_message():
                header = client_socket.recv(2)
@@ -174,6 +221,15 @@ class WebSocketServer:
                     
                 print(f"Получено от WebSocket-клиента {addr}: {message}")
                 
+                # Добавляем в историю сообщений
+                self._add_to_message_history({
+                    "type": "websocket",
+                    "client": f"{addr[0]}:{addr[1]}",
+                    "direction": "incoming",
+                    "timestamp": time.time(),
+                    "message": message
+                })
+                
                 # Отправка ответа
                 response_message = f"Сервер получил: {message}"
                 send_message(response_message)
@@ -190,6 +246,15 @@ class WebSocketServer:
                 print(f"WebSocket-клиент {addr} удален. Осталось клиентов: {len(self.connected_clients)}")
             client_socket.close()
             print(f"Соединение с {addr} закрыто")
+            
+            # Добавляем запись в историю сообщений о закрытии соединения
+            self._add_to_message_history({
+                "type": "connection",
+                "client": f"{addr[0]}:{addr[1]}",
+                "direction": "outgoing",
+                "timestamp": time.time(),
+                "message": "WebSocket-соединение закрыто"
+            })
 
     def _broadcast_message(self, message):
         """Отправляет сообщение всем подключенным WebSocket-клиентам"""
@@ -213,6 +278,19 @@ class WebSocketServer:
             header = struct.pack('!BBQ', 0x81, 127, length)
         
         frame = header + message
+        
+        # Добавляем в историю сообщений
+        try:
+            msg_text = message.decode('utf-8') if isinstance(message, bytes) else message
+            self._add_to_message_history({
+                "type": "broadcast",
+                "client": "all",
+                "direction": "outgoing",
+                "timestamp": time.time(),
+                "message": msg_text
+            })
+        except Exception as e:
+            print(f"Ошибка при логировании широковещательного сообщения: {e}")
         
         # Отправляем сообщение всем клиентам
         disconnected_clients = []
@@ -349,6 +427,15 @@ class WebSocketServer:
             self.server.listen(5)
             print(f"Сервер запущен на {self.host}:{self.port}")
             
+            # Добавляем запись в историю сообщений о запуске сервера
+            self._add_to_message_history({
+                "type": "server",
+                "client": "system",
+                "direction": "info",
+                "timestamp": time.time(),
+                "message": f"Сервер запущен на {self.host}:{self.port}"
+            })
+            
             while True:
                 if self.server is None:
                     print("Сервер был остановлен")
@@ -405,7 +492,29 @@ class WebSocketServer:
             self.connected_clients = []
             self.connected_clients_info = []
             
+            # Добавляем запись в историю сообщений о остановке сервера
+            self._add_to_message_history({
+                "type": "server",
+                "client": "system",
+                "direction": "info",
+                "timestamp": time.time(),
+                "message": "Сервер остановлен"
+            })
+            
             print("Сервер полностью остановлен")
+
+    def _add_to_message_history(self, message_data):
+        """Добавляет сообщение в историю с потокобезопасностью"""
+        with self.message_history_lock:
+            self.message_history.append(message_data)
+    
+    def get_message_history(self, limit=50):
+        """Возвращает историю сообщений с ограничением по количеству"""
+        with self.message_history_lock:
+            # Возвращаем копию последних сообщений (в обратном порядке - новые сначала)
+            messages = list(self.message_history)[-limit:]
+            messages.reverse()  # Новые сообщения сначала
+            return messages
 
 # Функция-синглтон для получения экземпляра WebSocketServer
 def get_server_instance(host="0.0.0.0", port=8765):
@@ -429,6 +538,10 @@ def start_server(host="0.0.0.0", port=8765):
     """Запускает WebSocket-сервер"""
     server = get_server_instance(host, port)
     server.start()
+
+def get_message_history(limit=50):
+    """Возвращает историю сообщений с ограничением по количеству"""
+    return get_server_instance().get_message_history(limit)
 
 if __name__ == "__main__":
     start_server()

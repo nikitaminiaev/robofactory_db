@@ -35,9 +35,16 @@
         <div class="card mb-4">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h3>Сообщения</h3>
-                <button id="clear-messages" class="btn btn-sm btn-outline-secondary">Очистить</button>
+                <div>
+                    <button id="refresh-messages" class="btn btn-sm btn-outline-primary me-2">Обновить сообщения</button>
+                    <button id="clear-messages" class="btn btn-sm btn-outline-secondary">Очистить</button>
+                </div>
             </div>
             <div class="card-body">
+                <div class="alert alert-info mb-3">
+                    <strong>Примечание:</strong> Для просмотра сообщений между клиентами и сервером необходимо добавить API для мониторинга сообщений на сервере. 
+                    В текущей реализации сервер не сохраняет историю сообщений и не предоставляет API для их получения.
+                </div>
                 <div id="messages" style="height: 400px; overflow-y: auto; border: 1px solid #dee2e6; padding: 10px; border-radius: 4px;"></div>
             </div>
         </div>
@@ -47,6 +54,7 @@
 <script>
     let serverRunning = false;
     let clientsUpdateInterval = null;
+    let messagesUpdateInterval = null;
     
     // Функции для управления сервером
     document.getElementById('start-server').addEventListener('click', async function() {
@@ -69,6 +77,12 @@
                 updateClientsInfo();
                 if (!clientsUpdateInterval) {
                     clientsUpdateInterval = setInterval(updateClientsInfo, 5000);
+                }
+                
+                // Запускаем автоматическое обновление сообщений
+                updateMessages();
+                if (!messagesUpdateInterval) {
+                    messagesUpdateInterval = setInterval(updateMessages, 3000);
                 }
             } else {
                 addMessage('Ошибка при запуске сервера: ' + data.message);
@@ -97,6 +111,12 @@
                 if (clientsUpdateInterval) {
                     clearInterval(clientsUpdateInterval);
                     clientsUpdateInterval = null;
+                }
+                
+                // Останавливаем автоматическое обновление сообщений
+                if (messagesUpdateInterval) {
+                    clearInterval(messagesUpdateInterval);
+                    messagesUpdateInterval = null;
                 }
                 
                 document.getElementById('clients-info').textContent = 'Сервер не запущен';
@@ -153,8 +173,89 @@
         }
     }
     
+    // Функция для получения и отображения истории сообщений
+    async function updateMessages() {
+        if (!serverRunning) {
+            return;
+        }
+        
+        try {
+            const response = await fetch('/api/websocket/messages');
+            const data = await response.json();
+            
+            if (data.error) {
+                addMessage('Ошибка при получении сообщений: ' + data.error);
+                return;
+            }
+            
+            // Очищаем текущие сообщения
+            document.getElementById('messages').innerHTML = '';
+            
+            // Отображаем полученные сообщения
+            const messages = data.messages;
+            if (messages && messages.length > 0) {
+                messages.forEach(msg => {
+                    const timestamp = new Date(msg.timestamp * 1000).toLocaleTimeString();
+                    let messageText = '';
+                    
+                    // Форматируем сообщение в зависимости от типа
+                    switch (msg.type) {
+                        case 'connection':
+                            messageText = `[${msg.direction}] ${msg.client}: ${msg.message}`;
+                            break;
+                        case 'websocket':
+                            messageText = `[${msg.direction}] ${msg.client}: ${msg.message}`;
+                            break;
+                        case 'broadcast':
+                            messageText = `[Broadcast] ${msg.message}`;
+                            break;
+                        case 'raw':
+                            messageText = `[Raw ${msg.direction}] ${msg.client}: ${msg.message}`;
+                            break;
+                        case 'server':
+                            messageText = `[Server] ${msg.message}`;
+                            break;
+                        default:
+                            messageText = `[${msg.type}] ${msg.message}`;
+                    }
+                    
+                    // Добавляем сообщение в интерфейс
+                    const messageElement = document.createElement('div');
+                    messageElement.className = 'message';
+                    messageElement.innerHTML = `<span class="timestamp">${timestamp}</span> - ${messageText}`;
+                    document.getElementById('messages').appendChild(messageElement);
+                    
+                    // Если сообщение содержит JSON, пытаемся его отформатировать
+                    try {
+                        // Проверяем, является ли сообщение JSON-строкой
+                        if (msg.type === 'websocket' || msg.type === 'broadcast') {
+                            const jsonData = JSON.parse(msg.message);
+                            if (typeof jsonData === 'object') {
+                                const formattedJson = JSON.stringify(jsonData, null, 2);
+                                addJsonMessage(formattedJson);
+                            }
+                        }
+                    } catch (e) {
+                        // Не JSON, игнорируем
+                    }
+                });
+                
+                // Прокручиваем к последнему сообщению
+                const messagesDiv = document.getElementById('messages');
+                messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            } else {
+                addMessage('Нет сообщений для отображения');
+            }
+        } catch (error) {
+            addMessage('Ошибка при получении сообщений: ' + error.message);
+        }
+    }
+    
     // Обновление информации о клиентах при нажатии на кнопку
     document.getElementById('refresh-clients').addEventListener('click', updateClientsInfo);
+    
+    // Обновление сообщений при нажатии на кнопку
+    document.getElementById('refresh-messages').addEventListener('click', updateMessages);
     
     // Проверка статуса сервера при загрузке страницы
     async function checkServerStatus() {
@@ -175,6 +276,12 @@
                     updateClientsInfo();
                     clientsUpdateInterval = setInterval(updateClientsInfo, 5000); // Обновляем каждые 5 секунд
                 }
+                
+                // Запускаем автоматическое обновление сообщений
+                if (!messagesUpdateInterval) {
+                    updateMessages();
+                    messagesUpdateInterval = setInterval(updateMessages, 3000); // Обновляем каждые 3 секунды
+                }
             } else {
                 document.getElementById('server-status').textContent = 'Статус сервера: Остановлен';
                 document.getElementById('server-status').className = 'alert alert-warning';
@@ -185,6 +292,12 @@
                 if (clientsUpdateInterval) {
                     clearInterval(clientsUpdateInterval);
                     clientsUpdateInterval = null;
+                }
+                
+                // Останавливаем автоматическое обновление сообщений
+                if (messagesUpdateInterval) {
+                    clearInterval(messagesUpdateInterval);
+                    messagesUpdateInterval = null;
                 }
                 
                 document.getElementById('clients-info').textContent = 'Сервер не запущен';
