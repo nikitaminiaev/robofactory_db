@@ -10,5 +10,5 @@ cube = doc.addObject('Part::Feature', 'Cube')
 cube.Shape = box
 doc.recompute()
 # Возвращаем результат
-result = {'object_created': cube.Name, 'dimensions': [10, 10, 10]}
+result = {'object_created': cube.Name, 'document_name': doc.Name}
 """

@@ -174,13 +174,14 @@
                 fetch('/api/websocket/messages')
                     .then(response => response.json())
                     .then(data => {
-                        console.log('Прямой запрос сообщений из updateUIBasedOnServerStatus:', data);
+                        console.log('Прямой запрос сообщений при загрузке:', data);
                         
                         // Очищаем текущие сообщения
                         document.getElementById('messages').innerHTML = '';
                         
                         if (!data.error && data.messages && data.messages.length > 0) {
-                            data.messages.forEach(msg => {
+                            // Переворачиваем массив сообщений, чтобы новые были внизу
+                            data.messages.reverse().forEach(msg => {
                                 const timestamp = new Date(msg.timestamp * 2000).toLocaleTimeString();
                                 let messageText = '';
                                 
@@ -221,10 +222,7 @@
                             addMessage('Ошибка при получении сообщений: ' + data.error);
                         }
                     })
-                    .catch(error => {
-                        console.error('Ошибка при прямом запросе сообщений:', error);
-                        addMessage('Ошибка при получении сообщений: ' + error.message);
-                    });
+                    .catch(error => console.error('Ошибка при запросе сообщений при загрузке:', error));
             }, 500);
             
             // Запускаем автоматическое обновление информации о клиентах
@@ -265,7 +263,8 @@
                                 // Очищаем текущие сообщения
                                 document.getElementById('messages').innerHTML = '';
                                 
-                                data.messages.forEach(msg => {
+                                // Переворачиваем массив сообщений, чтобы новые были внизу
+                                data.messages.reverse().forEach(msg => {
                                     const timestamp = new Date(msg.timestamp * 2000).toLocaleTimeString();
                                     let messageText = '';
                                     
@@ -582,7 +581,8 @@
                         document.getElementById('messages').innerHTML = '';
                         
                         if (!data.error && data.messages && data.messages.length > 0) {
-                            data.messages.forEach(msg => {
+                            // Переворачиваем массив сообщений, чтобы новые были внизу
+                            data.messages.reverse().forEach(msg => {
                                 const timestamp = new Date(msg.timestamp * 2000).toLocaleTimeString();
                                 let messageText = '';
                                 
@@ -733,7 +733,8 @@
             // Отображаем полученные сообщения
             const messages = data.messages;
             if (messages && messages.length > 0) {
-                messages.forEach(msg => {
+                // Переворачиваем массив сообщений, чтобы новые были внизу
+                messages.reverse().forEach(msg => {
                     const timestamp = new Date(msg.timestamp * 2000).toLocaleTimeString();
                     let messageText = '';
                     
@@ -791,11 +792,6 @@
         }
     }
     
-    // Очистка сообщений
-    document.getElementById('clear-messages').addEventListener('click', function() {
-        document.getElementById('messages').innerHTML = '';
-    });
-    
     // Вспомогательные функции для отображения сообщений
     function addMessage(message) {
         const messagesDiv = document.getElementById('messages');
@@ -819,6 +815,13 @@
         messagesDiv.appendChild(messageElement);
         messagesDiv.scrollTop = messagesDiv.scrollHeight;
     }
+    
+    // Функция для очистки всех сообщений
+    document.getElementById('clear-messages').addEventListener('click', function() {
+        document.getElementById('messages').innerHTML = '';
+        // Добавляем сообщение о очистке
+        addMessage('Сообщения очищены');
+    });
     
     // Инициализация при загрузке страницы
     window.addEventListener('load', function() {
@@ -859,7 +862,52 @@
                 .then(response => response.json())
                 .then(data => {
                     console.log('Прямой запрос сообщений при загрузке:', data);
-                    // Обработка сообщений...
+                    
+                    // Очищаем текущие сообщения
+                    document.getElementById('messages').innerHTML = '';
+                    
+                    if (!data.error && data.messages && data.messages.length > 0) {
+                        // Переворачиваем массив сообщений, чтобы новые были внизу
+                        data.messages.reverse().forEach(msg => {
+                            const timestamp = new Date(msg.timestamp * 2000).toLocaleTimeString();
+                            let messageText = '';
+                            
+                            // Форматируем сообщение в зависимости от типа
+                            switch (msg.type) {
+                                case 'connection':
+                                    messageText = `[${msg.direction}] ${msg.client}: ${msg.message}`;
+                                    break;
+                                case 'websocket':
+                                    messageText = `[${msg.direction}] ${msg.client}: ${msg.message}`;
+                                    break;
+                                case 'broadcast':
+                                    messageText = `[Broadcast] ${msg.message}`;
+                                    break;
+                                case 'raw':
+                                    messageText = `[Raw ${msg.direction}] ${msg.client}: ${msg.message}`;
+                                    break;
+                                case 'server':
+                                    messageText = `[Server] ${msg.message}`;
+                                    break;
+                                default:
+                                    messageText = `[${msg.type}] ${msg.message}`;
+                            }
+                            
+                            // Добавляем сообщение в интерфейс
+                            const messageElement = document.createElement('div');
+                            messageElement.className = 'message';
+                            messageElement.innerHTML = `<span class="timestamp">${timestamp}</span> - ${messageText}`;
+                            document.getElementById('messages').appendChild(messageElement);
+                        });
+                        
+                        // Прокручиваем к последнему сообщению
+                        const messagesDiv = document.getElementById('messages');
+                        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                    } else if (!data.error) {
+                        addMessage('Нет сообщений для отображения');
+                    } else {
+                        addMessage('Ошибка при получении сообщений: ' + data.error);
+                    }
                 })
                 .catch(error => console.error('Ошибка при запросе сообщений при загрузке:', error));
         }
@@ -904,7 +952,52 @@
                         .then(response => response.json())
                         .then(data => {
                             console.log('Прямой запрос сообщений при несоответствии:', data);
-                            // Обработка сообщений...
+                            
+                            // Очищаем текущие сообщения
+                            document.getElementById('messages').innerHTML = '';
+                            
+                            if (!data.error && data.messages && data.messages.length > 0) {
+                                // Переворачиваем массив сообщений, чтобы новые были внизу
+                                data.messages.reverse().forEach(msg => {
+                                    const timestamp = new Date(msg.timestamp * 2000).toLocaleTimeString();
+                                    let messageText = '';
+                                    
+                                    // Форматируем сообщение в зависимости от типа
+                                    switch (msg.type) {
+                                        case 'connection':
+                                            messageText = `[${msg.direction}] ${msg.client}: ${msg.message}`;
+                                            break;
+                                        case 'websocket':
+                                            messageText = `[${msg.direction}] ${msg.client}: ${msg.message}`;
+                                            break;
+                                        case 'broadcast':
+                                            messageText = `[Broadcast] ${msg.message}`;
+                                            break;
+                                        case 'raw':
+                                            messageText = `[Raw ${msg.direction}] ${msg.client}: ${msg.message}`;
+                                            break;
+                                        case 'server':
+                                            messageText = `[Server] ${msg.message}`;
+                                            break;
+                                        default:
+                                            messageText = `[${msg.type}] ${msg.message}`;
+                                    }
+                                    
+                                    // Добавляем сообщение в интерфейс
+                                    const messageElement = document.createElement('div');
+                                    messageElement.className = 'message';
+                                    messageElement.innerHTML = `<span class="timestamp">${timestamp}</span> - ${messageText}`;
+                                    document.getElementById('messages').appendChild(messageElement);
+                                });
+                                
+                                // Прокручиваем к последнему сообщению
+                                const messagesDiv = document.getElementById('messages');
+                                messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                            } else if (!data.error) {
+                                addMessage('Нет сообщений для отображения');
+                            } else {
+                                addMessage('Ошибка при получении сообщений: ' + data.error);
+                            }
                         })
                         .catch(error => console.error('Ошибка при запросе сообщений при несоответствии:', error));
                 }
