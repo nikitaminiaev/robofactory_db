@@ -156,24 +156,12 @@ function applyFreeCadButtonStyle(button) {
 function loadObjectToFreeCad(objectId) {
     // Проверяем статус сервера и клиентов перед отправкой запроса
     if (!serverRunning || connectedClientsCount === 0) {
-        alert('Невозможно загрузить объект во FreeCad: WebSocket-сервер не запущен или нет подключенных клиентов.');
+        showNotification('Невозможно загрузить объект во FreeCad: WebSocket-сервер не запущен или нет подключенных клиентов.', 'error');
         return;
     }
     
-    // Показываем индикатор загрузки или сообщение
-    const loadingMessage = document.createElement('div');
-    loadingMessage.className = 'loading-message';
-    loadingMessage.textContent = 'Отправка запроса на загрузку во FreeCad...';
-    loadingMessage.style.position = 'fixed';
-    loadingMessage.style.top = '50%';
-    loadingMessage.style.left = '50%';
-    loadingMessage.style.transform = 'translate(-50%, -50%)';
-    loadingMessage.style.padding = '15px';
-    loadingMessage.style.backgroundColor = '#f8f9fa';
-    loadingMessage.style.border = '1px solid #dee2e6';
-    loadingMessage.style.borderRadius = '4px';
-    loadingMessage.style.zIndex = '1000';
-    document.body.appendChild(loadingMessage);
+    // Показываем индикатор загрузки
+    showNotification('Отправка запроса на загрузку во FreeCad...', 'info');
 
     console.log(`Отправка запроса на загрузку объекта ${objectId} во FreeCad`);
     
@@ -190,40 +178,83 @@ function loadObjectToFreeCad(objectId) {
     })
     .then(data => {
         console.log('Данные ответа:', data);
-        // Формируем подробное сообщение
-        let messageLines = [];
         
-        if (data.success) {
-            messageLines.push('✅ Запрос успешно обработан');
-            messageLines.push(`📋 ID объекта: ${data.object_id}`);
+        if (data.success && data.socket_server_running && data.message_sent) {
+            // Успешный результат - кратковременное уведомление
+            showNotification('Объект успешно отправлен во FreeCad', 'success');
         } else {
-            messageLines.push('❌ Ошибка при обработке запроса');
-        }
-        
-        // Добавляем информацию о статусе WebSocket-сервера
-        if (data.socket_server_running) {
-            messageLines.push('✅ WebSocket-сервер запущен');
-            
-            if (data.message_sent) {
-                messageLines.push('✅ Команда успешно отправлена во FreeCad');
-            } else {
-                messageLines.push('❌ Не удалось отправить команду во FreeCad');
-                messageLines.push('👉 Проверьте, запущен ли FreeCad и подключен ли он к серверу');
+            // Ошибка - подробное уведомление
+            let message = 'Ошибка при отправке объекта во FreeCad';
+            if (!data.socket_server_running) {
+                message += ': WebSocket-сервер не запущен';
+            } else if (!data.message_sent) {
+                message += ': Не удалось отправить команду во FreeCad';
             }
-        } else {
-            messageLines.push('❌ WebSocket-сервер не запущен');
-            messageLines.push('👉 Запустите WebSocket-сервер через API: /api/websocket/start');
+            showNotification(message, 'error');
         }
-        
-        // Показываем сообщение пользователю
-        document.body.removeChild(loadingMessage);
-        alert(messageLines.join('\n'));
     })
     .catch(error => {
         console.error('Ошибка при загрузке объекта:', error);
-        document.body.removeChild(loadingMessage);
-        alert(`Произошла ошибка при загрузке объекта во FreeCad:\n${error.message}`);
+        showNotification(`Ошибка при загрузке объекта во FreeCad: ${error.message}`, 'error');
     });
+}
+
+// Функция для показа временного уведомления
+function showNotification(message, type = 'info') {
+    // Удаляем предыдущие уведомления
+    const existingNotification = document.getElementById('temp-notification');
+    if (existingNotification) {
+        document.body.removeChild(existingNotification);
+    }
+    
+    // Создаем элемент уведомления
+    const notification = document.createElement('div');
+    notification.id = 'temp-notification';
+    notification.textContent = message;
+    
+    // Стили в зависимости от типа уведомления
+    notification.style.position = 'fixed';
+    notification.style.top = '20px';
+    notification.style.right = '20px';
+    notification.style.padding = '10px 15px';
+    notification.style.borderRadius = '4px';
+    notification.style.zIndex = '10000';
+    notification.style.boxShadow = '0 4px 8px rgba(0,0,0,0.1)';
+    notification.style.transition = 'opacity 0.5s';
+    
+    switch (type) {
+        case 'success':
+            notification.style.backgroundColor = '#d4edda';
+            notification.style.color = '#155724';
+            notification.style.border = '1px solid #c3e6cb';
+            break;
+        case 'error':
+            notification.style.backgroundColor = '#f8d7da';
+            notification.style.color = '#721c24';
+            notification.style.border = '1px solid #f5c6cb';
+            break;
+        case 'info':
+        default:
+            notification.style.backgroundColor = '#e2f3f7';
+            notification.style.color = '#0c5460';
+            notification.style.border = '1px solid #bee5eb';
+            break;
+    }
+    
+    // Добавляем уведомление на страницу
+    document.body.appendChild(notification);
+    
+    // Автоматически удаляем уведомление через 3 секунды
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.style.opacity = '0';
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    document.body.removeChild(notification);
+                }
+            }, 500);
+        }
+    }, 3000);
 }
 
 // Инициализация при загрузке страницы
