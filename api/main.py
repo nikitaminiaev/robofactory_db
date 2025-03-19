@@ -1,7 +1,8 @@
+from routes.freecad import load_freecad
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from routes import get_all_basic_objects, get_basic_object, create_basic_object, load_freecad
+from routes import get_all_basic_objects, get_basic_object, create_basic_object
 from routes import websocket_routes
 import threading
 from service.web_soket_server import get_server_instance
