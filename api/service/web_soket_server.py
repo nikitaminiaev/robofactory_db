@@ -380,7 +380,6 @@ class WebSocketServer:
             # Создаем простой клиент для отправки сообщения
             print(f"[WebSocketServer] Создание сокета для отправки сообщения")
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(15)  # Увеличиваем таймаут для более надежного соединения
             
             try:
                 print(f"[WebSocketServer] Подключение к {host}:{port}")
@@ -400,11 +399,11 @@ class WebSocketServer:
                     sock.sendall(current_chunk)
                     sent_bytes += chunk_len
                 
-                # Ожидаем подтверждение от сервера
+                # Устанавливаем неблокирующий режим для сокета
+                sock.setblocking(False)
+                
                 print(f"[WebSocketServer] Ожидание ответа от сервера")
-                sock.settimeout(15)  # Увеличиваем таймаут для ожидания ответа
-                response = sock.recv(1024)
-                print(f"[WebSocketServer] Получен ответ от сервера: {response.decode('utf-8')}")
+                sock.recv(65536)
                 
                 return True
             except socket.timeout:

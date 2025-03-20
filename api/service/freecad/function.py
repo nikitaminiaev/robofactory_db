@@ -1,16 +1,3 @@
-def create_cube():
-    return """
-import FreeCAD
-import Part
-doc = FreeCAD.newDocument('Example')
-box = Part.makeBox(10, 10, 10)
-cube = doc.addObject('Part::Feature', 'Cube')
-cube.Shape = box
-doc.recompute()
-# Возвращаем результат
-result = {'object_created': cube.Name, 'document_name': doc.Name}
-"""
-
 def create_part_from_brep(brep_string: str, label: str, coordinates: dict = None, id: str = ''):
     return f"""
 import FreeCAD
@@ -46,3 +33,13 @@ Gui.SendMsgToActiveView("ViewFit")
 # Возвращаем результат
 result = {{'object_created': part_obj.Name, 'document_name': doc.Name}}
 """
+
+def load_object_in_new_doc(obj_id: str):
+    return f'''
+            {{
+                "function_call": "load_object_in_new_doc",
+                "arguments": {{
+                    "obj_id": "{obj_id}"
+                }}
+            }}
+            '''

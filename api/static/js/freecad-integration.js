@@ -179,19 +179,19 @@ function loadObjectToFreeCad(objectId) {
     .then(data => {
         console.log('Данные ответа:', data);
         
-        if (data.success && data.socket_server_running && data.message_sent) {
-            // Успешный результат - кратковременное уведомление
-            showNotification('Объект успешно отправлен во FreeCad', 'success');
-        } else {
-            // Ошибка - подробное уведомление
-            let message = 'Ошибка при отправке объекта во FreeCad';
-            if (!data.socket_server_running) {
-                message += ': WebSocket-сервер не запущен';
-            } else if (!data.message_sent) {
-                message += ': Не удалось отправить команду во FreeCad';
-            }
-            showNotification(message, 'error');
-        }
+        // if (data.success && data.socket_server_running && data.message_sent) {
+        //     // Успешный результат - кратковременное уведомление
+        //     showNotification('Объект успешно отправлен во FreeCad', 'success');
+        // } else {
+        //     // Ошибка - подробное уведомление
+        //     let message = 'Ошибка при отправке объекта во FreeCad';
+        //     if (!data.socket_server_running) {
+        //         message += ': WebSocket-сервер не запущен';
+        //     } else if (!data.message_sent) {
+        //         message += ': Не удалось отправить команду во FreeCad';
+        //     }
+        //     showNotification(message, 'error');
+        // }
     })
     .catch(error => {
         console.error('Ошибка при загрузке объекта:', error);
@@ -254,7 +254,7 @@ function showNotification(message, type = 'info') {
                 }
             }, 500);
         }
-    }, 3000);
+    }, 1000);
 }
 
 // Инициализация при загрузке страницы
