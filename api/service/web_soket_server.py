@@ -38,7 +38,15 @@ class WebSocketServer:
         print(f"Подключение от {addr}")
         
         # Получение данных от клиента
-        request = client_socket.recv(1024)
+        request = b''
+        while True:
+            chunk = client_socket.recv(8192)  # Увеличиваем размер буфера
+            if not chunk:
+                break
+            request += chunk
+            # Проверяем, получили ли мы полный HTTP-запрос
+            if b'\r\n\r\n' in request:
+                break
         
         # Проверяем, является ли это HTTP-запросом для WebSocket handshake
         if request.startswith(b'GET '):
@@ -349,12 +357,19 @@ class WebSocketServer:
                 pass
         return result
 
-    def send_message(self, message, host="localhost", port=None):
-        """Отправляет сообщение через WebSocket-сервер"""
+    def send_message(self, message, host="localhost", port=None, chunk_size=262144):
+        """Отправляет сообщение через WebSocket-сервер с поддержкой больших сообщений
+        
+        Args:
+            message: сообщение для отправки
+            host: хост сервера (по умолчанию localhost)
+            port: порт сервера (по умолчанию self.port)
+            chunk_size: размер фрагмента для разбиения больших сообщений
+        """
         if port is None:
             port = self.port
         
-        print(f"[WebSocketServer] Попытка отправить сообщение на {host}:{port}")
+        print(f"[WebSocketServer] Попытка отправить сообщение размером {len(message)} байт на {host}:{port}")
             
         try:
             # Сначала проверяем, запущен ли сервер
@@ -365,19 +380,29 @@ class WebSocketServer:
             # Создаем простой клиент для отправки сообщения
             print(f"[WebSocketServer] Создание сокета для отправки сообщения")
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(5)  # Увеличиваем таймаут для более надежного соединения
+            sock.settimeout(15)  # Увеличиваем таймаут для более надежного соединения
             
             try:
                 print(f"[WebSocketServer] Подключение к {host}:{port}")
                 sock.connect((host, port))
                 
-                # Отправляем сообщение через WebSocket-сервер
-                print(f"[WebSocketServer] Отправка сообщения: {message[:100]}{'...' if len(message) > 100 else ''}")
-                sock.sendall(message.encode('utf-8'))
+                # Разбиваем большое сообщение на части и отправляем
+                encoded_message = message.encode('utf-8')
+                total_size = len(encoded_message)
+                sent_bytes = 0
+                
+                while sent_bytes < total_size:
+                    # Определяем размер текущего фрагмента
+                    current_chunk = encoded_message[sent_bytes:sent_bytes+chunk_size]
+                    chunk_len = len(current_chunk)
+                    
+                    print(f"[WebSocketServer] Отправка фрагмента {sent_bytes+1}-{sent_bytes+chunk_len} из {total_size} байт")
+                    sock.sendall(current_chunk)
+                    sent_bytes += chunk_len
                 
                 # Ожидаем подтверждение от сервера
                 print(f"[WebSocketServer] Ожидание ответа от сервера")
-                sock.settimeout(10)  # Увеличиваем таймаут для ожидания ответа
+                sock.settimeout(15)  # Увеличиваем таймаут для ожидания ответа
                 response = sock.recv(1024)
                 print(f"[WebSocketServer] Получен ответ от сервера: {response.decode('utf-8')}")
                 
@@ -410,7 +435,10 @@ class WebSocketServer:
         try:
             # Создаем новый сокет
             self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            # Оптимизация настроек сокета
+            self.server.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 262144)  # 256KB для приема
+            self.server.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 262144)  # 256KB для отправки
+            self.server.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             
             # Пытаемся привязать сокет к адресу и порту
             try:

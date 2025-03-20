@@ -11,11 +11,11 @@ doc.recompute()
 result = {'object_created': cube.Name, 'document_name': doc.Name}
 """
 
-def create_part_from_brep(brep_string: str, label: str, coordinates: dict = None, id: int = None):
+def create_part_from_brep(brep_string: str, label: str, coordinates: dict = None, id: str = ''):
     return f"""
 import FreeCAD
 import Part
-doc = FreeCAD.newDocument('Example')
+doc = FreeCAD.newDocument('{label}')
 
 # Создаем объект Part
 part_obj = doc.addObject('App::Part', '{label}')
@@ -29,8 +29,8 @@ body_obj.Shape = shape
 # Добавляем body в part
 part_obj.Group = [body_obj]
 
-if {id} is not None:
-    part_obj.Id = {id}
+if '{id}' != '':
+    part_obj.Id = '{id}'
 # Устанавливаем координаты если они есть
 if {coordinates}:
     part_obj.Placement.Base.x = {coordinates.get('x', 0.0)}
