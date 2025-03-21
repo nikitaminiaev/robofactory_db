@@ -2,8 +2,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Request, HTTPException
 from fastapi.responses import JSONResponse
 from repository.module_repository import ModuleRepository
-from dto.freecad.basic_object import BasicObject
 from service.freecad.part_loader import PartLoader
+from utils.logger import log
 
 router = APIRouter()
 
@@ -28,7 +28,7 @@ async def load_object_to_freecad(request: Request, id: UUID, repo: ModuleReposit
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Ошибка при загрузке объекта во FreeCad: {e}")
+        log(f"Ошибка при загрузке объекта во FreeCad: {e}")
         return JSONResponse({
             "success": False,
             "message": f"Ошибка при загрузке объекта во FreeCad: {str(e)}",
