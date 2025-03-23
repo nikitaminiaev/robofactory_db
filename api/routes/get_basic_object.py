@@ -1,8 +1,9 @@
 from uuid import UUID
-from typing import List
+from typing import List, Dict
 
 from fastapi import APIRouter, Depends, Request, HTTPException
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 from repository.module_repository import ModuleRepository
 from schemas import BasicObjectDTO
 
@@ -45,6 +46,39 @@ async def get_basic_object_parents(request: Request, id: UUID, repo: ModuleRepos
     if not basic_object:
         raise HTTPException(status_code=404, detail=f"Объект с ID '{id}' не найден")
     
-    # Возвращаем список строковых ID родительских объектов
     return [str(parent.id) for parent in basic_object.parents]
+
+
+class ModuleIdsRequest(BaseModel):
+    ids: List[str]
+
+@router.post("/api/basic_objects/names", response_model=Dict[str, str])
+async def get_modules_names(request: ModuleIdsRequest, repo: ModuleRepository = Depends()):
+    """
+    Получение имен объектов по списку их идентификаторов
+    
+    Args:
+        request: объект запроса со списком идентификаторов
+        repo: репозиторий модулей
+        
+    Returns:
+        словарь вида {id: name}
+    """
+    try:
+        if not request.ids:
+            return {}
+            
+        valid_uuids = []
+        for id_str in request.ids:
+            try:
+                valid_uuids.append(UUID(id_str))
+            except ValueError:
+                continue
+        
+        names_dict = repo.get_modules_names_by_ids(valid_uuids)
+        
+        return names_dict
+    except Exception as e:
+        print(f"Ошибка при получении имен модулей: {str(e)}")
+        return {}
 

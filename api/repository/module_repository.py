@@ -134,3 +134,21 @@ class ModuleRepository(BaseRepository):
             
             modules = query.all()
         return modules
+
+    def get_modules_names_by_ids(self, ids: list[UUID]) -> dict[str, str]:
+        """
+        Получает словарь с именами модулей по их идентификаторам
+        
+        Args:
+            ids: список UUID идентификаторов модулей
+            
+        Returns:
+            словарь, где ключ - строковое представление UUID, а значение - имя модуля
+        """
+        if not ids:
+            return {}
+            
+        with self.db_session.session() as db:
+            query = db.query(Module.id, Module.name).filter(Module.id.in_(ids))
+            results = query.all()
+            return {str(id): name for id, name in results}
