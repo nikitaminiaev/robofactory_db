@@ -259,16 +259,31 @@ function showNotification(message, type = 'info') {
 
 // Инициализация при загрузке страницы
 document.addEventListener('DOMContentLoaded', function() {
+    if (window._freecadIntegrationInitialized) {
+        return;
+    }
+    window._freecadIntegrationInitialized = true;
+    
     initFreeCadButtons();
     
     // Наблюдатель DOM для динамически добавляемых кнопок
     const observer = new MutationObserver(function(mutations) {
-        mutations.forEach(function(mutation) {
-            if (mutation.addedNodes && mutation.addedNodes.length > 0) {
-                // Если были добавлены новые элементы, обновляем видимость кнопок
-                updateFreeCadButtonsVisibility();
+        // Проверяем, есть ли среди добавленных узлов что-то кроме статусных элементов
+        const hasRelevantChanges = mutations.some(function(mutation) {
+            if (!mutation.addedNodes || mutation.addedNodes.length === 0) {
+                return false;
             }
+            // Игнорируем изменения в элементах статуса и уведомлений
+            return Array.from(mutation.addedNodes).some(function(node) {
+                if (node.nodeType !== 1) return false; // Только элементы
+                const id = node.id || '';
+                return id !== 'freecad-status-message' && id !== 'temp-notification';
+            });
         });
+        
+        if (hasRelevantChanges) {
+            updateFreeCadButtonsVisibility();
+        }
     });
     
     // Наблюдаем за изменениями в DOM
