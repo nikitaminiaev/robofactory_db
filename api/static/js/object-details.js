@@ -8,19 +8,20 @@ function renderModulesTable(modules) {
     }
 
     let html = `
-    <table class="modules-table">
-        <thead>
-            <tr>
-                <th>Name</th>
-                <th>Author</th>
-                <th>Description</th>
-                <th>Created</th>
-                <th>Is Assembly</th>
-                <th>BREP Files</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody>
+    <div class="table-container">
+        <table class="modules-table resizable-table">
+            <thead>
+                <tr>
+                    <th style="width: 250px">Name<div class="resizer"></div></th>
+                    <th style="width: 120px">Author<div class="resizer"></div></th>
+                    <th style="width: 200px">Description<div class="resizer"></div></th>
+                    <th style="width: 150px">Created<div class="resizer"></div></th>
+                    <th style="width: 100px">Is Assembly<div class="resizer"></div></th>
+                    <th style="width: 100px">BREP Files<div class="resizer"></div></th>
+                    <th style="width: 180px">Actions<div class="resizer"></div></th>
+                </tr>
+            </thead>
+            <tbody>
     `;
 
     modules.forEach(module => {
@@ -28,11 +29,71 @@ function renderModulesTable(modules) {
     });
 
     html += `
-        </tbody>
-    </table>
+            </tbody>
+        </table>
+    </div>
     `;
 
+    // Инициализируем изменение ширины после вставки в DOM
+    setTimeout(initResizableColumns, 0);
+
     return html;
+}
+
+function initResizableColumns() {
+    const tables = document.querySelectorAll('.resizable-table');
+    tables.forEach(table => {
+        const headerRow = table.querySelector('thead tr');
+        const cols = headerRow.querySelectorAll('th');
+        
+        // Устанавливаем начальную общую ширину таблицы в пикселях
+        let tableWidth = 0;
+        cols.forEach(col => {
+            tableWidth += col.offsetWidth;
+        });
+        table.style.width = tableWidth + 'px';
+        table.style.minWidth = tableWidth + 'px';
+
+        cols.forEach(col => {
+            const resizer = col.querySelector('.resizer');
+            if (!resizer || resizer.dataset.initialized) return;
+            
+            resizer.dataset.initialized = "true";
+            
+            resizer.addEventListener('mousedown', function(e) {
+                const startX = e.pageX;
+                const startWidth = col.offsetWidth;
+                const initialTableWidth = table.offsetWidth;
+                
+                resizer.classList.add('resizing');
+                
+                const onMouseMove = (e) => {
+                    const delta = e.pageX - startX;
+                    const newWidth = Math.max(50, startWidth + delta); // Минимум 50px
+                    const actualDelta = newWidth - startWidth;
+                    
+                    col.style.width = newWidth + 'px';
+                    
+                    // Расширяем саму таблицу на величину изменения столбца
+                    const newTableWidth = initialTableWidth + actualDelta;
+                    table.style.width = newTableWidth + 'px';
+                    table.style.minWidth = newTableWidth + 'px';
+                };
+                
+                const onMouseUp = () => {
+                    resizer.classList.remove('resizing');
+                    document.removeEventListener('mousemove', onMouseMove);
+                    document.removeEventListener('mouseup', onMouseUp);
+                    document.body.style.cursor = 'default';
+                };
+                
+                document.addEventListener('mousemove', onMouseMove);
+                document.addEventListener('mouseup', onMouseUp);
+                document.body.style.cursor = 'col-resize';
+                e.preventDefault();
+            });
+        });
+    });
 }
 
 function createModuleRow(module, level, type = 'main') {
