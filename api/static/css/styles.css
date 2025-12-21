@@ -212,29 +212,86 @@ button:hover {
 
 .name-cell {
     position: relative;
+    padding-top: 8px !important;
+    padding-bottom: 8px !important;
 }
 
-.hierarchy-line {
+.tree-node-wrapper {
+    display: flex;
+    align-items: center;
+    position: relative;
+}
+
+.module-name-box {
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    padding: 4px 12px;
+    background-color: white;
+    display: inline-block;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    font-weight: 400;
+    color: #212529;
+}
+
+.tree-expander {
+    width: 20px;
+    height: 20px;
+    margin-right: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.tree-expand-btn {
+    background: none !important;
+    border: none !important;
+    color: #495057 !important;
+    font-size: 16px !important;
+    cursor: pointer;
+    padding: 0 !important;
+    width: 20px !important;
+    height: 20px !important;
+    line-height: 1 !important;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s;
+}
+
+.tree-connector-v {
     position: absolute;
     left: -15px;
-    top: -10px;
-    bottom: 20px;
-    width: 2px;
+    top: -20px; /* Смещение вверх чтобы соединиться с предыдущей строкой */
+    height: calc(100% + 20px);
+    width: 1px;
     background-color: #dee2e6;
+    z-index: 1;
 }
 
-.hierarchy-line::after {
-    content: '';
+/* Убираем лишний хвост у последнего элемента в ветке - сложно в CSS без JS, 
+   но можно ограничить высоту если это последний ребенок */
+
+.tree-connector-h {
     position: absolute;
+    left: -15px;
     top: 50%;
-    left: 0;
     width: 15px;
-    height: 2px;
+    height: 1px;
     background-color: #dee2e6;
+    z-index: 1;
 }
 
-.parent-row {
-    background-color: rgba(231, 76, 60, 0.03);
+.module-row:hover .module-name-box {
+    border-color: #3498db;
+}
+
+.child-row {
+    background-color: transparent !important;
+}
+
+.child-row .module-name-box {
+    background-color: #fff;
 }
 
 /* Стили для детального отображения */

@@ -11,7 +11,6 @@ function renderModulesTable(modules) {
     <table class="modules-table">
         <thead>
             <tr>
-                <th class="expand-col"></th>
                 <th>Name</th>
                 <th>Author</th>
                 <th>Description</th>
@@ -38,7 +37,7 @@ function renderModulesTable(modules) {
 
 function createModuleRow(module, level, type = 'main') {
     const hasChildren = module.children && module.children.length > 0;
-    const indent = level * 25; // Увеличим отступ для наглядности
+    const indent = level * 30;
     
     // Форматирование даты
     const created = module.created_ts ? new Date(module.created_ts).toLocaleString() : '-';
@@ -53,14 +52,16 @@ function createModuleRow(module, level, type = 'main') {
 
     return `
         <tr id="${rowId}" class="${rowClass}" data-id="${module.id}" data-level="${level}">
-            <td class="expand-col">
-                <div class="expand-btns">
-                    <button class="expand-child-btn" onclick="toggleChildren('${module.id}', ${level}, this)" title="Show Children" ${!hasChildren ? 'disabled' : ''}>↓</button>
+            <td class="name-cell" style="padding-left: ${indent + 15}px">
+                <div class="tree-node-wrapper">
+                    ${level > 0 ? '<div class="tree-connector-v"></div><div class="tree-connector-h"></div>' : ''}
+                    <div class="tree-expander">
+                        ${hasChildren ? `<button class="tree-expand-btn" onclick="toggleChildren('${module.id}', ${level}, this)">▸</button>` : ''}
+                    </div>
+                    <div class="module-name-box">
+                        <span class="module-name-text">${module.name}</span>
+                    </div>
                 </div>
-            </td>
-            <td style="padding-left: ${indent + 15}px" class="name-cell">
-                ${level > 0 ? '<span class="hierarchy-line"></span>' : ''}
-                <span class="module-name">${module.name}</span>
             </td>
             <td>${module.author}</td>
             <td class="desc-col" title="${module.description || ''}">${module.description || '-'}</td>
@@ -88,7 +89,7 @@ async function toggleChildren(moduleId, level, btn) {
             toRemove.remove();
         }
         btn.classList.remove('expanded');
-        btn.textContent = '↓';
+        btn.textContent = '▸';
         return;
     }
 
@@ -108,7 +109,7 @@ async function toggleChildren(moduleId, level, btn) {
         });
         
         btn.classList.add('expanded');
-        btn.textContent = '⭥'; // Символ того что развернуто
+        btn.textContent = '▾';
         
         // Инициализируем новые кнопки FreeCad
         if (typeof updateFreeCadButtonsVisibility === 'function') {
