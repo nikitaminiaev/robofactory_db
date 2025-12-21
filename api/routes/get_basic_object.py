@@ -1,5 +1,5 @@
 from uuid import UUID
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 from fastapi import APIRouter, Depends, Request, HTTPException
 from fastapi.responses import JSONResponse
@@ -11,24 +11,13 @@ from schemas import BasicObjectDTO
 router = APIRouter()
 
 
-@router.get("/api/basic_object", response_model=BasicObjectDTO)
-async def get_basic_object(request: Request, name: str = None, repo: ModuleRepository = Depends()):
-    error_message = None
-    basic_object = None
-
+@router.get("/api/basic_object", response_model=List[BasicObjectDTO])
+async def get_basic_object(request: Request, name: Optional[str] = None, repo: ModuleRepository = Depends()):
     if name:
-        basic_object = repo.get_module_with_relations(name)
-        if not basic_object:
-            error_message = f"Объект с именем '{name}' не найден"
-
-    if basic_object:
-        return BasicObjectDTO.from_module(basic_object)
-    else:
-        return JSONResponse({
-            "basic_object": None,
-            "error_message": error_message,
-            "search_performed": name is not None
-        })
+        modules = repo.get_module_with_relations(name)
+        return [BasicObjectDTO.from_module(m) for m in modules]
+    
+    return []
 
 
 @router.get("/api/basic_object/{id}", response_model=BasicObjectDTO)

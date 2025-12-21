@@ -22,8 +22,10 @@ $(document).ready(function() {
             var resultHtml = '';
             if (data.error_message) {
                 resultHtml = '<div class="error-message">' + data.error_message + '</div>';
-            } else if (data) {
-                resultHtml = '<h2>Search Result:</h2>' + renderObjectDetails(data);
+            } else if (data && data.length > 0) {
+                resultHtml = '<h2>Search Results:</h2>' + renderModulesTable(data);
+            } else {
+                resultHtml = '<div class="info-message">Объекты с именем "' + name + '" не найдены</div>';
             }
             $('#result').html(resultHtml);
             

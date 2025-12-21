@@ -1,3 +1,4 @@
+from typing import Optional
 from uuid import UUID
 from sqlalchemy.orm import selectinload
 from . import BaseRepository
@@ -25,7 +26,7 @@ class ModuleRepository(BaseRepository):
             modules = query.all()
         return modules
     
-    def get_top_level_modules_with_relations(self, limit: int = 10, offset: int = 0, top_level_ids: list[UUID] = None) -> list[Module]:
+    def get_top_level_modules_with_relations(self, limit: int = 10, offset: int = 0, top_level_ids: Optional[list[UUID]] = None) -> list[Module]:
         with (self.db_session.session() as db):
             query = db.query(Module).options(
                 selectinload(Module.bounding_contour),
@@ -58,17 +59,17 @@ class ModuleRepository(BaseRepository):
             module = db.query(Module).filter_by(name=name).first()
         return module
 
-    def get_module_with_relations(self, name: str) -> Module:
+    def get_module_with_relations(self, name: str) -> list[Module]:
         with self.db_session.session() as db:
-            module = db.query(Module).options(
+            modules = db.query(Module).options(
                 selectinload(Module.bounding_contour),
                 selectinload(Module.children),
                 selectinload(Module.parents),
                 selectinload(Module.boundaries),
                 selectinload(Module.streams),
                 selectinload(Module.platforms)
-            ).filter_by(name=name).first()
-        return module
+            ).filter(Module.name.ilike(f"%{name}%")).all()
+        return modules
     
     def get_module_by_id(self, id: UUID) -> Module:
         with self.db_session.session() as db:
@@ -129,6 +130,27 @@ class ModuleRepository(BaseRepository):
                 parent_child_module,
                 Module.id == parent_child_module.c.child_id
             ).filter(parent_child_module.c.parent_id == parent_id)
+            
+            query = query.order_by(Module.id)
+            
+            modules = query.all()
+        return modules
+
+    def get_parents_modules_with_relations(self, child_id: UUID) -> list[Module]:
+        with (self.db_session.session() as db):
+            query = db.query(Module).options(
+                selectinload(Module.bounding_contour),
+                selectinload(Module.children),
+                selectinload(Module.parents),
+                selectinload(Module.boundaries),
+                selectinload(Module.streams),
+                selectinload(Module.platforms)
+            )
+            
+            query = query.join(
+                parent_child_module,
+                Module.id == parent_child_module.c.parent_id
+            ).filter(parent_child_module.c.child_id == child_id)
             
             query = query.order_by(Module.id)
             
