@@ -251,6 +251,12 @@ button:hover {
     position: relative;
 }
 
+.module-name-link {
+    text-decoration: none !important;
+    color: inherit !important;
+    display: inline-block;
+}
+
 .module-name-box {
     border: 1px solid #ced4da;
     border-radius: 4px;
@@ -260,6 +266,8 @@ button:hover {
     box-shadow: 0 1px 2px rgba(0,0,0,0.05);
     font-weight: 400;
     color: #212529;
+    transition: all 0.2s;
+    cursor: pointer;
 }
 
 .tree-expander {

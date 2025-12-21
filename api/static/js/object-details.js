@@ -119,9 +119,11 @@ function createModuleRow(module, level, type = 'main') {
                     <div class="tree-expander">
                         ${hasChildren ? `<button class="tree-expand-btn" onclick="toggleChildren('${module.id}', ${level}, this)">▸</button>` : ''}
                     </div>
-                    <div class="module-name-box">
-                        <span class="module-name-text">${module.name}</span>
-                    </div>
+                    <a href="/basic_object/${module.id}" class="module-name-link">
+                        <div class="module-name-box">
+                            <span class="module-name-text">${module.name}</span>
+                        </div>
+                    </a>
                 </div>
             </td>
             <td>${module.author}</td>
@@ -131,7 +133,6 @@ function createModuleRow(module, level, type = 'main') {
             <td>${brepStatus}</td>
             <td class="actions-col">
                 <button class="load-freecad-btn" data-id="${module.id}" style="display: none;">Load FreeCad</button>
-                <a href="/basic_object/${module.id}" class="view-page-link">Go to Page</a>
             </td>
         </tr>
     `;
