@@ -84,6 +84,69 @@ li:last-child {
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
+.search-form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    align-items: end;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+}
+
+.form-group label {
+    margin-bottom: 5px;
+    color: #2c3e50;
+    font-weight: 500;
+}
+
+.form-group input {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 16px;
+    height: 42px; /* Фиксированная высота для выравнивания */
+    box-sizing: border-box;
+    color: #333;
+    margin: 0; /* Сброс отступов */
+    display: block;
+}
+
+.form-group input::placeholder {
+    color: #999;
+}
+
+/* Стили для поля даты */
+input[type="date"] {
+    color: #999; /* Цвет по умолчанию */
+    font-family: inherit;
+    -webkit-appearance: none; /* Убираем специфичные стили Safari */
+    appearance: none;
+}
+
+/* Специальные селекторы для Chrome/Edge чтобы выровнять контент внутри date input */
+input[type="date"]::-webkit-calendar-picker-indicator {
+    margin-left: 5px;
+}
+
+input[type="date"]::-webkit-datetime-edit {
+    padding: 0;
+}
+
+.form-actions {
+    display: flex;
+    justify-content: flex-start;
+}
+
+.form-actions button {
+    height: 42px;
+    padding: 0 30px;
+    box-sizing: border-box;
+}
+
 label {
     display: block;
     margin-bottom: 10px;
@@ -91,13 +154,28 @@ label {
     font-weight: 500;
 }
 
-input[type="text"] {
-    width: 100%;
-    padding: 10px;
-    margin-bottom: 15px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    font-size: 16px;
+/* Сортировка таблиц */
+th.sortable {
+    cursor: pointer;
+    position: relative;
+    user-select: none;
+    transition: background-color 0.2s;
+}
+
+th.sortable:hover {
+    background-color: #e9ecef;
+}
+
+.sort-icon {
+    display: inline-block;
+    margin-left: 5px;
+    color: #999;
+    font-size: 0.8em;
+    vertical-align: middle;
+}
+
+th.sortable:hover .sort-icon {
+    color: #3498db;
 }
 
 button {

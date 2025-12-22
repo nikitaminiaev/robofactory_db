@@ -1,6 +1,7 @@
-from typing import Optional
+from typing import Optional, List
 from uuid import UUID
 from sqlalchemy.orm import selectinload
+from sqlalchemy import func
 from . import BaseRepository
 from models import Module
 from models.associations import parent_child_module
@@ -59,17 +60,26 @@ class ModuleRepository(BaseRepository):
             module = db.query(Module).filter_by(name=name).first()
         return module
 
-    def get_module_with_relations(self, name: str) -> list[Module]:
+    def get_module_with_relations(self, name: Optional[str] = None, author: Optional[str] = None, created_ts: Optional[str] = None) -> list[Module]:
         with self.db_session.session() as db:
-            modules = db.query(Module).options(
+            query = db.query(Module).options(
                 selectinload(Module.bounding_contour),
                 selectinload(Module.children),
                 selectinload(Module.parents),
                 selectinload(Module.boundaries),
                 selectinload(Module.streams),
                 selectinload(Module.platforms)
-            ).filter(Module.name.ilike(f"%{name}%")).all()
-        return modules
+            )
+            
+            if name:
+                query = query.filter(Module.name.ilike(f"%{name}%"))
+            if author:
+                query = query.filter(Module.author.ilike(f"%{author}%"))
+            if created_ts:
+                # Поиск объектов, созданных после указанной даты
+                query = query.filter(func.date(Module.created_ts) > created_ts)
+                
+            return query.all()
     
     def get_module_by_id(self, id: UUID) -> Module:
         with self.db_session.session() as db:

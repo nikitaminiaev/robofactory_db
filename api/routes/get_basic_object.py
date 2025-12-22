@@ -12,9 +12,15 @@ router = APIRouter()
 
 
 @router.get("/api/basic_object", response_model=List[BasicObjectDTO])
-async def get_basic_object(request: Request, name: Optional[str] = None, repo: ModuleRepository = Depends()):
-    if name:
-        modules = repo.get_module_with_relations(name)
+async def get_basic_object(
+    request: Request, 
+    name: Optional[str] = None, 
+    author: Optional[str] = None, 
+    created_ts: Optional[str] = None,
+    repo: ModuleRepository = Depends()
+):
+    if name or author or created_ts:
+        modules = repo.get_module_with_relations(name=name, author=author, created_ts=created_ts)
         return [BasicObjectDTO.from_module(m) for m in modules]
     
     return []

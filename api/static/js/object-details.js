@@ -2,21 +2,59 @@
  * Модуль для отрисовки иерархической таблицы объектов
  */
 
-function renderModulesTable(modules) {
+// Глобальное состояние сортировки
+let currentSort = {
+    column: null,
+    direction: 'asc'
+};
+
+function renderModulesTable(modules, sortCol = null, sortDir = 'asc') {
     if (!modules || modules.length === 0) {
         return '<div class="info-message">Объекты не найдены</div>';
     }
+
+    // Сохраняем данные для возможности повторной сортировки
+    window.lastTableData = modules;
+    currentSort.column = sortCol;
+    currentSort.direction = sortDir;
+
+    // Сортировка если указана колонка
+    if (sortCol) {
+        modules.sort((a, b) => {
+            let valA, valB;
+            
+            switch(sortCol) {
+                case 'name': valA = a.name; valB = b.name; break;
+                case 'author': valA = a.author; valB = b.author; break;
+                case 'created': valA = a.created_ts; valB = b.created_ts; break;
+                case 'assembly': 
+                    valA = a.bounding_contour ? (a.bounding_contour.is_assembly ? 1 : 0) : -1;
+                    valB = b.bounding_contour ? (b.bounding_contour.is_assembly ? 1 : 0) : -1;
+                    break;
+                default: return 0;
+            }
+
+            if (valA < valB) return sortDir === 'asc' ? -1 : 1;
+            if (valA > valB) return sortDir === 'asc' ? 1 : -1;
+            return 0;
+        });
+    }
+
+    const getSortIcon = (col) => {
+        if (currentSort.column !== col) return '<span class="sort-icon">↕</span>';
+        return currentSort.direction === 'asc' ? '<span class="sort-icon">↑</span>' : '<span class="sort-icon">↓</span>';
+    };
 
     let html = `
     <div class="table-container">
         <table class="modules-table resizable-table">
             <thead>
                 <tr>
-                    <th style="width: 250px">Name<div class="resizer"></div></th>
-                    <th style="width: 120px">Author<div class="resizer"></div></th>
+                    <th style="width: 250px" class="sortable" onclick="handleSort('name')">Name ${getSortIcon('name')}<div class="resizer"></div></th>
+                    <th style="width: 120px" class="sortable" onclick="handleSort('author')">Author ${getSortIcon('author')}<div class="resizer"></div></th>
                     <th style="width: 200px">Description<div class="resizer"></div></th>
-                    <th style="width: 150px">Created<div class="resizer"></div></th>
-                    <th style="width: 100px">Is Assembly<div class="resizer"></div></th>
+                    <th style="width: 150px" class="sortable" onclick="handleSort('created')">Created ${getSortIcon('created')}<div class="resizer"></div></th>
+                    <th style="width: 100px" class="sortable" onclick="handleSort('assembly')">Is Assembly ${getSortIcon('assembly')}<div class="resizer"></div></th>
                     <th style="width: 100px">BREP Files<div class="resizer"></div></th>
                     <th style="width: 180px">Actions<div class="resizer"></div></th>
                 </tr>
@@ -38,6 +76,28 @@ function renderModulesTable(modules) {
     setTimeout(initResizableColumns, 0);
 
     return html;
+}
+
+function handleSort(column) {
+    const direction = (currentSort.column === column && currentSort.direction === 'asc') ? 'desc' : 'asc';
+    const sortedHtml = renderModulesTable(window.lastTableData, column, direction);
+    
+    // Находим контейнер и обновляем его содержимое
+    const resultDiv = document.getElementById('result');
+    if (resultDiv) {
+        resultDiv.innerHTML = '<h2>Search Results:</h2>' + sortedHtml;
+    } else {
+        // Если мы не на странице поиска, возможно мы на другой странице с таблицей
+        const tableContainer = document.querySelector('.table-container');
+        if (tableContainer) {
+            tableContainer.outerHTML = sortedHtml;
+        }
+    }
+    
+    // Обновляем видимость кнопок FreeCad
+    if (typeof updateFreeCadButtonsVisibility === 'function') {
+        updateFreeCadButtonsVisibility();
+    }
 }
 
 function initResizableColumns() {
