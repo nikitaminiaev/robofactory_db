@@ -34,6 +34,7 @@ class BasicObjectCreate(BaseModel):
     role: Optional[str] = None
     role_description: Optional[str] = None
     is_assembly: bool
+    is_shell: bool = False
     brep_files: Dict[str, str]
     parent_id: Optional[str] = None
     status: Optional[ModuleStatus] = None
@@ -56,6 +57,7 @@ async def create_basic_object(
         # Prepare bounding contour data
         contour_data = {
             "is_assembly": item.is_assembly,
+            "is_shell": item.is_shell,
             "brep_files": item.brep_files,
         }
 
@@ -120,6 +122,7 @@ class BasicObjectUpdate(BaseModel):
     role: Optional[str] = None
     role_description: Optional[str] = None
     is_assembly: Optional[bool] = None
+    is_shell: Optional[bool] = None
     brep_files: Optional[Dict[str, str]] = None
     parent_id: Optional[str] = None
 
@@ -194,7 +197,7 @@ async def update_basic_object(
             for field in ["parent_id", "coordinates", "role", "role_description"]:
                 update_data.pop(field, None)
 
-            contour_fields = {"is_assembly", "brep_files"}
+            contour_fields = {"is_assembly", "is_shell", "brep_files"}
             basic_object_data = {k: v for k, v in update_data.items() if k not in contour_fields}
             contour_data = {k: v for k, v in update_data.items() if k in contour_fields}
 

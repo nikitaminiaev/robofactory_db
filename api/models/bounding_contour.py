@@ -18,6 +18,7 @@ class BoundingContour(Base):
     module: Mapped["Module"] = relationship(back_populates="bounding_contour")
 
     is_assembly = Column(Boolean, nullable=False)
+    is_shell: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     brep_files = Column(JSON, nullable=True)  # Список BREP файлов или ссылок на них
     parent_id = Column(UUID(as_uuid=True), ForeignKey('bounding_contours.id'), nullable=True)
     parent = relationship("BoundingContour", remote_side=[id])
@@ -27,7 +28,8 @@ class BoundingContour(Base):
 
     @classmethod
     def create(cls, is_assembly: bool, brep_files: Dict[str, str] = None,
-               module_id: Optional[UUID] = None, parent_id: Optional[UUID] = None) -> "BoundingContour":
+               module_id: Optional[UUID] = None, parent_id: Optional[UUID] = None,
+               is_shell: bool = False) -> "BoundingContour":
         """
         Factory method for creating a BoundingContour instance.
         """
@@ -35,20 +37,22 @@ class BoundingContour(Base):
             is_assembly=is_assembly,
             brep_files=brep_files or {},
             module_id=module_id,
-            parent_id=parent_id
+            parent_id=parent_id,
+            is_shell=is_shell
         )
 
     def __repr__(self) -> str:
         return str(self)
 
     def __str__(self):
-        return f"BoundingContour(id={self.id!r}, is_assembly={self.is_assembly!r})"
+        return f"BoundingContour(id={self.id!r}, is_assembly={self.is_assembly!r}, is_shell={self.is_shell!r})"
 
     def to_dict(self):
         return {
             "id": str(self.id),
             "module_id": str(self.module_id) if self.module_id else None,
             "is_assembly": self.is_assembly,
+            "is_shell": self.is_shell,
             "brep_files": self.brep_files,
             "parent_id": str(self.parent_id) if self.parent_id else None,
             "created_ts": self.created_ts.isoformat() if self.created_ts else None,

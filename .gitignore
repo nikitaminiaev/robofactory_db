@@ -5,3 +5,6 @@
 **/__pycache__/
 *.py[cod]
 *$py.class
+api/.env
+AGENTS.md
+opencode.json
