@@ -6,6 +6,7 @@ class BoundingContourDTO(BaseModel):
     id: str
     basic_object_id: str
     is_assembly: bool
+    is_shell: bool = False
     brep_files: Dict[str, str]
     parent_id: Optional[str] = None
     created_ts: Optional[str] = None

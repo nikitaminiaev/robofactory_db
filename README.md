@@ -65,6 +65,7 @@ generating a db diagram:
 all commands execute from the api/database directory   
 create migration
 
+    cd database
     alembic revision --autogenerate -m "Create parts_cad table"
 
 execute all new migrations:

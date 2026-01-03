@@ -270,6 +270,7 @@ function renderObjectFullDetails(data) {
             <h2>Bounding Contour</h2>
             <table class="detail-table">
                 <tr><th>Is Assembly</th><td>${data.bounding_contour.is_assembly ? 'Yes' : 'No'}</td></tr>
+                <tr><th>Is Shell</th><td>${data.bounding_contour.is_shell ? 'Yes' : 'No'}</td></tr>
                 <tr><th>BREP Files</th><td>${
                     data.bounding_contour.brep_files 
                     && (typeof data.bounding_contour.brep_files === 'object' 
