@@ -247,17 +247,25 @@ async function toggleChildren(moduleId, level, btn) {
 
 // Новая функция для детального отображения объекта
 function renderObjectFullDetails(data) {
+    // Сохраняем данные объекта для редактирования
+    window.currentObjectData = data;
+    
     // Глобальный кэш имен объектов
     if (!window.objectNamesCache) {
         window.objectNamesCache = {};
     }
 
-    let detailsHtml = `<div class="detail-view">
+    let detailsHtml = `<div class="detail-view" id="object-detail-container">
+        <div class="action-buttons">
+            <button id="edit-btn" onclick="toggleEditMode()">Edit</button>
+            <button id="save-btn" class="save-btn" style="display: none;" onclick="saveObjectChanges()">Save</button>
+            <button id="cancel-btn" class="cancel-btn" style="display: none;" onclick="toggleEditMode(false)">Cancel</button>
+        </div>
         <table class="detail-table">
             <tr><th>ID</th><td>${data.id} <button class="load-freecad-btn" data-id="${data.id}" style="display: none;">Load FreeCad</button></td></tr>
-            <tr><th>Name</th><td>${data.name}</td></tr>
-            <tr><th>Author</th><td>${data.author}</td></tr>
-            <tr><th>Description</th><td>${data.description || '-'}</td></tr>
+            <tr><th>Name</th><td id="field-name">${data.name}</td></tr>
+            <tr><th>Author</th><td id="field-author">${data.author}</td></tr>
+            <tr><th>Description</th><td id="field-description">${data.description || '-'}</td></tr>
             ${data.coordinates ? `<tr><th>Coordinates</th><td>${JSON.stringify(data.coordinates)}</td></tr>` : ''}
             ${data.role ? `<tr><th>Role</th><td>${data.role}</td></tr>` : ''}
             ${data.role_description ? `<tr><th>Role Description</th><td>${data.role_description}</td></tr>` : ''}
@@ -269,8 +277,8 @@ function renderObjectFullDetails(data) {
         detailsHtml += `
             <h2>Bounding Contour</h2>
             <table class="detail-table">
-                <tr><th>Is Assembly</th><td>${data.bounding_contour.is_assembly ? 'Yes' : 'No'}</td></tr>
-                <tr><th>Is Shell</th><td>${data.bounding_contour.is_shell ? 'Yes' : 'No'}</td></tr>
+                <tr><th>Is Assembly</th><td id="field-is_assembly">${data.bounding_contour.is_assembly ? 'Yes' : 'No'}</td></tr>
+                <tr><th>Is Shell</th><td id="field-is_shell">${data.bounding_contour.is_shell ? 'Yes' : 'No'}</td></tr>
                 <tr><th>BREP Files</th><td>${
                     data.bounding_contour.brep_files 
                     && (typeof data.bounding_contour.brep_files === 'object' 
@@ -335,6 +343,305 @@ function renderObjectFullDetails(data) {
     detailsHtml += `</div>`;
 
     return detailsHtml;
+}
+
+function toggleEditMode(enable = true) {
+    const container = document.getElementById('object-detail-container');
+    const data = window.currentObjectData;
+    
+    if (enable) {
+        container.classList.add('edit-mode');
+        document.getElementById('edit-btn').style.display = 'none';
+        document.getElementById('save-btn').style.display = 'inline-block';
+        document.getElementById('cancel-btn').style.display = 'inline-block';
+        
+        // Превращаем поля в инпуты
+        document.getElementById('field-name').innerHTML = `<input type="text" id="input-name" value="${data.name}">`;
+        document.getElementById('field-author').innerHTML = `<input type="text" id="input-author" value="${data.author}">`;
+        document.getElementById('field-description').innerHTML = `<textarea id="input-description">${data.description || ''}</textarea>`;
+        
+        if (data.bounding_contour) {
+            document.getElementById('field-is_assembly').innerHTML = `<input type="checkbox" id="input-is_assembly" ${data.bounding_contour.is_assembly ? 'checked' : ''}>`;
+            document.getElementById('field-is_shell').innerHTML = `<input type="checkbox" id="input-is_shell" ${data.bounding_contour.is_shell ? 'checked' : ''}>`;
+        }
+        
+        // Добавляем возможность удаления родителей
+        const parentsList = document.getElementById('parentsList');
+        if (parentsList) {
+            const parents = parentsList.querySelectorAll('li');
+            parents.forEach(li => {
+                if (!li.querySelector('.remove-btn')) {
+                    const removeBtn = document.createElement('button');
+                    removeBtn.className = 'remove-btn';
+                    removeBtn.textContent = 'Remove';
+                    removeBtn.onclick = () => {
+                        li.style.display = 'none';
+                        li.dataset.removed = 'true';
+                    };
+                    li.appendChild(removeBtn);
+                }
+            });
+            
+            // Добавляем секцию добавления родителя
+            if (!document.getElementById('add-parent-section')) {
+                const addParentSection = document.createElement('div');
+                addParentSection.id = 'add-parent-section';
+                addParentSection.className = 'add-child-section';
+                addParentSection.innerHTML = `
+                    <h3>Add Parent</h3>
+                    <div class="add-child-grid">
+                        <div style="position: relative;">
+                            <input type="text" id="search-parent-input" placeholder="Search module by name..." oninput="searchModulesForRelation(this.value, 'parent')">
+                            <div id="parent-search-results" class="search-results-dropdown" style="display: none;"></div>
+                        </div>
+                        <button onclick="addNewRelationToList('parent')">Add</button>
+                    </div>
+                `;
+                parentsList.after(addParentSection);
+            }
+        } else {
+            // Если списка родителей нет, создаем его для добавления новых
+            const title = document.createElement('h2');
+            title.textContent = 'Parents';
+            const newList = document.createElement('ul');
+            newList.id = 'parentsList';
+            newList.className = 'related-list';
+            
+            const addParentSection = document.createElement('div');
+            addParentSection.id = 'add-parent-section';
+            addParentSection.className = 'add-child-section';
+            addParentSection.innerHTML = `
+                <h3>Add Parent</h3>
+                <div class="add-child-grid">
+                    <div style="position: relative;">
+                        <input type="text" id="search-parent-input" placeholder="Search module by name..." oninput="searchModulesForRelation(this.value, 'parent')">
+                        <div id="parent-search-results" class="search-results-dropdown" style="display: none;"></div>
+                    </div>
+                    <button onclick="addNewRelationToList('parent')">Add</button>
+                </div>
+            `;
+            container.appendChild(title);
+            container.appendChild(newList);
+            container.appendChild(addParentSection);
+        }
+
+        // Добавляем возможность удаления детей
+        const childrenList = document.getElementById('childrenList');
+        if (childrenList) {
+            const children = childrenList.querySelectorAll('li');
+            children.forEach(li => {
+                if (!li.querySelector('.remove-btn')) {
+                    const removeBtn = document.createElement('button');
+                    removeBtn.className = 'remove-btn';
+                    removeBtn.textContent = 'Remove';
+                    removeBtn.onclick = () => {
+                        li.style.display = 'none';
+                        li.dataset.removed = 'true';
+                    };
+                    li.appendChild(removeBtn);
+                }
+            });
+            
+            // Добавляем секцию добавления ребенка
+            if (!document.getElementById('add-child-section')) {
+                const addChildSection = document.createElement('div');
+                addChildSection.id = 'add-child-section';
+                addChildSection.className = 'add-child-section';
+                addChildSection.innerHTML = `
+                    <h3>Add Child</h3>
+                    <div class="add-child-grid">
+                        <div style="position: relative;">
+                            <input type="text" id="search-child-input" placeholder="Search module by name..." oninput="searchModulesForRelation(this.value, 'child')">
+                            <div id="child-search-results" class="search-results-dropdown" style="display: none;"></div>
+                        </div>
+                        <button onclick="addNewRelationToList('child')">Add</button>
+                    </div>
+                `;
+                childrenList.after(addChildSection);
+            }
+        } else {
+            // Если списка детей нет, создаем его для добавления новых
+            const title = document.createElement('h2');
+            title.textContent = 'Children';
+            const newList = document.createElement('ul');
+            newList.id = 'childrenList';
+            newList.className = 'related-list';
+            
+            const addChildSection = document.createElement('div');
+            addChildSection.id = 'add-child-section';
+            addChildSection.className = 'add-child-section';
+            addChildSection.innerHTML = `
+                <h3>Add Child</h3>
+                <div class="add-child-grid">
+                    <div style="position: relative;">
+                        <input type="text" id="search-child-input" placeholder="Search module by name..." oninput="searchModulesForRelation(this.value, 'child')">
+                        <div id="child-search-results" class="search-results-dropdown" style="display: none;"></div>
+                    </div>
+                    <button onclick="addNewRelationToList('child')">Add</button>
+                </div>
+            `;
+            container.appendChild(title);
+            container.appendChild(newList);
+            container.appendChild(addChildSection);
+        }
+    } else {
+        // Выходим из режима редактирования - просто перерисовываем все
+        const detailDiv = document.getElementById('objectDetails');
+        if (detailDiv) {
+            detailDiv.innerHTML = renderObjectDetails(data);
+        }
+    }
+}
+
+let selectedRelId = null;
+let selectedRelType = null;
+
+async function searchModulesForRelation(query, type) {
+    const resultsDiv = document.getElementById(`${type}-search-results`);
+    if (query.length < 2) {
+        resultsDiv.style.display = 'none';
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/basic_object?name=${encodeURIComponent(query)}`);
+        const modules = await response.json();
+        
+        if (modules.length === 0) {
+            resultsDiv.innerHTML = '<div class="search-result-item">No results</div>';
+        } else {
+            resultsDiv.innerHTML = modules
+                .filter(m => m.id !== window.currentObjectData.id) // Нельзя добавить самого себя
+                .map(m => `<div class="search-result-item" onclick="selectRelationForAdd('${m.id}', '${m.name}', '${type}')">${m.name} (${m.id})</div>`)
+                .join('');
+        }
+        resultsDiv.style.display = 'block';
+    } catch (e) {
+        console.error('Error searching modules:', e);
+    }
+}
+
+function selectRelationForAdd(id, name, type) {
+    selectedRelId = id;
+    selectedRelType = type;
+    document.getElementById(`search-${type}-input`).value = name;
+    document.getElementById(`${type}-search-results`).style.display = 'none';
+}
+
+function showToast(message, type = 'success') {
+    const toast = document.createElement('div');
+    toast.className = `toast-notification toast-${type}`;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    
+    // Показываем с небольшой задержкой для анимации
+    setTimeout(() => toast.classList.add('show'), 10);
+    
+    // Удаляем через 3 секунды
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
+function addNewRelationToList(type) {
+    if (!selectedRelId || selectedRelType !== type) {
+        showToast('Please select a module from the search results', 'error');
+        return;
+    }
+    
+    const name = document.getElementById(`search-${type}-input`).value;
+    const list = document.getElementById(`${type}sList`);
+    
+    const li = document.createElement('li');
+    li.dataset.newRelation = 'true';
+    li.dataset.id = selectedRelId;
+    
+    // Координаты по умолчанию (нулевые)
+    const coords = { x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0 };
+    li.dataset.coordinates = JSON.stringify(coords);
+    
+    li.innerHTML = `
+        <a href="/basic_object/${selectedRelId}">${name}</a>
+        <span style="font-size: 11px; color: #666; margin-left: 10px;">(New)</span>
+        <button class="remove-btn" onclick="this.parentElement.remove()">Remove</button>
+    `;
+    
+    list.appendChild(li);
+    
+    // Сброс полей
+    selectedRelId = null;
+    selectedRelType = null;
+    document.getElementById(`search-${type}-input`).value = '';
+}
+
+async function saveObjectChanges() {
+    const data = window.currentObjectData;
+    const updatePayload = {
+        name: document.getElementById('input-name').value,
+        author: document.getElementById('input-author').value,
+        description: document.getElementById('input-description').value,
+        is_assembly: document.getElementById('input-is_assembly') ? document.getElementById('input-is_assembly').checked : undefined,
+        is_shell: document.getElementById('input-is_shell') ? document.getElementById('input-is_shell').checked : undefined,
+        added_children: [],
+        removed_children: [],
+        added_parents: [],
+        removed_parents: []
+    };
+    
+    // Собираем изменения по родителям
+    const parentsList = document.getElementById('parentsList');
+    if (parentsList) {
+        const parentItems = parentsList.querySelectorAll('li');
+        parentItems.forEach(li => {
+            if (li.dataset.removed === 'true') {
+                const id = li.querySelector('a').href.split('/').pop();
+                updatePayload.removed_parents.push(id);
+            } else if (li.dataset.newRelation === 'true') {
+                updatePayload.added_parents.push({
+                    id: li.dataset.id,
+                    coordinates: JSON.parse(li.dataset.coordinates)
+                });
+            }
+        });
+    }
+
+    // Собираем изменения по детям
+    const childrenList = document.getElementById('childrenList');
+    if (childrenList) {
+        const childItems = childrenList.querySelectorAll('li');
+        childItems.forEach(li => {
+            if (li.dataset.removed === 'true') {
+                const id = li.querySelector('a').href.split('/').pop();
+                updatePayload.removed_children.push(id);
+            } else if (li.dataset.newRelation === 'true') {
+                updatePayload.added_children.push({
+                    id: li.dataset.id,
+                    coordinates: JSON.parse(li.dataset.coordinates)
+                });
+            }
+        });
+    }
+    
+    try {
+        const response = await fetch(`/api/basic_object/${data.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updatePayload)
+        });
+        
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.detail || 'Failed to save changes');
+        }
+        
+        showToast('Changes saved successfully!', 'success');
+        
+        // Перезагружаем через секунду, чтобы пользователь успел увидеть уведомление
+        setTimeout(() => window.location.reload(), 1000);
+    } catch (e) {
+        showToast('Error: ' + e.message, 'error');
+    }
 }
 
 // Сохраняем обратную совместимость, если где-то используется старая функция

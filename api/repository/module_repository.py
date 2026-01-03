@@ -184,3 +184,57 @@ class ModuleRepository(BaseRepository):
             query = db.query(Module.id, Module.name).filter(Module.id.in_(ids))
             results = query.all()
             return {str(id): name for id, name in results}
+
+    def remove_children(self, parent_id: UUID, child_ids: List[UUID], db_session):
+        """
+        Удаляет связи с дочерними модулями
+        """
+        if not child_ids:
+            return
+        db_session.execute(
+            parent_child_module.delete().where(
+                (parent_child_module.c.parent_id == parent_id) &
+                (parent_child_module.c.child_id.in_(child_ids))
+            )
+        )
+
+    def remove_parents(self, child_id: UUID, parent_ids: List[UUID], db_session):
+        """
+        Удаляет связи с родительскими модулями
+        """
+        if not parent_ids:
+            return
+        db_session.execute(
+            parent_child_module.delete().where(
+                (parent_child_module.c.child_id == child_id) &
+                (parent_child_module.c.parent_id.in_(parent_ids))
+            )
+        )
+
+    def add_child_relation(self, parent_id: UUID, child_id: UUID, coordinates: Optional[dict] = None, role_id: Optional[UUID] = None, db_session = None):
+        """
+        Добавляет связь с дочерним модулем
+        """
+        target_db = db_session if db_session else self.db_session.session()
+        target_db.execute(
+            parent_child_module.insert().values(
+                parent_id=parent_id,
+                child_id=child_id,
+                coordinates=coordinates,
+                role_id=role_id
+            )
+        )
+
+    def add_parent_relation(self, child_id: UUID, parent_id: UUID, coordinates: Optional[dict] = None, role_id: Optional[UUID] = None, db_session = None):
+        """
+        Добавляет связь с родительским модулем
+        """
+        target_db = db_session if db_session else self.db_session.session()
+        target_db.execute(
+            parent_child_module.insert().values(
+                parent_id=parent_id,
+                child_id=child_id,
+                coordinates=coordinates,
+                role_id=role_id
+            )
+        )

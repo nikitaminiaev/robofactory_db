@@ -450,3 +450,151 @@ button:hover {
 .related-list li:last-child {
     border-bottom: none;
 }
+
+/* Стили для режима редактирования */
+.edit-mode .detail-table td input,
+.edit-mode .detail-table td textarea {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: inherit;
+    font-family: inherit;
+}
+
+.edit-mode .detail-table td textarea {
+    min-height: 100px;
+    resize: vertical;
+}
+
+.edit-mode .detail-table td input[type="checkbox"] {
+    width: auto;
+}
+
+.action-buttons {
+    margin-bottom: 20px;
+    display: flex;
+    gap: 10px;
+}
+
+.save-btn {
+    background-color: #27ae60;
+}
+
+.save-btn:hover {
+    background-color: #219150;
+}
+
+.cancel-btn {
+    background-color: #95a5a6;
+}
+
+.cancel-btn:hover {
+    background-color: #7f8c8d;
+}
+
+.remove-btn {
+    background-color: #e74c3c;
+    padding: 4px 8px;
+    font-size: 12px;
+    margin-left: 10px;
+}
+
+.remove-btn:hover {
+    background-color: #c0392b;
+}
+
+.add-child-section {
+    margin-top: 20px;
+    padding: 15px;
+    background: #f9f9f9;
+    border: 1px dashed #ccc;
+    border-radius: 4px;
+}
+
+.add-child-grid {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 10px;
+    margin-top: 10px;
+    align-items: start;
+}
+
+.add-child-grid button {
+    width: 100px;
+    padding: 8px 15px;
+    height: 42px;
+}
+
+.coordinate-inputs {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 5px;
+}
+
+.coordinate-inputs div {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.coordinate-inputs label {
+    margin-bottom: 0;
+    font-size: 12px;
+    width: 20px;
+}
+
+.coordinate-inputs input {
+    width: 100% !important;
+    padding: 4px !important;
+}
+
+.search-results-dropdown {
+    position: absolute;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    z-index: 100;
+    max-height: 200px;
+    overflow-y: auto;
+    width: calc(100% - 30px);
+}
+
+.search-result-item {
+    padding: 8px 12px;
+    cursor: pointer;
+}
+
+.search-result-item:hover {
+    background-color: #f0f0f0;
+}
+
+/* Стили для всплывающих уведомлений */
+.toast-notification {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 12px 24px;
+    border-radius: 4px;
+    color: white;
+    font-weight: 500;
+    z-index: 1000;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    transition: opacity 0.3s, transform 0.3s;
+    opacity: 0;
+}
+
+.toast-notification.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(10px);
+}
+
+.toast-success {
+    background-color: #27ae60;
+}
+
+.toast-error {
+    background-color: #e74c3c;
+}
