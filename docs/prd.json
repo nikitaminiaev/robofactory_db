@@ -92,9 +92,9 @@
         "Юнит-тесты для copy_module_with_roles проходят"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "blocked": false,
-      "notes": ""
+      "notes": "Сервис module_copier.py создан с функцией copy_module_with_roles. Копирует модуль, bounding_contour (is_assembly, is_shell, brep_files) и все роли из parent_child_module. Создает ModuleVersion с commit_hash=None. Pyright проходит."
     },
     {
       "id": "US-007",

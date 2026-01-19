@@ -3,3 +3,5 @@
 [US-019] Git уже установлен в Dockerfile для API контейнера. Проверка git --version успешна.
 
 [US-022] api/resources/brep_files добавлен в .gitignore для исключения BREP файлов из репозитория.
+
+[US-006] Сервис api/service/module_copier.py создан с функцией copy_module_with_roles для копирования модулей с ролями и bounding_contour. Pyright проходит.
