@@ -108,9 +108,9 @@
         "pyright api/routes/copy_module.py проходит без ошибок"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "blocked": false,
-      "notes": ""
+      "notes": "API endpoint POST /modules/{module_id}/copy создан с использованием copy_module_with_roles. Возвращает BasicObjectDTO.from_module. Обработка ошибок 404 и 400. Pyright проходит."
     },
     {
       "id": "US-008",
