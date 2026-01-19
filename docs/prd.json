@@ -380,9 +380,9 @@
         "pyright api/main.py проходит без ошибок"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "blocked": false,
-      "notes": ""
+      "notes": "Роутеры copy_module, module_versions, brep_files импортированы и зарегистрированы с prefix /api. Pyright проходит (старая ошибка с root)."
     },
     {
       "id": "US-025",
