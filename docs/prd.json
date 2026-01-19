@@ -350,9 +350,9 @@
         "git status не показывает файлы в api/resources/brep_files"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "blocked": false,
-      "notes": ""
+      "notes": "Строка api/resources/brep_files добавлена в .gitignore."
     },
     {
       "id": "US-023",
