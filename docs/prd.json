@@ -29,9 +29,9 @@
         "Типы полей соответствуют требованиям"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "blocked": false,
-      "notes": ""
+      "notes": "Поля git_repo_path (Optional[str]) и is_released (bool, default=False) добавлены в ModuleVersion. Pyright проходит."
     },
     {
       "id": "US-003",

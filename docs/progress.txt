@@ -7,3 +7,5 @@
 [US-006] Сервис api/service/module_copier.py создан с функцией copy_module_with_roles для копирования модулей с ролями и bounding_contour. Pyright проходит.
 
 [US-010] Структура директорий для BREP файлов создана. Сервис api/service/brep_storage.py с функцией create_module_brep_directory. Pyright проходит.
+
+[US-002] Поля git_repo_path и is_released добавлены в модель ModuleVersion. Pyright проходит.
