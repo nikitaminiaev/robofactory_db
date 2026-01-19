@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from uuid import UUID
 from repository.module_version_repository import ModuleVersionRepository
 from schemas.module_version_dto import ModuleVersionDTO
+from service.git_manager import get_module_commit_history
 
 router = APIRouter()
 
@@ -47,3 +48,14 @@ async def release_module_version(
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Ошибка обновления: {str(e)}")
+
+@router.get("/modules/{module_id}/commits")
+async def get_module_commits(
+    module_id: str
+):
+    try:
+        module_uuid = UUID(module_id)
+        history = get_module_commit_history(module_uuid)
+        return history
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=f"Репозиторий модуля не найден или ошибка: {str(e)}")

@@ -291,9 +291,9 @@
         "pyright api/routes/module_versions.py проходит без ошибок"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "blocked": false,
-      "notes": "Требуется установленный git в контейнере API"
+      "notes": "GET /modules/{module_id}/commits добавлен. Возвращает список dict с hash, message, date. Обработка 404. Pyright проходит. Git установлен."
     },
     {
       "id": "US-019",

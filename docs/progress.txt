@@ -33,3 +33,5 @@
 [US-015] Метод create_version_with_git добавлен в ModuleVersionRepository. Pyright проходит.
 
 [US-016] copy_module_with_roles обновлен для использования create_version_with_git. Pyright имеет ошибки импорта.
+
+[US-018] GET /modules/{module_id}/commits добавлен для истории коммитов. Pyright проходит.
