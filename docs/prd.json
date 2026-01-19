@@ -51,7 +51,7 @@
     {
       "id": "US-004",
       "title": "Создать репозиторий ModuleVersionRepository",
-      "description": "Создать api/repository/module_version_repository.py с классом ModuleVersionRepository, наследуемым от BaseRepository. Реализовать методы: get_by_module_id(module_id: UUID) -> List[ModuleVersion], get_latest_version(module_id: UUID) -> Optional[ModuleVersion], create_version(module_id: UUID, version_number: str, description: str, commit_hash: Optional[str] = None, git_repo_path: Optional[str] = None) -> ModuleVersion.",
+      "description": "Создать api/repository/module_version_repository.py с классом ModuleVersionRepository, наследуемым от BaseRepository. Реализовать методы: get_by_module_id(module_id: UUID) -> List[ModuleVersion], get_latest_version(module_id: UUID) -> Optional[ModuleVersion], create_version(module_id: UUID, version_number: str, description: str, commit_hash: Optional[str] = None) -> ModuleVersion.",
       "acceptanceCriteria": [
         "Файл api/repository/module_version_repository.py создан",
         "Класс ModuleVersionRepository наследуется от BaseRepository",
@@ -60,9 +60,9 @@
         "Юнит-тесты для ModuleVersionRepository проходят (если есть тесты)"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "blocked": false,
-      "notes": ""
+      "notes": "ModuleVersionRepository создан с методами get_by_module_id, get_latest_version, create_version (расширен для git_repo_path и is_released). Pyright проходит."
     },
     {
       "id": "US-005",

@@ -9,3 +9,5 @@
 [US-010] Структура директорий для BREP файлов создана. Сервис api/service/brep_storage.py с функцией create_module_brep_directory. Pyright проходит.
 
 [US-002] Поля git_repo_path и is_released добавлены в модель ModuleVersion. Pyright проходит.
+
+[US-004] Репозиторий ModuleVersionRepository создан с методами get_by_module_id, get_latest_version, create_version. Pyright проходит.
