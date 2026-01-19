@@ -157,9 +157,9 @@
         "Юнит-тесты для create_module_brep_directory проходят"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "blocked": false,
-      "notes": ""
+      "notes": "Директория api/resources создана. Функция create_module_brep_directory реализована в api/service/brep_storage.py с использованием pathlib. api/resources/brep_files уже в .gitignore. Pyright проходит."
     },
     {
       "id": "US-011",
