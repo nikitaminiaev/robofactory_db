@@ -35,3 +35,5 @@
 [US-016] copy_module_with_roles обновлен для использования create_version_with_git. Pyright имеет ошибки импорта.
 
 [US-018] GET /modules/{module_id}/commits добавлен для истории коммитов. Pyright проходит.
+
+[US-020] POST /modules/{module_id}/brep создан для сохранения BREP файлов с Git коммитом. Pyright имеет ошибки импорта.
