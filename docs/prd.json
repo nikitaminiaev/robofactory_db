@@ -74,9 +74,9 @@
         "pyright api/schemas/module_version_dto.py проходит без ошибок"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "blocked": false,
-      "notes": ""
+      "notes": "Pydantic схемы ModuleVersionDTO, ModuleVersionCreateDTO, ModuleVersionUpdateDTO созданы с правильными типами. Pyright проходит."
     },
     {
       "id": "US-006",

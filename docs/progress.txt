@@ -11,3 +11,5 @@
 [US-002] Поля git_repo_path и is_released добавлены в модель ModuleVersion. Pyright проходит.
 
 [US-004] Репозиторий ModuleVersionRepository создан с методами get_by_module_id, get_latest_version, create_version. Pyright проходит.
+
+[US-005] Pydantic схемы ModuleVersionDTO, ModuleVersionCreateDTO, ModuleVersionUpdateDTO созданы. Pyright проходит.
