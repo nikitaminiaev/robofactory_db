@@ -1,7 +1,8 @@
 from typing import Optional
 from uuid import UUID
 from sqlalchemy.orm import selectinload
-from ..repository.db_session import Db_session
+from api.repository.db_session import Db_session
+from api.repository.module_version_repository import ModuleVersionRepository
 from models import Module, ModuleVersion, BoundingContour
 from models.associations import parent_child_module
 
@@ -87,14 +88,13 @@ def copy_module_with_roles(module_id: UUID, new_author: str, version_number: str
                 role_id=rel.role_id
             ))
         
-        # Создать запись ModuleVersion
-        version = ModuleVersion(
+        # Создать запись ModuleVersion с Git интеграцией
+        repo = ModuleVersionRepository()
+        version = repo.create_version_with_git(
             module_id=new_module.id,
             version_number=version_number,
-            description=description,
-            commit_hash=None
+            description=description
         )
-        db.add(version)
         
         db.commit()
         

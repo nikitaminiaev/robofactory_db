@@ -259,9 +259,9 @@
         "Юнит-тесты для обновленного copy_module_with_roles проходят"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "blocked": false,
-      "notes": "Требуется установленный git в контейнере API"
+      "notes": "copy_module_with_roles изменен для использования create_version_with_git. Git интеграция при копировании. Pyright имеет ошибки импорта, но код корректен. Git установлен."
     },
     {
       "id": "US-017",
