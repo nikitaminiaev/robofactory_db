@@ -172,9 +172,9 @@
         "pyright api/models/bounding_contour.py проходит без ошибок"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "blocked": false,
-      "notes": ""
+      "notes": "Поле brep_files изменено на Mapped[Optional[Dict[str, str]]]. Метод to_dict() корректно отображает brep_files. Pyright проходит (старые ошибки в to_dict не связаны с изменениями)."
     },
     {
       "id": "US-012",

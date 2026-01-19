@@ -19,3 +19,5 @@
 [US-008] API endpoints GET /modules/{module_id}/versions и latest созданы. Pyright проходит.
 
 [US-009] PATCH endpoint для пометки версии как релиза добавлен. Pyright проходит.
+
+[US-011] Поле brep_files в BoundingContour изменено на Dict[str, str]. Pyright проходит.

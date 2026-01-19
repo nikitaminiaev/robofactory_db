@@ -1,9 +1,12 @@
 import uuid
-from typing import Optional, Dict
+from typing import Optional, Dict, TYPE_CHECKING
 
 from sqlalchemy import Column, JSON
 from sqlalchemy import ForeignKey, Boolean, DateTime, func, UUID
 from sqlalchemy.orm import relationship, Mapped, mapped_column
+
+if TYPE_CHECKING:
+    from .module import Module
 
 from .base import Base
 
@@ -19,7 +22,7 @@ class BoundingContour(Base):
 
     is_assembly = Column(Boolean, nullable=False)
     is_shell: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    brep_files = Column(JSON, nullable=True)  # Список BREP файлов или ссылок на них
+    brep_files: Mapped[Optional[Dict[str, str]]] = mapped_column(JSON, nullable=True)  # Ссылки на BREP файлы: имя -> относительный путь
     parent_id = Column(UUID(as_uuid=True), ForeignKey('bounding_contours.id'), nullable=True)
     parent = relationship("BoundingContour", remote_side=[id])
 
@@ -27,9 +30,9 @@ class BoundingContour(Base):
     updated_ts = Column(DateTime(timezone=True), onupdate=func.now())
 
     @classmethod
-    def create(cls, is_assembly: bool, brep_files: Dict[str, str] = None,
-               module_id: Optional[UUID] = None, parent_id: Optional[UUID] = None,
-               is_shell: bool = False) -> "BoundingContour":
+    def create(cls, is_assembly: bool, brep_files: Optional[Dict[str, str]] = None,
+                module_id: Optional[UUID] = None, parent_id: Optional[UUID] = None,
+                is_shell: bool = False) -> "BoundingContour":
         """
         Factory method for creating a BoundingContour instance.
         """
