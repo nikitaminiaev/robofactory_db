@@ -1,0 +1,1 @@
+[US-001] Модель ModuleVersion создана в api/models/module_version.py с полями id, module_id, version_number, commit_hash, description, created_ts. Связь с Module добавлена. Pyright проверки пройдены.

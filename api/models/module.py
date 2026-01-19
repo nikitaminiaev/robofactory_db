@@ -11,6 +11,7 @@ from sqlalchemy import Enum as SQLAlchemyEnum
 from .base import Base
 from .bounding_contour import BoundingContour
 from .associations import parent_child_module, module_stream, module_platform, module_boundary
+from .module_version import ModuleVersion
 
 
 class ModuleStatus(str, Enum):
@@ -71,6 +72,8 @@ class Module(Base):
         secondary=module_boundary,
         back_populates="modules"
     )
+
+    versions = relationship("ModuleVersion", back_populates="module", cascade="all, delete-orphan")
 
     created_ts = Column(DateTime(timezone=True), server_default=func.now())
     updated_ts = Column(DateTime(timezone=True), onupdate=func.now())
