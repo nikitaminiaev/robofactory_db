@@ -123,10 +123,10 @@
         "Обработка ошибок 404 реализована",
         "pyright api/routes/module_versions.py проходит без ошибок"
       ],
-      "priority": 3,
-      "passes": false,
+      "priority": 2,
+      "passes": true,
       "blocked": false,
-      "notes": ""
+      "notes": "GET endpoints для версий модуля созданы. Возвращают ModuleVersionDTO. Обработка 404. Pyright проходит."
     },
     {
       "id": "US-009",

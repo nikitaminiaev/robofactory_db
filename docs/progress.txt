@@ -15,3 +15,5 @@
 [US-005] Pydantic схемы ModuleVersionDTO, ModuleVersionCreateDTO, ModuleVersionUpdateDTO созданы. Pyright проходит.
 
 [US-007] API endpoint POST /modules/{module_id}/copy создан для копирования модулей. Pyright проходит.
+
+[US-008] API endpoints GET /modules/{module_id}/versions и latest созданы. Pyright проходит.
