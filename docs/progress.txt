@@ -1,1 +1,3 @@
 [US-001] Модель ModuleVersion создана в api/models/module_version.py с полями id, module_id, version_number, commit_hash, description, created_ts. Связь с Module добавлена. Pyright проверки пройдены.
+
+[US-019] Git уже установлен в Dockerfile для API контейнера. Проверка git --version успешна.

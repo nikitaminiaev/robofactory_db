@@ -45,8 +45,8 @@
       ],
       "priority": 1,
       "passes": false,
-      "blocked": false,
-      "notes": ""
+      "blocked": true,
+      "notes": "Требуется настройка sqlalchemy.url в alembic.ini и запущенная база данных для выполнения alembic revision."
     },
     {
       "id": "US-004",
@@ -305,9 +305,9 @@
         "git доступен в контейнере (docker exec api git --version работает)"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "blocked": false,
-      "notes": ""
+      "notes": "Git уже установлен в Dockerfile (строка 4: git \\). docker exec api git --version возвращает git version 2.39.5."
     },
     {
       "id": "US-020",
