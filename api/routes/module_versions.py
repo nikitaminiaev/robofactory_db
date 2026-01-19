@@ -32,3 +32,18 @@ async def get_latest_module_version(
         raise
     except Exception as e:
         raise HTTPException(status_code=404, detail=f"Модуль не найден или ошибка: {str(e)}")
+
+@router.patch("/modules/{module_id}/versions/{version_id}/release")
+async def release_module_version(
+    module_id: str,
+    version_id: str,
+    repo: ModuleVersionRepository = Depends()
+):
+    try:
+        version_uuid = UUID(version_id)
+        updated_version = repo.update_version_is_released(version_uuid, True)
+        return ModuleVersionDTO.from_module_version(updated_version)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Ошибка обновления: {str(e)}")

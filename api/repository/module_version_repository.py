@@ -61,3 +61,26 @@ class ModuleVersionRepository(BaseRepository):
             db.commit()
             db.refresh(version)
         return version
+    
+    def update_version_is_released(self, version_id: UUID, is_released: bool) -> ModuleVersion:
+        """
+        Обновить флаг is_released для версии.
+        
+        Args:
+            version_id: UUID версии
+            is_released: Новое значение
+            
+        Returns:
+            Обновленная ModuleVersion
+            
+        Raises:
+            ValueError: Если версия не найдена
+        """
+        with self.db_session.session() as db:
+            version = db.query(ModuleVersion).filter_by(id=version_id).first()
+            if not version:
+                raise ValueError("Version not found")
+            version.is_released = is_released
+            db.commit()
+            db.refresh(version)
+        return version

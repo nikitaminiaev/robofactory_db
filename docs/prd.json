@@ -140,9 +140,9 @@
         "pyright api/routes/module_versions.py проходит без ошибок"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "blocked": false,
-      "notes": ""
+      "notes": "PATCH endpoint для пометки версии как релиза добавлен. Метод update_version_is_released в repository. Возвращает ModuleVersionDTO. Обработка 404. Pyright проходит."
     },
     {
       "id": "US-010",
