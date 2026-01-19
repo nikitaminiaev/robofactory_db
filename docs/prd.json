@@ -329,7 +329,7 @@
     {
       "id": "US-021",
       "title": "Создать миграцию для обновления поля brep_files в BoundingContour",
-      "description": "Выполнить alembic revision --autogenerate -m 'Update brep_files type' для создания миграции, обновляющей тип колонки brep_files в таблице bounding_contours. Проверить миграцию и применить её командой alembic upgrade head.",
+      "description": "Выполнить alembic revision --autogenerate -m 'Update brep_files type' для создания миграции, обновляющей тип колонки brep_files. Проверить миграцию и применить её командой alembic upgrade head.",
       "acceptanceCriteria": [
         "Миграция создана в alembic/versions",
         "Миграция обновляет тип brep_files",
@@ -338,8 +338,8 @@
       ],
       "priority": 2,
       "passes": false,
-      "blocked": false,
-      "notes": ""
+      "blocked": true,
+      "notes": "Требуется запущенная БД и настроенный alembic.ini для генерации и применения миграции."
     },
     {
       "id": "US-022",
@@ -365,9 +365,9 @@
         "Документация на русском языке"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "blocked": false,
-      "notes": ""
+      "notes": "Документация docs/module_copying.md создана с полным описанием API endpoints, примеров использования и структуры системы."
     },
     {
       "id": "US-024",

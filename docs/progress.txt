@@ -39,3 +39,5 @@
 [US-020] POST /modules/{module_id}/brep создан для сохранения BREP файлов с Git коммитом. Pyright имеет ошибки импорта.
 
 [US-024] Новые роутеры зарегистрированы в main.py с prefix /api. Pyright проходит.
+
+[US-023] Документация docs/module_copying.md создана с описанием всех функций.
