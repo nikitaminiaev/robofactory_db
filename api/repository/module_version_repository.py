@@ -2,6 +2,7 @@ from typing import Optional, List
 from uuid import UUID
 from . import BaseRepository
 from models import ModuleVersion
+from ..service.git_manager import init_module_git_repo, commit_module_changes
 
 
 class ModuleVersionRepository(BaseRepository):
@@ -81,6 +82,43 @@ class ModuleVersionRepository(BaseRepository):
             if not version:
                 raise ValueError("Version not found")
             version.is_released = is_released
+            db.commit()
+            db.refresh(version)
+        return version
+    
+    def create_version_with_git(self, module_id: UUID, version_number: str, description: str) -> ModuleVersion:
+        """
+        Создать версию с Git интеграцией.
+        
+        Args:
+            module_id: UUID модуля
+            version_number: Номер версии
+            description: Описание
+            
+        Returns:
+            Созданная ModuleVersion
+        """
+        # Проверить, есть ли уже git_repo_path для модуля
+        with self.db_session.session() as db:
+            existing_version = db.query(ModuleVersion).filter_by(module_id=module_id).first()
+            git_repo_path = existing_version.git_repo_path if existing_version else None
+            
+            if not git_repo_path:
+                # Инициализировать репозиторий
+                git_repo_path = init_module_git_repo(module_id)
+            
+            # Коммит изменений
+            commit_hash = commit_module_changes(module_id, description)
+            
+            # Создать версию
+            version = ModuleVersion(
+                module_id=module_id,
+                version_number=version_number,
+                description=description,
+                commit_hash=commit_hash,
+                git_repo_path=git_repo_path
+            )
+            db.add(version)
             db.commit()
             db.refresh(version)
         return version

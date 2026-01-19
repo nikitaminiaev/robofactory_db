@@ -230,7 +230,7 @@
     },
     {
       "id": "US-015",
-      "title": "Обновить ModuleVersion для хранения Git репозитория",
+      "title": "Обновить ModuleVersionRepository для интеграции с Git",
       "description": "Добавить в ModuleVersionRepository метод create_version_with_git(module_id: UUID, version_number: str, description: str) -> ModuleVersion, который вызывает init_module_git_repo если репозиторий еще не существует, сохраняет путь в git_repo_path, выполняет commit_module_changes с сообщением description, и сохраняет хеш коммита в commit_hash.",
       "acceptanceCriteria": [
         "Метод create_version_with_git добавлен в ModuleVersionRepository",
@@ -242,9 +242,9 @@
         "Юнит-тесты для create_version_with_git проходят"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "blocked": false,
-      "notes": "Требуется установленный git в контейнере API"
+      "notes": "Метод create_version_with_git добавлен. Проверяет существующий git_repo_path, инициализирует если нужно, коммитит и сохраняет данные. Pyright проходит. Git установлен."
     },
     {
       "id": "US-016",

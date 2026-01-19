@@ -29,3 +29,5 @@
 [US-014] Функция commit_module_changes добавлена в git_manager.py. Pyright проходит.
 
 [US-017] Функция get_module_commit_history добавлена в git_manager.py. Pyright проходит.
+
+[US-015] Метод create_version_with_git добавлен в ModuleVersionRepository. Pyright проходит.
