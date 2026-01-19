@@ -21,3 +21,5 @@
 [US-009] PATCH endpoint для пометки версии как релиза добавлен. Pyright проходит.
 
 [US-011] Поле brep_files в BoundingContour изменено на Dict[str, str]. Pyright проходит.
+
+[US-012] Функция save_brep_file добавлена в brep_storage.py. Pyright проходит.

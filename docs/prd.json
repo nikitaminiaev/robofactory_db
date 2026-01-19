@@ -189,9 +189,9 @@
         "Юнит-тесты для save_brep_file проходят"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "blocked": false,
-      "notes": ""
+      "notes": "Функция save_brep_file добавлена в brep_storage.py. Сохраняет файл в api/resources/brep_files/{module_id}/ и возвращает относительный путь. Обработка OSError. Pyright проходит."
     },
     {
       "id": "US-013",
