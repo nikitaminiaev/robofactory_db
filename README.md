@@ -5,13 +5,13 @@
 
 ## Install
 
-	docker-compose build
+	docker compose build
 
 
 ## Usage
 Before up container:
 
-	docker-compose up -d
+	docker compose up -d
 
 check that the containers are running:
 
