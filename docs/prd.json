@@ -207,9 +207,9 @@
         "Юнит-тесты для init_module_git_repo проходят"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "blocked": false,
-      "notes": "Требуется установленный git в контейнере API"
+      "notes": "Функция init_module_git_repo реализована в git_manager.py. Обработка CalledProcessError. Pyright проходит. Git установлен в контейнере."
     },
     {
       "id": "US-014",
@@ -224,9 +224,9 @@
         "Юнит-тесты для commit_module_changes проходят"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "blocked": false,
-      "notes": "Требуется установленный git в контейнере API"
+      "notes": "Функция commit_module_changes реализована в git_manager.py. Выполняет git add и commit, возвращает хеш. Обработка CalledProcessError. Pyright проходит. Git установлен."
     },
     {
       "id": "US-015",
@@ -276,9 +276,9 @@
         "Юнит-тесты для get_module_commit_history проходят"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "blocked": false,
-      "notes": "Требуется установленный git в контейнере API"
+      "notes": "Функция get_module_commit_history реализована в git_manager.py. Парсит git log и возвращает список dict. Обработка CalledProcessError. Pyright проходит. Git установлен."
     },
     {
       "id": "US-018",

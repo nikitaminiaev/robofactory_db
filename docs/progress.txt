@@ -23,3 +23,9 @@
 [US-011] Поле brep_files в BoundingContour изменено на Dict[str, str]. Pyright проходит.
 
 [US-012] Функция save_brep_file добавлена в brep_storage.py. Pyright проходит.
+
+[US-013] Функция init_module_git_repo добавлена в git_manager.py. Pyright проходит.
+
+[US-014] Функция commit_module_changes добавлена в git_manager.py. Pyright проходит.
+
+[US-017] Функция get_module_commit_history добавлена в git_manager.py. Pyright проходит.
