@@ -1,6 +1,6 @@
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-    max-width: 1000px;
+    max-width: 1400px;
     margin: 0 auto;
     padding: 20px;
     color: #333;
@@ -84,6 +84,69 @@ li:last-child {
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
+.search-form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    align-items: end;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+}
+
+.form-group label {
+    margin-bottom: 5px;
+    color: #2c3e50;
+    font-weight: 500;
+}
+
+.form-group input {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 16px;
+    height: 42px; /* Фиксированная высота для выравнивания */
+    box-sizing: border-box;
+    color: #333;
+    margin: 0; /* Сброс отступов */
+    display: block;
+}
+
+.form-group input::placeholder {
+    color: #999;
+}
+
+/* Стили для поля даты */
+input[type="date"] {
+    color: #999; /* Цвет по умолчанию */
+    font-family: inherit;
+    -webkit-appearance: none; /* Убираем специфичные стили Safari */
+    appearance: none;
+}
+
+/* Специальные селекторы для Chrome/Edge чтобы выровнять контент внутри date input */
+input[type="date"]::-webkit-calendar-picker-indicator {
+    margin-left: 5px;
+}
+
+input[type="date"]::-webkit-datetime-edit {
+    padding: 0;
+}
+
+.form-actions {
+    display: flex;
+    justify-content: flex-start;
+}
+
+.form-actions button {
+    height: 42px;
+    padding: 0 30px;
+    box-sizing: border-box;
+}
+
 label {
     display: block;
     margin-bottom: 10px;
@@ -91,13 +154,28 @@ label {
     font-weight: 500;
 }
 
-input[type="text"] {
-    width: 100%;
-    padding: 10px;
-    margin-bottom: 15px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    font-size: 16px;
+/* Сортировка таблиц */
+th.sortable {
+    cursor: pointer;
+    position: relative;
+    user-select: none;
+    transition: background-color 0.2s;
+}
+
+th.sortable:hover {
+    background-color: #e9ecef;
+}
+
+.sort-icon {
+    display: inline-block;
+    margin-left: 5px;
+    color: #999;
+    font-size: 0.8em;
+    vertical-align: middle;
+}
+
+th.sortable:hover .sort-icon {
+    color: #3498db;
 }
 
 button {
@@ -121,4 +199,402 @@ button:hover {
     background: #fdf0ed;
     border-radius: 4px;
     margin-top: 20px;
+}
+
+/* Компактная иерархическая таблица */
+.table-container {
+    width: 100%;
+    overflow-x: auto;
+    margin: 20px 0;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.modules-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+    table-layout: fixed; /* Обязательно для фиксированных ширин */
+    max-width: none !important; /* Разрешаем расти за пределы родителя */
+}
+
+.modules-table th {
+    background-color: #f1f3f5;
+    padding: 8px 12px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border: 1px solid #dee2e6;
+    position: relative; /* Для позиционирования ресайзера */
+}
+
+.resizer {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 4px;
+    cursor: col-resize;
+    user-select: none;
+    height: 100%;
+    z-index: 10;
+    transition: background-color 0.2s;
+}
+
+.resizer:hover, .resizer.resizing {
+    background-color: #3498db;
+    width: 4px;
+}
+
+.modules-table td {
+    padding: 6px 12px;
+    vertical-align: middle;
+    border: 1px solid #dee2e6;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.module-row:hover {
+    background-color: #f8f9fa;
+}
+
+.expand-col {
+    width: 60px;
+    padding: 4px !important;
+    text-align: center;
+}
+
+.expand-btns {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    align-items: center;
+}
+
+.expand-btns button {
+    padding: 0;
+    width: 24px;
+    height: 20px;
+    font-size: 12px;
+    line-height: 1;
+    background-color: #e9ecef !important;
+    color: #495057 !important;
+    border: 1px solid #dee2e6 !important;
+    border-radius: 2px;
+}
+
+.expand-btns button:hover:not(:disabled) {
+    background-color: #dee2e6 !important;
+}
+
+.expand-btns button:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+.module-name {
+    font-weight: 500;
+}
+
+.desc-col {
+    max-width: 200px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.actions-col {
+    white-space: nowrap;
+}
+
+.view-page-link {
+    font-size: 12px;
+    margin-left: 10px;
+    color: #3498db;
+}
+
+.child-row {
+    background-color: rgba(52, 152, 219, 0.03);
+}
+
+.name-cell {
+    position: relative;
+    padding-top: 8px !important;
+    padding-bottom: 8px !important;
+}
+
+.tree-node-wrapper {
+    display: flex;
+    align-items: center;
+    position: relative;
+}
+
+.module-name-link {
+    text-decoration: none !important;
+    color: inherit !important;
+    display: inline-block;
+}
+
+.module-name-box {
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    padding: 4px 12px;
+    background-color: white;
+    display: inline-block;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    font-weight: 400;
+    color: #212529;
+    transition: all 0.2s;
+    cursor: pointer;
+}
+
+.tree-expander {
+    width: 20px;
+    height: 20px;
+    margin-right: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.tree-expand-btn {
+    background: none !important;
+    border: none !important;
+    color: #495057 !important;
+    font-size: 16px !important;
+    cursor: pointer;
+    padding: 0 !important;
+    width: 20px !important;
+    height: 20px !important;
+    line-height: 1 !important;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s;
+}
+
+.tree-connector-v {
+    position: absolute;
+    left: -15px;
+    top: -20px; /* Смещение вверх чтобы соединиться с предыдущей строкой */
+    height: calc(100% + 20px);
+    width: 1px;
+    background-color: #dee2e6;
+    z-index: 1;
+}
+
+/* Убираем лишний хвост у последнего элемента в ветке - сложно в CSS без JS, 
+   но можно ограничить высоту если это последний ребенок */
+
+.tree-connector-h {
+    position: absolute;
+    left: -15px;
+    top: 50%;
+    width: 15px;
+    height: 1px;
+    background-color: #dee2e6;
+    z-index: 1;
+}
+
+.module-row:hover .module-name-box {
+    border-color: #3498db;
+}
+
+.child-row {
+    background-color: transparent !important;
+}
+
+.child-row .module-name-box {
+    background-color: #fff;
+}
+
+/* Стили для детального отображения */
+.detail-view {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.detail-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 30px;
+}
+
+.detail-table th {
+    width: 200px;
+    text-align: left;
+    background-color: #f8f9fa;
+    border: 1px solid #eee;
+    padding: 12px 15px;
+}
+
+.detail-table td {
+    border: 1px solid #eee;
+    padding: 12px 15px;
+}
+
+.related-list {
+    margin: 15px 0;
+}
+
+.related-list li {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.related-list li:last-child {
+    border-bottom: none;
+}
+
+/* Стили для режима редактирования */
+.edit-mode .detail-table td input,
+.edit-mode .detail-table td textarea {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: inherit;
+    font-family: inherit;
+}
+
+.edit-mode .detail-table td textarea {
+    min-height: 100px;
+    resize: vertical;
+}
+
+.edit-mode .detail-table td input[type="checkbox"] {
+    width: auto;
+}
+
+.action-buttons {
+    margin-bottom: 20px;
+    display: flex;
+    gap: 10px;
+}
+
+.save-btn {
+    background-color: #27ae60;
+}
+
+.save-btn:hover {
+    background-color: #219150;
+}
+
+.cancel-btn {
+    background-color: #95a5a6;
+}
+
+.cancel-btn:hover {
+    background-color: #7f8c8d;
+}
+
+.remove-btn {
+    background-color: #e74c3c;
+    padding: 4px 8px;
+    font-size: 12px;
+    margin-left: 10px;
+}
+
+.remove-btn:hover {
+    background-color: #c0392b;
+}
+
+.add-child-section {
+    margin-top: 20px;
+    padding: 15px;
+    background: #f9f9f9;
+    border: 1px dashed #ccc;
+    border-radius: 4px;
+}
+
+.add-child-grid {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 10px;
+    margin-top: 10px;
+    align-items: start;
+}
+
+.add-child-grid button {
+    width: 100px;
+    padding: 8px 15px;
+    height: 42px;
+}
+
+.coordinate-inputs {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 5px;
+}
+
+.coordinate-inputs div {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.coordinate-inputs label {
+    margin-bottom: 0;
+    font-size: 12px;
+    width: 20px;
+}
+
+.coordinate-inputs input {
+    width: 100% !important;
+    padding: 4px !important;
+}
+
+.search-results-dropdown {
+    position: absolute;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    z-index: 100;
+    max-height: 200px;
+    overflow-y: auto;
+    width: calc(100% - 30px);
+}
+
+.search-result-item {
+    padding: 8px 12px;
+    cursor: pointer;
+}
+
+.search-result-item:hover {
+    background-color: #f0f0f0;
+}
+
+/* Стили для всплывающих уведомлений */
+.toast-notification {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 12px 24px;
+    border-radius: 4px;
+    color: white;
+    font-weight: 500;
+    z-index: 1000;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    transition: opacity 0.3s, transform 0.3s;
+    opacity: 0;
+}
+
+.toast-notification.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(10px);
+}
+
+.toast-success {
+    background-color: #27ae60;
+}
+
+.toast-error {
+    background-color: #e74c3c;
 }

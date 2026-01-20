@@ -13,11 +13,12 @@ class BoundingContour(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
-    # Связь с BasicObject (1 к 1)
-    basic_object_id: Mapped[UUID] = mapped_column(ForeignKey("basic_objects.id"), unique=True)
-    basic_object: Mapped["BasicObject"] = relationship(back_populates="bounding_contour")
+    # Связь с Module (1 к 1)
+    module_id: Mapped[UUID] = mapped_column(ForeignKey("modules.id"), unique=True)
+    module: Mapped["Module"] = relationship(back_populates="bounding_contour")
 
     is_assembly = Column(Boolean, nullable=False)
+    is_shell: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     brep_files = Column(JSON, nullable=True)  # Список BREP файлов или ссылок на них
     parent_id = Column(UUID(as_uuid=True), ForeignKey('bounding_contours.id'), nullable=True)
     parent = relationship("BoundingContour", remote_side=[id])
@@ -27,28 +28,31 @@ class BoundingContour(Base):
 
     @classmethod
     def create(cls, is_assembly: bool, brep_files: Dict[str, str] = None,
-               basic_object_id: Optional[UUID] = None, parent_id: Optional[UUID] = None) -> "BoundingContour":
+               module_id: Optional[UUID] = None, parent_id: Optional[UUID] = None,
+               is_shell: bool = False) -> "BoundingContour":
         """
         Factory method for creating a BoundingContour instance.
         """
         return cls(
             is_assembly=is_assembly,
             brep_files=brep_files or {},
-            basic_object_id=basic_object_id,
-            parent_id=parent_id
+            module_id=module_id,
+            parent_id=parent_id,
+            is_shell=is_shell
         )
 
     def __repr__(self) -> str:
         return str(self)
 
     def __str__(self):
-        return f"BoundingContour(id={self.id!r}, is_assembly={self.is_assembly!r})"
+        return f"BoundingContour(id={self.id!r}, is_assembly={self.is_assembly!r}, is_shell={self.is_shell!r})"
 
     def to_dict(self):
         return {
             "id": str(self.id),
-            "basic_object_id": str(self.basic_object_id) if self.basic_object_id else None,
+            "module_id": str(self.module_id) if self.module_id else None,
             "is_assembly": self.is_assembly,
+            "is_shell": self.is_shell,
             "brep_files": self.brep_files,
             "parent_id": str(self.parent_id) if self.parent_id else None,
             "created_ts": self.created_ts.isoformat() if self.created_ts else None,

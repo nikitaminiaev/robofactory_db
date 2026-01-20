@@ -5,13 +5,13 @@
 
 ## Install
 
-	docker-compose build
+	docker compose build
 
 
 ## Usage
 Before up container:
 
-	docker-compose up -d
+	docker compose up -d
 
 check that the containers are running:
 
@@ -20,7 +20,7 @@ check that the containers are running:
 restore a test db dump:
 
     docker exec -ti db bash
-    psql -U admin -h db -p 5432 < /home/db/dump/schema.sql
+    psql -U admin -h db -p 5433 < /home/db/dump/schema.sql
 (pass: root)
 
     exit
@@ -39,7 +39,7 @@ or:
 enter the db container and to postgres terminal:
 
     docker exec -ti db bash
-    psql postgres://admin:root@localhost:5432
+    psql postgres://admin:root@localhost:5433
     \connect robofactory;
 
 enter the container with the python:
@@ -48,7 +48,7 @@ enter the container with the python:
 
 make a db dump:
 
-    docker exec -e PGPASSWORD=root db pg_dump --create -U admin -h db -p 5432 -d robofactory > ./db/dump/schema.sql
+    docker exec -e PGPASSWORD=root db pg_dump --create -U admin -h db -p 5433 -d robofactory > ./db/dump/schema.sql
 
 exit the container:
     
@@ -59,12 +59,13 @@ stop container:
     docker stop api
 
 generating a db diagram:
-    eralchemy2 -i postgresql://admin:root@db:5432/robofactory -o diagram.png --exclude-tables alembic_version
+    eralchemy2 -i postgresql://admin:root@db:5433/robofactory -o diagram.png --exclude-tables alembic_version
 
 ### migrations
 all commands execute from the api/database directory   
 create migration
 
+    cd database
     alembic revision --autogenerate -m "Create parts_cad table"
 
 execute all new migrations:
@@ -77,4 +78,4 @@ roll back migration:
 
 ### scheme db 
 
-    eralchemy2 -i postgresql://myuser:mypassword@localhost:5432/mydatabase -o db_diagram.png
+    eralchemy2 -i postgresql://myuser:mypassword@localhost:5433/mydatabase -o db_diagram.png

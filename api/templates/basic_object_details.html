@@ -1,10 +1,10 @@
 <!-- templates/object_details.html -->
 {% extends "base.html" %}
 
-{% block title %}Basic Object Details{% endblock %}
+{% block title %}Module details{% endblock %}
 
 {% block content %}
-<h1>Basic Object Details</h1>
+<h1>Module details</h1>
 <div id="objectDetails"></div>
 
 <script>
@@ -15,6 +15,10 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(response => response.json())
         .then(data => {
             document.getElementById('objectDetails').innerHTML = renderObjectDetails(data);
+            // Обновляем видимость кнопок FreeCad после загрузки деталей объекта
+            if (typeof updateFreeCadButtonsVisibility === 'function') {
+                updateFreeCadButtonsVisibility();
+            }
         })
         .catch(error => {
             console.error('Error loading object details:', error);
@@ -25,4 +29,5 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 });
 </script>
+
 {% endblock %}
