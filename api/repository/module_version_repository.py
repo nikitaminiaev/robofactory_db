@@ -2,7 +2,7 @@ from typing import Optional, List
 from uuid import UUID
 from . import BaseRepository
 from models import ModuleVersion
-from ..service.git_manager import init_module_git_repo, commit_module_changes
+from service.git_manager import init_module_git_repo, commit_module_changes
 
 
 class ModuleVersionRepository(BaseRepository):
