@@ -481,9 +481,9 @@
         "pyright api/routes/brep_files.py проходит без ошибок"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "blocked": false,
-      "notes": ""
+      "notes": "Метод save_single_brep_file добавлен в BrepFileService. POST /modules/{module_id}/brep рефакторирован для использования сервиса."
     },
     {
       "id": "US-031",
