@@ -1,8 +1,8 @@
 from typing import Optional
 from uuid import UUID
 from sqlalchemy.orm import selectinload
-from api.repository.db_session import Db_session
-from api.repository.module_version_repository import ModuleVersionRepository
+from repository.db_session import Db_session
+from repository.module_version_repository import ModuleVersionRepository
 from models import Module, ModuleVersion, BoundingContour
 from models.associations import parent_child_module
 

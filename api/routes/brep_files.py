@@ -6,7 +6,7 @@ from repository.module_version_repository import ModuleVersionRepository
 from schemas.module_version_dto import ModuleVersionDTO
 from models import Module
 from sqlalchemy.orm import selectinload
-from api.repository.db_session import Db_session
+from repository.db_session import Db_session
 
 router = APIRouter()
 
