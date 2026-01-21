@@ -49,3 +49,5 @@
 [US-029] PATCH /api/basic_object/{object_id} обновлен для использования BrepFileService при обновлении brep_files.
 
 [US-030] POST /modules/{module_id}/brep рефакторирован для использования BrepFileService.save_single_brep_file.
+
+[US-031] Unit-тесты для BrepFileService созданы в tests/unit/test_brep_file_service.py.

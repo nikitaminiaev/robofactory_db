@@ -499,9 +499,9 @@
         "Все тесты запускаются и проходят"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "blocked": false,
-      "notes": ""
+      "notes": "Unit-тесты для BrepFileService созданы с использованием pytest и моков."
     }
   ]
 }
