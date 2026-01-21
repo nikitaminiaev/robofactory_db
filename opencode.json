@@ -1,0 +1,13 @@
+{
+    "$schema": "https://opencode.ai/config.json",
+    "lsp": {
+      "python": {
+        "command": [
+          "docker", "exec", "-i", "api",
+          "pyright-langserver", "--stdio"
+        ],
+        "extensions": [".py"]
+      }
+    }
+  }
+  
