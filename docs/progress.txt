@@ -43,3 +43,5 @@
 [US-023] Документация docs/module_copying.md создана с описанием всех функций.
 
 [US-027] BrepFileService создан в api/service/brep_file_service.py с методом save_brep_files_from_dict для сохранения файлов из словаря с обновлением BoundingContour, Git коммитом и созданием ModuleVersion.
+
+[US-028] POST /api/basic_object/ обновлен для использования BrepFileService при создании объектов с brep_files.

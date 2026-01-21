@@ -448,9 +448,9 @@
         "pyright api/routes/create_basic_object.py проходит без ошибок"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "blocked": false,
-      "notes": ""
+      "notes": "POST /api/basic_object/ обновлен для использования BrepFileService.save_brep_files_from_dict после создания объекта. Логика упрощена, brep_files теперь обрабатывается сервисом."
     },
     {
       "id": "US-029",

@@ -8,6 +8,7 @@ from uuid import UUID
 import logging
 from models.associations import parent_child_module
 from models.module import ModuleStatus
+from service.brep_file_service import BrepFileService
 
 router = APIRouter()
 
@@ -59,7 +60,7 @@ async def create_basic_object(
         contour_data = {
             "is_assembly": item.is_assembly,
             "is_shell": item.is_shell,
-            "brep_files": item.brep_files,
+            "brep_files": {},  # BREP files will be handled by BrepFileService
         }
 
         # Execute all operations in one session
@@ -102,6 +103,15 @@ async def create_basic_object(
 
             db.commit()
             db.refresh(basic_object)
+
+            # Handle BREP files if provided
+            if item.brep_files:
+                service = BrepFileService()
+                service.save_brep_files_from_dict(
+                    basic_object.id,
+                    item.brep_files,
+                    f"Initial BREP files for {item.name}"
+                )
 
         return {"ok": True, "id": str(basic_object.id)}
 
