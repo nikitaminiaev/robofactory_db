@@ -1,3 +1,5 @@
+import pytest
+
 def test_full_versioning_workflow(client):
     """Интеграционный тест полного workflow версионирования модулей"""
 
