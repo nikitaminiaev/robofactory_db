@@ -41,3 +41,5 @@
 [US-024] Новые роутеры зарегистрированы в main.py с prefix /api. Pyright проходит.
 
 [US-023] Документация docs/module_copying.md создана с описанием всех функций.
+
+[US-027] BrepFileService создан в api/service/brep_file_service.py с методом save_brep_files_from_dict для сохранения файлов из словаря с обновлением BoundingContour, Git коммитом и созданием ModuleVersion.

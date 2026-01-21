@@ -414,6 +414,94 @@
       "passes": true,
       "blocked": false,
       "notes": "Поле version удалено из модели и to_dict(), миграция создана и применена успешно."
+    },
+    {
+      "id": "US-027",
+      "title": "Создать сервис BrepFileService для сохранения brep файлов из словаря",
+      "description": "Создать api/service/brep_file_service.py с классом BrepFileService. Реализовать метод save_brep_content(module_id: UUID, filename: str, brep_content: str, description: str = None) -> ModuleVersion. brep_content - строка с BREP содержимым (из brep_files['brep_string']). Метод должен: сохранять brep_content в api/resources/brep_files/{module_id}/{filename} с помощью save_brep_file (преобразуя строку в bytes через .encode()), обновлять brep_files в BoundingContour (filename -> относительный_путь), делать git коммит через commit_module_changes, создавать версию через ModuleVersionRepository.create_version_with_git. Обрабатывать OSError и CalledProcessError. Переиспользовать функционал из api/routes/brep_files.py (save_brep_file, commit_module_changes, ModuleVersionRepository).",
+      "acceptanceCriteria": [
+        "Файл api/service/brep_file_service.py создан",
+        "Класс BrepFileService реализован",
+        "Метод save_brep_files_from_dict сохраняет файлы из словаря",
+        "BREP файлы обновляются в BoundingContour",
+        "Git коммит выполняется с сообщением описания",
+        "ModuleVersion создается с хешем коммита",
+        "Обработка OSError и CalledProcessError реализована",
+        "pyright api/service/brep_file_service.py проходит без ошибок",
+        "Юнит-тесты для BrepFileService проходят"
+      ],
+      "priority": 1,
+      "passes": true,
+      "blocked": false,
+      "notes": "BrepFileService создан с методом save_brep_files_from_dict. Сохраняет файлы из словаря, обновляет BoundingContour, выполняет Git коммит и создает ModuleVersion. Обработка ошибок OSError и CalledProcessError."
+    },
+    {
+      "id": "US-028",
+      "title": "Обновить POST /api/basic_object/ для использования BrepFileService",
+      "description": "Модифицировать api/routes/create_basic_object.py роут POST /api/basic_object/. После создания Module и BoundingContour с brep_files, если brep_files не пустой, вызвать BrepFileService.save_brep_files_from_dict для сохранения файлов с Git коммитом и версионированием. Уменьшить логику в контроллере, перенести в сервис.",
+      "acceptanceCriteria": [
+        "POST /api/basic_object/ использует BrepFileService для brep файлов",
+        "BREP файлы сохраняются в ФС",
+        "Git коммит выполняется",
+        "ModuleVersion создается",
+        "Логика контроллера упрощена",
+        "pyright api/routes/create_basic_object.py проходит без ошибок"
+      ],
+      "priority": 1,
+      "passes": false,
+      "blocked": false,
+      "notes": ""
+    },
+    {
+      "id": "US-029",
+      "title": "Обновить PATCH /api/basic_object/{object_id} для использования BrepFileService",
+      "description": "Модифицировать api/routes/create_basic_object.py роут PATCH /api/basic_object/{object_id}. При обновлении поля brep_files в BasicObjectUpdate, если brep_files передан и не пустой, вызвать BrepFileService.save_brep_files_from_dict для сохранения новых файлов с Git коммитом и версионированием. Уменьшить логику в контроллере, перенести в сервис.",
+      "acceptanceCriteria": [
+        "PATCH /api/basic_object/{object_id} использует BrepFileService для brep файлов",
+        "BREP файлы сохраняются в ФС",
+        "Git коммит выполняется",
+        "ModuleVersion создается",
+        "Логика контроллера упрощена",
+        "pyright api/routes/create_basic_object.py проходит без ошибок"
+      ],
+      "priority": 1,
+      "passes": false,
+      "blocked": false,
+      "notes": ""
+    },
+    {
+      "id": "US-030",
+      "title": "Рефакторинг /modules/{module_id}/brep для использования BrepFileService",
+      "description": "Модифицировать api/routes/brep_files.py роут POST /modules/{module_id}/brep. Вынести логику сохранения файла, обновления BoundingContour, Git коммита и создания версии в BrepFileService.save_single_brep_file. Роут должен стать thin wrapper, который получает multipart файл, читает его содержимое и вызывает сервис. Сохранить роут для загрузки отдельного файла к существующему модулю.",
+      "acceptanceCriteria": [
+        "BrepFileService имеет метод save_single_brep_file для одного файла",
+        "POST /modules/{module_id}/brep использует новый метод сервиса",
+        "Роут оставлен и работает корректно",
+        "Логика контроллера упрощена",
+        "pyright api/routes/brep_files.py проходит без ошибок"
+      ],
+      "priority": 2,
+      "passes": false,
+      "blocked": false,
+      "notes": ""
+    },
+    {
+      "id": "US-031",
+      "title": "Написать unit-тесты для BrepFileService",
+      "description": "Создать tests/unit/test_brep_file_service.py с unit-тестами для BrepFileService. Тесты должны проверять: сохранение одного файла, сохранение нескольких файлов, обработку ошибок чтения файлов, создание версии, Git коммит. Использовать моки для файловой системы, Git и репозитория. Не задействовать реальную БД.",
+      "acceptanceCriteria": [
+        "Файл tests/unit/test_brep_file_service.py создан",
+        "Тест для сохранения одного файла проходит",
+        "Тест для сохранения нескольких файлов проходит",
+        "Тест для обработки ошибок чтения файлов проходит",
+        "Тесты используют моки (mock) для БД, Git и файловой системы",
+        "pyright tests/unit/test_brep_file_service.py проходит без ошибок",
+        "Все тесты запускаются и проходят"
+      ],
+      "priority": 2,
+      "passes": false,
+      "blocked": false,
+      "notes": ""
     }
   ]
 }
