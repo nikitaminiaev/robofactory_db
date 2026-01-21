@@ -465,9 +465,9 @@
         "pyright api/routes/create_basic_object.py проходит без ошибок"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "blocked": false,
-      "notes": ""
+      "notes": "PATCH /api/basic_object/{object_id} обновлен для использования BrepFileService при обновлении brep_files."
     },
     {
       "id": "US-030",

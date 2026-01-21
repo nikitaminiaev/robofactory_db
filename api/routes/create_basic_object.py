@@ -281,7 +281,16 @@ async def update_basic_object(
                 contour = basic_object.bounding_contour
                 if contour:
                     for field, value in contour_data.items():
-                        setattr(contour, field, value)
+                        if field == "brep_files":
+                            if value:
+                                service = BrepFileService()
+                                service.save_brep_files_from_dict(
+                                    obj_id_uuid,
+                                    value,
+                                    f"Update BREP files for {basic_object.name}"
+                                )
+                        else:
+                            setattr(contour, field, value)
 
             db.commit()
             db.refresh(basic_object)
