@@ -142,4 +142,12 @@ class Module(Base):
                     "stream_id": str(boundary.stream_id)
                 } for boundary in self.boundaries
             ],
+            "last_version": {
+                    "id": str(self.versions[0].id),
+                    "version_number": self.versions[0].version_number,
+                    "description": self.versions[0].description,
+                    "commit_hash": self.versions[0].commit_hash,
+                    "is_released": self.versions[0].is_released,
+                    "created_ts": self.versions[0].created_ts.isoformat() if self.versions[0].created_ts else None
+                } if self.versions else None,
         }

@@ -502,6 +502,23 @@
       "passes": true,
       "blocked": false,
       "notes": "Unit-тесты для BrepFileService созданы с использованием pytest и моков."
+    },
+    {
+      "id": "US-032",
+      "title": "Добавить проверку изменений BREP строк перед сохранением",
+      "description": "Модифицировать api/routes/create_basic_object.py (PATCH endpoint) и/или BrepFileService для проверки изменений BREP файлов перед сохранением. Перед вызовом save_brep_files_from_dict нужно сравнивать новые brep строки с текущими в BoundingContour (или через git diff) и, если изменений нет, не создавать новую версию и не делать коммит. Если изменения есть, сохранять их как обычно. Это позволит избежать создания лишних версий и коммитов при отсутствии реальных изменений.",
+      "acceptanceCriteria": [
+        "PATCH /api/basic_object/{object_id} проверяет изменения brep файлов перед сохранением",
+        "BrepFileService.save_brep_files_from_dict проверяет изменения",
+        "Новая версия и коммит создаются только при реальных изменениях",
+        "Если изменений нет - возвращается существующая версия без создания новой",
+        "pyright api/routes/create_basic_object.py проходит без ошибок",
+        "pyright api/service/brep_file_service.py проходит без ошибок"
+      ],
+      "priority": 2,
+      "passes": false,
+      "blocked": false,
+      "notes": "Задача создана из PR комментария. Требует реализации проверки изменений через git diff или прямое сравнение строк."
     }
   ]
 }

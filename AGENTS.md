@@ -83,6 +83,10 @@
 - **ModuleUpdateReason** (tracks module updates)
   - Many-to-One: `old_module` and `new_module` (to Module)
 
+- **ModuleVersion** (version history with Git integration)
+  - Many-to-One: `module_id` (to Module)
+  - Stores: version_number, commit_hash, description, git_repo_path, is_released, created_ts
+
 ### Association Tables (Many-to-Many)
 - `parent_child_module`: Links Modules in hierarchy with coordinates and role.
 - `module_stream`: Links Modules to Streams.

@@ -1,10 +1,27 @@
 {
     "$schema": "https://opencode.ai/config.json",
+    "mcp": {
+      "github": {
+       "type": "local",
+       "command": [
+         "docker",
+         "run",
+         "-i",
+         "-e",
+         "GITHUB_PERSONAL_ACCESS_TOKEN",
+         "ghcr.io/github/github-mcp-server"
+       ],
+        "enabled": true
+      }
+    },
+    "tools": {
+      "github": true
+    },
     "lsp": {
       "python": {
         "command": [
           "docker", "exec", "-i", "api",
-          "pyright-langserver", "--stdio"
+          "pyright", "--stdio"
         ],
         "extensions": [".py"]
       }
