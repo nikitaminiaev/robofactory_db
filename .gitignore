@@ -8,3 +8,4 @@
 api/.env
 api/database/alembic/versions/*
 api/resources/brep_files
+opencode.json
