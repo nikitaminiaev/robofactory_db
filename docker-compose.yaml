@@ -19,8 +19,9 @@ services:
      build:
        context: ./docker/api
        dockerfile: ./Dockerfile
-      volumes:
-          - .:/usr/src
+     volumes:
+       - .:/usr/src
+       - ./docker/api/requirements.txt:/usr/src/docker/api/requirements.txt
      environment:
        - PYTHONPATH=/usr/src
      command: sh -c "uvicorn main:app --host 0.0.0.0 --reload"
