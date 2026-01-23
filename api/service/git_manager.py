@@ -3,9 +3,47 @@ from pathlib import Path
 from uuid import UUID
 import os
 import logging
+import hashlib
 from service.constants import BREP_FILES_PATH
 
 logger = logging.getLogger(__name__)
+
+
+def calculate_brep_files_hash(module_id: UUID) -> str:
+    """
+    Вычисляет SHA256 хеш содержимого всех BREP файлов модуля.
+
+    Args:
+        module_id: UUID модуля
+
+    Returns:
+        SHA256 хеш в виде строки
+    """
+    repo_path = Path(BREP_FILES_PATH) / str(module_id)
+
+    if not repo_path.exists():
+        return ""
+
+    # Собираем все файлы в директории
+    files = []
+    for file_path in repo_path.rglob('*'):
+        if file_path.is_file():
+            files.append(file_path)
+
+    # Сортируем файлы для консистентности хеша
+    files.sort(key=lambda p: str(p.relative_to(repo_path)))
+
+    hasher = hashlib.sha256()
+    for file_path in files:
+        try:
+            content = file_path.read_bytes()
+            hasher.update(content)
+            # Добавляем имя файла для отличия файлов с одинаковым содержимым
+            hasher.update(str(file_path.relative_to(repo_path)).encode())
+        except Exception as e:
+            logger.warning(f"Не удалось прочитать файл {file_path}: {e}")
+
+    return hasher.hexdigest()
 
 
 def init_module_git_repo(module_id: UUID) -> str:

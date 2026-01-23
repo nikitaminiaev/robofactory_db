@@ -17,20 +17,20 @@
        "blocked": false,
        "notes": "Implemented delete_module method in ModuleRepository. Deletes bounding_contour, ModuleBoundary entities, removes associations to streams/platforms/boundaries/parent-child, preserves parent/child modules. Unit tests pass."
      },
-    {
-      "id": "US-002",
-      "title": "Implement file (brep_string) hash check for module updates",
-      "description": "In the module update process, before committing changes, calculate hash of current files and compare with previous version hash. If hashes differ, proceed with update; if same, skip. Implement hash function using hashlib.sha256 on file contents.",
-      "acceptanceCriteria": [
-        "Hash calculation function exists in git_manager.py or similar",
-        "Update logic checks hash before proceeding",
-        "No update if files unchanged",
-        "Full unit test passes for hash checking"
-      ],
-      "priority": 7,
-      "passes": false,
-      "blocked": false,
-      "notes": ""
+     {
+       "id": "US-002",
+       "title": "Implement file (brep_string) hash check for module updates",
+       "description": "In the module update process, before committing changes, calculate hash of current files and compare with previous version hash. If hashes differ, proceed with update; if same, skip. Implement hash function using hashlib.sha256 on file contents.",
+       "acceptanceCriteria": [
+         "Hash calculation function exists in git_manager.py or similar",
+         "Update logic checks hash before proceeding",
+         "No update if files unchanged",
+         "Full unit test passes for hash checking"
+       ],
+       "priority": 7,
+       "passes": true,
+       "blocked": false,
+       "notes": "Implemented file hash check using hashlib.sha256 on file contents. Added file_hash to ModuleVersion model with migration. Checks hash before update in brep_file_service, skips if unchanged. Unit test added."
      },
       {
         "id": "US-003",

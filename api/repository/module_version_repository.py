@@ -34,7 +34,7 @@ class ModuleVersionRepository(BaseRepository):
             version = db.query(ModuleVersion).filter_by(module_id=module_id).order_by(ModuleVersion.created_ts.desc()).first()
         return version
     
-    def create_version(self, module_id: UUID, version_number: str, description: str, commit_hash: Optional[str] = None, git_repo_path: Optional[str] = None, is_released: bool = False) -> ModuleVersion:
+    def create_version(self, module_id: UUID, version_number: str, description: str, commit_hash: Optional[str] = None, file_hash: Optional[str] = None, git_repo_path: Optional[str] = None, is_released: bool = False) -> ModuleVersion:
         """
         Создать новую версию модуля.
         
@@ -54,6 +54,7 @@ class ModuleVersionRepository(BaseRepository):
             version_number=version_number,
             description=description,
             commit_hash=commit_hash,
+            file_hash=file_hash,
             git_repo_path=git_repo_path,
             is_released=is_released
         )

@@ -1,3 +1,4 @@
 US-003: Unit tests created for module_copier, brep_storage, git_manager, web_soket_server, basic_object_extractor services. Tests are failing due to mocking complexities and set as blocked for further fixes.
 US-001: Implemented delete_module method in ModuleRepository with proper cascade deletion, preserving hierarchy modules. Unit tests pass.
 US-004: Added delete button and confirmation modal to module details page. Calls DELETE API endpoint and preserves hierarchy.
+US-002: Implemented file hash check using hashlib.sha256. Added file_hash to ModuleVersion with migration. Skips update if files unchanged.

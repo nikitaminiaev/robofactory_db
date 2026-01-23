@@ -137,3 +137,29 @@ class TestBrepFileService:
         mock_save.assert_called_once_with(UUID('12345678-1234-5678-1234-567812345678'), 'file1', b'content')
         mock_commit.assert_called_once()
         mock_repo_instance.create_version.assert_called_once()
+
+    @patch('service.brep_file_service.calculate_brep_dict_hash')
+    @patch('service.brep_file_service.save_brep_file')
+    @patch('service.brep_file_service.commit_module_changes')
+    @patch('service.brep_file_service.Db_session')
+    @patch('service.brep_file_service.ModuleVersionRepository')
+    def test_save_brep_files_from_dict_no_change(self, mock_repo_class, mock_db_session_class, mock_commit, mock_save, mock_hash):
+        # Setup mocks
+        mock_hash.return_value = 'same_hash'
+        
+        mock_repo_instance = MagicMock()
+        mock_existing_version = MagicMock()
+        mock_existing_version.file_hash = 'same_hash'
+        mock_repo_instance.get_latest_version.return_value = mock_existing_version
+        mock_repo_class.return_value = mock_repo_instance
+        
+        service = BrepFileService()
+        result = service.save_brep_files_from_dict(
+            UUID('12345678-1234-5678-1234-567812345678'), 
+            {'file1': 'content1'}
+        )
+        
+        assert result == mock_existing_version
+        mock_save.assert_not_called()
+        mock_commit.assert_not_called()
+        mock_repo_instance.create_version.assert_not_called()
