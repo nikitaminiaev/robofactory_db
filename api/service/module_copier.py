@@ -39,9 +39,8 @@ def copy_module_with_roles(module_id: UUID, new_author: str, version_number: str
             name=original.name,
             abbreviation=original.abbreviation,
             author=new_author,
-            description=original.description,
+            description=description,
             ttx=original.ttx,
-            version=version_number,
             implementation=original.implementation,
             status=original.status,
             is_lts=original.is_lts,
@@ -89,13 +88,40 @@ def copy_module_with_roles(module_id: UUID, new_author: str, version_number: str
             ))
         
         # Создать запись ModuleVersion с Git интеграцией
-        repo = ModuleVersionRepository()
-        version = repo.create_version_with_git(
+        from service.git_manager import init_module_git_repo, commit_module_changes
+
+        # Проверить, есть ли уже git_repo_path для модуля
+        existing_version = db.query(ModuleVersion).filter_by(module_id=new_module.id).first()
+        git_repo_path = existing_version.git_repo_path if existing_version else None
+
+        if not git_repo_path:
+            # Инициализировать репозиторий
+            git_repo_path = init_module_git_repo(new_module.id)
+
+        # Коммит изменений
+        commit_hash = commit_module_changes(new_module.id, description)
+
+        # Создать версию в той же сессии
+        version = ModuleVersion(
             module_id=new_module.id,
             version_number=version_number,
-            description=description
+            description=description,
+            commit_hash=commit_hash,
+            git_repo_path=git_repo_path
         )
-        
+        db.add(version)
+
         db.commit()
-        
+
+        # Получить обновленный объект с отношениями
+        new_module = db.query(Module).options(
+            selectinload(Module.bounding_contour),
+            selectinload(Module.children),
+            selectinload(Module.parents),
+            selectinload(Module.streams),
+            selectinload(Module.platforms),
+            selectinload(Module.boundaries),
+            selectinload(Module.versions),
+        ).filter_by(id=new_module.id).first()
+
         return new_module
