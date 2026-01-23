@@ -1,5 +1,5 @@
 import uuid
-from typing import Optional, List, Dict
+from typing import Optional, List
 from sqlalchemy import DateTime, ForeignKey, UUID, Boolean
 from sqlalchemy import Column, String, Text
 from sqlalchemy.orm import relationship, Mapped, mapped_column
@@ -11,7 +11,6 @@ from sqlalchemy import Enum as SQLAlchemyEnum
 from .base import Base
 from .bounding_contour import BoundingContour
 from .associations import parent_child_module, module_stream, module_platform, module_boundary
-from .module_version import ModuleVersion
 
 
 class ModuleStatus(str, Enum):

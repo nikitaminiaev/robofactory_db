@@ -12,6 +12,7 @@ if TYPE_CHECKING:
 from .base import Base
 from pathlib import Path
 
+BREP_FILES_PATH = "resources/brep_files"
 
 class BoundingContour(Base):
     __tablename__ = "bounding_contours"
@@ -61,7 +62,7 @@ class BoundingContour(Base):
         if self.brep_files:
             for filename, relative_path in self.brep_files.items():
                 try:
-                    full_path = Path("resources/brep_files") / relative_path
+                    full_path = Path(BREP_FILES_PATH) / relative_path
                     if full_path.exists():
                         content = full_path.read_text()
                         # Для совместимости с клиентом FreeCAD возвращаем структуру с path и brep_string

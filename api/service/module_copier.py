@@ -1,13 +1,12 @@
-from typing import Optional, Dict
+from typing import Dict
 from uuid import UUID
 from pathlib import Path
 from sqlalchemy.orm import selectinload
 from repository.db_session import Db_session
-from repository.module_version_repository import ModuleVersionRepository
 from models import Module, ModuleVersion, BoundingContour
 from models.associations import parent_child_module
 from service.brep_storage import save_brep_file
-
+from service.constants import BREP_FILES_PATH
 
 def copy_module_with_roles(module_id: UUID, new_author: str, version_number: str, description: str) -> Module:
     """
@@ -57,7 +56,7 @@ def copy_module_with_roles(module_id: UUID, new_author: str, version_number: str
         if original.bounding_contour:
             brep_files = original.bounding_contour.brep_files or {}
             new_brep_files: Dict[str, str] = {}
-            base_path = Path("resources/brep_files")
+            base_path = Path(BREP_FILES_PATH)
             for filename, relative_path in brep_files.items():
                 if not relative_path:
                     continue

@@ -3,6 +3,7 @@ from pathlib import Path
 from uuid import UUID
 import os
 import logging
+from service.constants import BREP_FILES_PATH
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +21,7 @@ def init_module_git_repo(module_id: UUID) -> str:
     Raises:
         CalledProcessError: Если git init не удался
     """
-    repo_path = Path("resources/brep_files") / str(module_id)
+    repo_path = Path(BREP_FILES_PATH) / str(module_id)
 
     # Создать директорию если она не существует
     os.makedirs(repo_path, exist_ok=True)
@@ -56,7 +57,7 @@ def commit_module_changes(module_id: UUID, message: str) -> str:
     Raises:
         CalledProcessError: Если git команды не удались
     """
-    repo_path = Path("resources/brep_files") / str(module_id)
+    repo_path = Path(BREP_FILES_PATH) / str(module_id)
 
     try:
         # Получить список файлов в директории
@@ -108,7 +109,7 @@ def get_module_commit_history(module_id: UUID) -> list[dict[str, str]]:
     Raises:
         CalledProcessError: Если git log не удался
     """
-    repo_path = Path("resources/brep_files") / str(module_id)
+    repo_path = Path(BREP_FILES_PATH) / str(module_id)
     
     try:
         result = run(["git", "log", "--pretty=format:%H|%s|%ai"], cwd=repo_path, check=True, capture_output=True, text=True)

@@ -87,12 +87,6 @@ roll back migration:
 
 run tests manually in api container:
 
-    # copy tests to container (if not mounted)
-    docker cp tests/ api:/usr/src/tests/
-
-    # install pytest (if not installed)
-    docker exec api pip install pytest
-
     # run all tests
     docker exec -e PYTHONPATH=/usr/src api python -m pytest tests/ -v
 

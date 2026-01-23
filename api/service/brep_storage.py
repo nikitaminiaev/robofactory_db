@@ -1,5 +1,6 @@
 from pathlib import Path
 from uuid import UUID
+from service.constants import BREP_FILES_PATH
 
 
 def create_module_brep_directory(module_id: UUID) -> str:
@@ -15,7 +16,7 @@ def create_module_brep_directory(module_id: UUID) -> str:
     Raises:
         OSError: Если не удается создать директорию
     """
-    base_path = Path("resources/brep_files")
+    base_path = Path(BREP_FILES_PATH)
     module_path = base_path / str(module_id)
     
     try:
@@ -40,14 +41,14 @@ def save_brep_file(module_id: UUID, filename: str, file_content: bytes) -> str:
     Raises:
         OSError: Если не удается создать директорию или записать файл
     """
-    base_path = Path("resources/brep_files")
+    base_path = Path(BREP_FILES_PATH)
     module_path = base_path / str(module_id)
     
     try:
         module_path.mkdir(parents=True, exist_ok=True)
         file_path = module_path / filename
         file_path.write_bytes(file_content)
-        # Относительный путь от api/resources/brep_files/
+        # Относительный путь от resources/brep_files/
         relative_path = f"{module_id}/{filename}"
         return relative_path
     except OSError as e:
