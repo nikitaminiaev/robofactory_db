@@ -1,10 +1,12 @@
-from typing import Optional
+from typing import Optional, Dict
 from uuid import UUID
+from pathlib import Path
 from sqlalchemy.orm import selectinload
 from repository.db_session import Db_session
 from repository.module_version_repository import ModuleVersionRepository
 from models import Module, ModuleVersion, BoundingContour
 from models.associations import parent_child_module
+from service.brep_storage import save_brep_file
 
 
 def copy_module_with_roles(module_id: UUID, new_author: str, version_number: str, description: str) -> Module:
@@ -53,11 +55,24 @@ def copy_module_with_roles(module_id: UUID, new_author: str, version_number: str
         
         # Копировать bounding_contour если есть
         if original.bounding_contour:
+            brep_files = original.bounding_contour.brep_files or {}
+            new_brep_files: Dict[str, str] = {}
+            base_path = Path("resources/brep_files")
+            for filename, relative_path in brep_files.items():
+                if not relative_path:
+                    continue
+                source_path = base_path / relative_path
+                if not source_path.exists():
+                    continue
+                file_content = source_path.read_bytes()
+                new_relative_path = save_brep_file(new_module.id, filename, file_content)
+                new_brep_files[filename] = new_relative_path
+
             new_contour = BoundingContour(
                 module_id=new_module.id,
                 is_assembly=original.bounding_contour.is_assembly,
                 is_shell=original.bounding_contour.is_shell,
-                brep_files=original.bounding_contour.brep_files,
+                brep_files=new_brep_files,
                 parent_id=None  # Для копии не копируем hierarchy
             )
             db.add(new_contour)
