@@ -15,7 +15,7 @@ def create_module_brep_directory(module_id: UUID) -> str:
     Raises:
         OSError: Если не удается создать директорию
     """
-    base_path = Path("api/resources/brep_files")
+    base_path = Path("resources/brep_files")
     module_path = base_path / str(module_id)
     
     try:
@@ -40,7 +40,7 @@ def save_brep_file(module_id: UUID, filename: str, file_content: bytes) -> str:
     Raises:
         OSError: Если не удается создать директорию или записать файл
     """
-    base_path = Path("api/resources/brep_files")
+    base_path = Path("resources/brep_files")
     module_path = base_path / str(module_id)
     
     try:

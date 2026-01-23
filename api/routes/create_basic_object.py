@@ -97,12 +97,14 @@ async def create_basic_object(
             # Set basic object ID for contour
             contour_data["module_id"] = basic_object.id
             contour = BoundingContour.create(**contour_data)
+            print(f"DEBUG create_basic_object: Created contour with id={contour.id}, brep_files={contour.brep_files}")
 
-            contour.basic_object_id = basic_object.id
+            contour.module_id = basic_object.id
             db.add(contour)
 
             db.commit()
             db.refresh(basic_object)
+            print(f"DEBUG create_basic_object: After commit, contour brep_files = {contour.brep_files}")
 
             # Handle BREP files if provided
             if item.brep_files:

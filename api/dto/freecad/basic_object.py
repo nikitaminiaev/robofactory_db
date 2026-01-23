@@ -1,4 +1,6 @@
 from models import Module
+from pathlib import Path
+import os
 
 
 class BasicObject:
@@ -24,12 +26,29 @@ class BasicObject:
             self.brep_string = None
         else:
             brep_files = bounding_contour.get('brep_files', {})
-            if brep_files is None:
+            if brep_files is None or not brep_files:
                 self.file_path = None
                 self.brep_string = None
             else:
-                self.file_path = brep_files.get('path')
-                self.brep_string = brep_files.get('brep_string')
+                # brep_files теперь содержит словарь {имя_файла: относительный_путь}
+                # Найдем файл brep_string
+                brep_file_path = brep_files.get('brep_string')
+                if brep_file_path:
+                    # Построим полный путь к файлу
+                    full_path = Path("resources/brep_files") / brep_file_path
+                    try:
+                        if full_path.exists():
+                            self.brep_string = full_path.read_text()
+                            self.file_path = str(full_path)
+                        else:
+                            self.file_path = None
+                            self.brep_string = None
+                    except Exception:
+                        self.file_path = None
+                        self.brep_string = None
+                else:
+                    self.file_path = None
+                    self.brep_string = None
     
     @classmethod
     def from_module(cls, module: Module):
@@ -61,5 +80,5 @@ class BasicObject:
                     'path': self.file_path,
                     'brep_string': self.brep_string
                 }
-            }
+            } if self.brep_string else None
         }

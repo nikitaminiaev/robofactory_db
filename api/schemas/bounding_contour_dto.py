@@ -7,7 +7,7 @@ class BoundingContourDTO(BaseModel):
     basic_object_id: str
     is_assembly: bool
     is_shell: bool = False
-    brep_files: Dict[str, str]
+    brep_files: Dict[str, str]  # Теперь содержит содержимое файлов, а не пути
     parent_id: Optional[str] = None
     created_ts: Optional[str] = None
     updated_ts: Optional[str] = None

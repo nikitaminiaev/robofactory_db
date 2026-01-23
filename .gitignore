@@ -7,5 +7,5 @@
 *$py.class
 api/.env
 api/database/alembic/versions/*
-api/resources/brep_files
+api/resources/*
 opencode.json

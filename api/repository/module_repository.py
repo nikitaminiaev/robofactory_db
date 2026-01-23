@@ -16,7 +16,8 @@ class ModuleRepository(BaseRepository):
                 selectinload(Module.parents),
                 selectinload(Module.boundaries),
                 selectinload(Module.streams),
-                selectinload(Module.platforms)
+                selectinload(Module.platforms),
+                selectinload(Module.versions)
             ).order_by(
                 Module.id
             )
@@ -35,7 +36,8 @@ class ModuleRepository(BaseRepository):
                 selectinload(Module.parents),
                 selectinload(Module.boundaries),
                 selectinload(Module.streams),
-                selectinload(Module.platforms)
+                selectinload(Module.platforms),
+                selectinload(Module.versions)
             )
             
             if top_level_ids is None:
@@ -68,7 +70,8 @@ class ModuleRepository(BaseRepository):
                 selectinload(Module.parents),
                 selectinload(Module.boundaries),
                 selectinload(Module.streams),
-                selectinload(Module.platforms)
+                selectinload(Module.platforms),
+                selectinload(Module.versions)
             )
             
             if name:
@@ -97,8 +100,15 @@ class ModuleRepository(BaseRepository):
                 selectinload(Module.parents),
                 selectinload(Module.boundaries),
                 selectinload(Module.streams),
-                selectinload(Module.platforms)
+                selectinload(Module.platforms),
+                selectinload(Module.versions)
             ).filter_by(id=id).first()
+            print(f"DEBUG get_module_with_relations_by_id: module found = {module is not None}")
+            if module:
+                print(f"DEBUG get_module_with_relations_by_id: module.id = {module.id}")
+                print(f"DEBUG get_module_with_relations_by_id: bounding_contour = {module.bounding_contour is not None}")
+                if module.bounding_contour:
+                    print(f"DEBUG get_module_with_relations_by_id: contour.brep_files = {module.bounding_contour.brep_files}")
         return module
 
     def get_child_coordinates(self, parent_id: UUID, child_id: UUID):
@@ -133,7 +143,8 @@ class ModuleRepository(BaseRepository):
                 selectinload(Module.parents),
                 selectinload(Module.boundaries),
                 selectinload(Module.streams),
-                selectinload(Module.platforms)
+                selectinload(Module.platforms),
+                selectinload(Module.versions)
             )
             
             query = query.join(
@@ -154,7 +165,8 @@ class ModuleRepository(BaseRepository):
                 selectinload(Module.parents),
                 selectinload(Module.boundaries),
                 selectinload(Module.streams),
-                selectinload(Module.platforms)
+                selectinload(Module.platforms),
+                selectinload(Module.versions)
             )
             
             query = query.join(

@@ -4,11 +4,13 @@ from typing import Optional, Dict, TYPE_CHECKING
 from sqlalchemy import Column, JSON
 from sqlalchemy import ForeignKey, Boolean, DateTime, func, UUID
 from sqlalchemy.orm import relationship, Mapped, mapped_column
+from sqlalchemy.ext.mutable import MutableDict
 
 if TYPE_CHECKING:
     from .module import Module
 
 from .base import Base
+from pathlib import Path
 
 
 class BoundingContour(Base):
@@ -22,7 +24,10 @@ class BoundingContour(Base):
 
     is_assembly = Column(Boolean, nullable=False)
     is_shell: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    brep_files: Mapped[Optional[Dict[str, str]]] = mapped_column(JSON, nullable=True)  # Ссылки на BREP файлы: имя -> относительный путь
+    brep_files: Mapped[Optional[Dict[str, str]]] = mapped_column(
+        MutableDict.as_mutable(JSON),
+        nullable=True
+    )  # Ссылки на BREP файлы: имя -> относительный путь
     parent_id = Column(UUID(as_uuid=True), ForeignKey('bounding_contours.id'), nullable=True)
     parent = relationship("BoundingContour", remote_side=[id])
 
@@ -51,12 +56,39 @@ class BoundingContour(Base):
         return f"BoundingContour(id={self.id!r}, is_assembly={self.is_assembly!r}, is_shell={self.is_shell!r})"
 
     def to_dict(self):
+        # Читаем содержимое BREP файлов вместо возврата путей
+        brep_files_content = {}
+        if self.brep_files:
+            for filename, relative_path in self.brep_files.items():
+                try:
+                    full_path = Path("resources/brep_files") / relative_path
+                    if full_path.exists():
+                        content = full_path.read_text()
+                        # Для совместимости с клиентом FreeCAD возвращаем структуру с path и brep_string
+                        if filename == 'brep_string':
+                            brep_files_content['path'] = str(full_path)
+                            brep_files_content['brep_string'] = content
+                        else:
+                            brep_files_content[filename] = content
+                    else:
+                        if filename == 'brep_string':
+                            brep_files_content['path'] = None
+                            brep_files_content['brep_string'] = ""
+                        else:
+                            brep_files_content[filename] = ""
+                except Exception:
+                    if filename == 'brep_string':
+                        brep_files_content['path'] = None
+                        brep_files_content['brep_string'] = ""
+                    else:
+                        brep_files_content[filename] = ""
+
         return {
             "id": str(self.id),
             "module_id": str(self.module_id) if self.module_id else None,
             "is_assembly": self.is_assembly,
             "is_shell": self.is_shell,
-            "brep_files": self.brep_files,
+            "brep_files": brep_files_content,  # Возвращаем содержимое файлов в формате, ожидаемом клиентом
             "parent_id": str(self.parent_id) if self.parent_id else None,
             "created_ts": self.created_ts.isoformat() if self.created_ts else None,
             "updated_ts": self.updated_ts.isoformat() if self.updated_ts else None,

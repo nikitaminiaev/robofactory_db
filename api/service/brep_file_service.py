@@ -1,10 +1,13 @@
 from typing import Dict
 from uuid import UUID
+import logging
 from repository.bounding_contour_repository import BoundingContourRepository
 from repository.module_version_repository import ModuleVersionRepository
 from service.brep_storage import save_brep_file
-from service.git_manager import commit_module_changes
+from service.git_manager import init_module_git_repo, commit_module_changes
 from models.module_version import ModuleVersion
+
+logger = logging.getLogger(__name__)
 
 
 class BrepFileService:
@@ -42,10 +45,14 @@ class BrepFileService:
         except OSError as e:
             raise OSError(f"Не удалось сохранить BREP файлы: {e}") from e
 
+        print(f"DEBUG BrepFileService: saved_paths = {saved_paths}")
         contour_repo = BoundingContourRepository()
-        contour_repo.update_brep_files(module_id, saved_paths)
+        updated_contour = contour_repo.update_brep_files(module_id, saved_paths)
+        print(f"DEBUG BrepFileService: update_brep_files returned, brep_files = {updated_contour.brep_files}")
 
         try:
+            # Инициализировать git репозиторий если он не существует
+            init_module_git_repo(module_id)
             commit_hash = commit_module_changes(module_id, description)
         except Exception as e:
             raise RuntimeError(f"Не удалось выполнить Git коммит: {e}") from e
@@ -94,6 +101,8 @@ class BrepFileService:
         contour_repo.update_brep_files(module_id, {filename: relative_path})
 
         try:
+            # Инициализировать git репозиторий если он не существует
+            init_module_git_repo(module_id)
             commit_hash = commit_module_changes(module_id, description)
         except Exception as e:
             raise RuntimeError(f"Не удалось выполнить Git коммит: {e}") from e
