@@ -3,6 +3,7 @@ from uuid import UUID
 from sqlalchemy.orm import selectinload
 from sqlalchemy import func
 from . import BaseRepository
+from .bounding_contour_repository import BoundingContourRepository
 from models import Module
 from models.associations import parent_child_module
 
@@ -250,3 +251,90 @@ class ModuleRepository(BaseRepository):
                 role_id=role_id
             )
         )
+
+    def copy_module_with_roles(self, module_id: UUID, new_author: str, version_number: str, description: str) -> Module:
+        """
+        Копирует модуль с указанными параметрами, копируя все его роли и bounding_contour.
+
+        Args:
+            module_id: UUID оригинального модуля
+            new_author: Автор копии
+            version_number: Номер версии для копии
+            description: Описание версии
+
+        Returns:
+            Новый модуль
+
+        Raises:
+            ValueError: Если модуль не найден
+        """
+        with self.db_session.session() as db:
+            # Получить оригинальный модуль с отношениями
+            original = db.query(Module).options(
+                selectinload(Module.bounding_contour),
+            ).filter_by(id=module_id).first()
+
+            if not original:
+                raise ValueError("Module not found")
+
+            # Создать копию модуля
+            new_module = Module(
+                name=original.name,
+                abbreviation=original.abbreviation,
+                author=new_author,
+                description=description,
+                ttx=original.ttx,
+                implementation=original.implementation,
+                status=original.status,
+                is_lts=original.is_lts,
+                service_id=original.service_id,
+                interface_object_id=original.interface_object_id
+            )
+
+            db.add(new_module)
+            db.flush()  # Получить id для нового модуля
+
+            # Копировать bounding_contour если есть
+            if original.bounding_contour:
+                bounding_contour_repo = BoundingContourRepository()
+                bounding_contour_repo.copy_bounding_contour(original.id, new_module.id)
+
+            # Копировать роли из parent_child_module
+            # Где оригинальный модуль - child
+            child_relations = db.query(parent_child_module).filter(
+                parent_child_module.c.child_id == module_id
+            ).all()
+            for rel in child_relations:
+                db.execute(parent_child_module.insert().values(
+                    parent_id=rel.parent_id,
+                    child_id=new_module.id,
+                    coordinates=rel.coordinates,
+                    role_id=rel.role_id
+                ))
+
+            # Где оригинальный модуль - parent
+            parent_relations = db.query(parent_child_module).filter(
+                parent_child_module.c.parent_id == module_id
+            ).all()
+            for rel in parent_relations:
+                db.execute(parent_child_module.insert().values(
+                    parent_id=new_module.id,
+                    child_id=rel.child_id,
+                    coordinates=rel.coordinates,
+                    role_id=rel.role_id
+                ))
+
+            db.commit()
+
+            # Получить обновленный объект с отношениями
+            new_module = db.query(Module).options(
+                selectinload(Module.bounding_contour),
+                selectinload(Module.children),
+                selectinload(Module.parents),
+                selectinload(Module.streams),
+                selectinload(Module.platforms),
+                selectinload(Module.boundaries),
+                selectinload(Module.versions),
+            ).filter_by(id=new_module.id).first()
+
+            return new_module
