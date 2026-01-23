@@ -4,8 +4,8 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy import func
 from . import BaseRepository
 from .bounding_contour_repository import BoundingContourRepository
-from models import Module
-from models.associations import parent_child_module
+from models import Module, ModuleBoundary, Stream, Platform
+from models.associations import parent_child_module, module_stream, module_platform, module_boundary
 
 
 class ModuleRepository(BaseRepository):
@@ -338,3 +338,64 @@ class ModuleRepository(BaseRepository):
             ).filter_by(id=new_module.id).first()
 
             return new_module
+
+    def delete_module(self, module_id: UUID) -> None:
+        """
+        Удаляет модуль и все связанные сущности, кроме родительских и дочерних модулей.
+        Удаляет ассоциации с иерархией, но сохраняет сами модули.
+
+        Args:
+            module_id: UUID модуля для удаления
+
+        Raises:
+            ValueError: Если модуль не найден
+        """
+        with self.db_session.session() as db:
+            # Получить модуль для проверки существования
+            module = db.query(Module).filter_by(id=module_id).first()
+            if not module:
+                raise ValueError(f"Модуль с id {module_id} не найден")
+
+            # Удалить связанные сущности
+            # Удалить bounding_contour
+            if module.bounding_contour:
+                db.delete(module.bounding_contour)
+
+            # Удалить ModuleBoundary сущности
+            db.query(ModuleBoundary).filter(
+                ModuleBoundary.id.in_(
+                    db.query(module_boundary.c.boundary_id).filter(
+                        module_boundary.c.module_id == module_id
+                    )
+                )
+            ).delete(synchronize_session=False)
+
+            # Удалить ассоциации с streams
+            db.execute(
+                module_stream.delete().where(module_stream.c.module_id == module_id)
+            )
+
+            # Удалить ассоциации с platforms
+            db.execute(
+                module_platform.delete().where(module_platform.c.module_id == module_id)
+            )
+
+            # Удалить ассоциации с boundaries (уже удалены сущности, но на всякий случай)
+            db.execute(
+                module_boundary.delete().where(module_boundary.c.module_id == module_id)
+            )
+
+            # Удалить ассоциации parent-child, но сохранить модули
+            # Где модуль - parent
+            db.execute(
+                parent_child_module.delete().where(parent_child_module.c.parent_id == module_id)
+            )
+            # Где модуль - child
+            db.execute(
+                parent_child_module.delete().where(parent_child_module.c.child_id == module_id)
+            )
+
+            # Удалить модуль (versions удалятся автоматически из-за cascade)
+            db.delete(module)
+
+            db.commit()

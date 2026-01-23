@@ -94,5 +94,21 @@
 - `module_boundary`: Links Modules to ModuleBoundaries.
 
 ### Overall Structure
-Modules form a parent-child hierarchy. Services belong to Platforms and contain Modules. Boundaries reference InterfaceObjects and Streams. Updates are tracked via ModuleUpdateReason.</content>
+Modules form a parent-child hierarchy. Services belong to Platforms and contain Modules. Boundaries reference InterfaceObjects and Streams. Updates are tracked via ModuleUpdateReason.
+
+## Модульное копирование и версионирование
+
+Система поддерживает копирование модулей с автоматическим версионированием и интеграцией с Git для отслеживания изменений в BREP файлах.
+
+### API эндпоинты
+- `POST /api/modules/{module_id}/copy`: Копирует модуль с указанием нового автора, номера версии и описания. Копирует связи parent-child, bounding_contour, инициализирует Git репозиторий и создаёт коммит.
+- `POST /api/modules/{module_id}/brep`: Сохраняет BREP файл в директорию `api/resources/brep_files/{module_id}/`, обновляет bounding_contour, выполняет Git коммит и создаёт новую версию.
+- `GET /api/modules/{module_id}/versions`: Возвращает список версий модуля.
+- `GET /api/modules/{module_id}/commits`: Возвращает историю Git коммитов.
+
+### Версионирование
+Каждая версия хранит номер, хэш коммита, описание, путь к репозиторию и статус релиза. Версии создаются при копировании и сохранении файлов.
+
+### Git интеграция
+Каждый модуль имеет собственный Git репозиторий для отслеживания BREP файлов. Коммиты создаются автоматически при изменениях.</content>
 <parameter name="filePath">/media/ssd_1_9tb/PycharmProjects/robofactory_db/AGENTS.md
