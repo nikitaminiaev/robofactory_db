@@ -1,0 +1,53 @@
+[US-001] Модель ModuleVersion создана в api/models/module_version.py с полями id, module_id, version_number, commit_hash, description, created_ts. Связь с Module добавлена. Pyright проверки пройдены.
+
+[US-019] Git уже установлен в Dockerfile для API контейнера. Проверка git --version успешна.
+
+[US-022] api/resources/brep_files добавлен в .gitignore для исключения BREP файлов из репозитория.
+
+[US-006] Сервис api/service/module_copier.py создан с функцией copy_module_with_roles для копирования модулей с ролями и bounding_contour. Pyright проходит.
+
+[US-010] Структура директорий для BREP файлов создана. Сервис api/service/brep_storage.py с функцией create_module_brep_directory. Pyright проходит.
+
+[US-002] Поля git_repo_path и is_released добавлены в модель ModuleVersion. Pyright проходит.
+
+[US-004] Репозиторий ModuleVersionRepository создан с методами get_by_module_id, get_latest_version, create_version. Pyright проходит.
+
+[US-005] Pydantic схемы ModuleVersionDTO, ModuleVersionCreateDTO, ModuleVersionUpdateDTO созданы. Pyright проходит.
+
+[US-007] API endpoint POST /modules/{module_id}/copy создан для копирования модулей. Pyright проходит.
+
+[US-008] API endpoints GET /modules/{module_id}/versions и latest созданы. Pyright проходит.
+
+[US-009] PATCH endpoint для пометки версии как релиза добавлен. Pyright проходит.
+
+[US-011] Поле brep_files в BoundingContour изменено на Dict[str, str]. Pyright проходит.
+
+[US-012] Функция save_brep_file добавлена в brep_storage.py. Pyright проходит.
+
+[US-013] Функция init_module_git_repo добавлена в git_manager.py. Pyright проходит.
+
+[US-014] Функция commit_module_changes добавлена в git_manager.py. Pyright проходит.
+
+[US-017] Функция get_module_commit_history добавлена в git_manager.py. Pyright проходит.
+
+[US-015] Метод create_version_with_git добавлен в ModuleVersionRepository. Pyright проходит.
+
+[US-016] copy_module_with_roles обновлен для использования create_version_with_git. Pyright имеет ошибки импорта.
+
+[US-018] GET /modules/{module_id}/commits добавлен для истории коммитов. Pyright проходит.
+
+[US-020] POST /modules/{module_id}/brep создан для сохранения BREP файлов с Git коммитом. Pyright имеет ошибки импорта.
+
+[US-024] Новые роутеры зарегистрированы в main.py с prefix /api. Pyright проходит.
+
+[US-023] Документация docs/module_copying.md создана с описанием всех функций.
+
+[US-027] BrepFileService создан в api/service/brep_file_service.py с методом save_brep_files_from_dict для сохранения файлов из словаря с обновлением BoundingContour, Git коммитом и созданием ModuleVersion.
+
+[US-028] POST /api/basic_object/ обновлен для использования BrepFileService при создании объектов с brep_files.
+
+[US-029] PATCH /api/basic_object/{object_id} обновлен для использования BrepFileService при обновлении brep_files.
+
+[US-030] POST /modules/{module_id}/brep рефакторирован для использования BrepFileService.save_single_brep_file.
+
+[US-031] Unit-тесты для BrepFileService созданы в tests/unit/test_brep_file_service.py.

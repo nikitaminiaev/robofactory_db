@@ -32,7 +32,13 @@ async def get_basic_object_by_id(request: Request, id: UUID, repo: ModuleReposit
     if not basic_object:
         raise HTTPException(status_code=404, detail=f"Объект с ID '{id}' не найден")
 
-    return BasicObjectDTO.from_module(basic_object)
+    result = BasicObjectDTO.from_module(basic_object)
+
+    if result.bounding_contour:
+        if hasattr(result.bounding_contour.brep_files, 'get'):
+            result.bounding_contour.brep_files.get('brep_string', 'NOT_FOUND')
+
+    return result
 
 
 @router.get("/api/basic_object/{id}/parent_ids", response_model=List[str])

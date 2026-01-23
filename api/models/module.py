@@ -1,5 +1,5 @@
 import uuid
-from typing import Optional, List, Dict
+from typing import Optional, List
 from sqlalchemy import DateTime, ForeignKey, UUID, Boolean
 from sqlalchemy import Column, String, Text
 from sqlalchemy.orm import relationship, Mapped, mapped_column
@@ -28,7 +28,6 @@ class Module(Base):
     author = Column(String, nullable=False, server_default=func.user())
     description = Column(Text, nullable=True)  # Пояснительная записка
     ttx = Column(Text, nullable=True)
-    version = Column(String, nullable=True)
     implementation = Column(String, nullable=True)  # Исполнение
     status = Column(SQLAlchemyEnum(ModuleStatus), nullable=False)
     is_lts = Column(Boolean, default=False)
@@ -71,6 +70,8 @@ class Module(Base):
         secondary=module_boundary,
         back_populates="modules"
     )
+
+    versions = relationship("ModuleVersion", back_populates="module", cascade="all, delete-orphan")
 
     created_ts = Column(DateTime(timezone=True), server_default=func.now())
     updated_ts = Column(DateTime(timezone=True), onupdate=func.now())
@@ -118,9 +119,8 @@ class Module(Base):
             "abbreviation": self.abbreviation,
             "author": self.author,
             "description": self.description,
-            "ttx": self.ttx,
-            "version": self.version,
-            "implementation": self.implementation,
+             "ttx": self.ttx,
+             "implementation": self.implementation,
             "status": self.status.value if self.status else None,
             "is_lts": self.is_lts,
             "service_id": str(self.service_id) if self.service_id else None,
@@ -141,4 +141,12 @@ class Module(Base):
                     "stream_id": str(boundary.stream_id)
                 } for boundary in self.boundaries
             ],
+            "last_version": {
+                    "id": str(self.versions[0].id),
+                    "version_number": self.versions[0].version_number,
+                    "description": self.versions[0].description,
+                    "commit_hash": self.versions[0].commit_hash,
+                    "is_released": self.versions[0].is_released,
+                    "created_ts": self.versions[0].created_ts.isoformat() if self.versions[0].created_ts else None
+                } if self.versions else None,
         }

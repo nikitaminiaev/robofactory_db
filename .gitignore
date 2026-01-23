@@ -6,6 +6,6 @@
 *.py[cod]
 *$py.class
 api/.env
-AGENTS.md
-opencode.json
 api/database/alembic/versions/*
+api/resources/*
+opencode.json

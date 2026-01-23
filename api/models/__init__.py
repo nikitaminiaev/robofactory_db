@@ -1,5 +1,6 @@
 from .base import Base
 from .module import Module
+from .module_version import ModuleVersion
 from .bounding_contour import BoundingContour
 from .interface_object import InterfaceObject
 from .stream import Stream

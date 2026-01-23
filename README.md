@@ -63,6 +63,9 @@ generating a db diagram:
 
 ### migrations
 all commands execute from the api/database directory   
+
+    docker exec -ti api bash
+    
 create migration
 
     cd database
@@ -76,6 +79,20 @@ roll back migration:
 
     alembic downgrade -1
 
-### scheme db 
+### scheme db
 
     eralchemy2 -i postgresql://myuser:mypassword@localhost:5433/mydatabase -o db_diagram.png
+
+### testing
+
+run tests manually in api container:
+
+    # run all tests
+    docker exec -e PYTHONPATH=/usr/src api python -m pytest tests/ -v
+
+    # run specific test
+    docker exec -e PYTHONPATH=/usr/src api python -m pytest tests/integration/test_versioning_workflow.py -v
+
+    # run with code coverage
+    docker exec api pip install pytest-cov
+    docker exec -e PYTHONPATH=/usr/src api python -m pytest tests/ --cov=api --cov-report=html
