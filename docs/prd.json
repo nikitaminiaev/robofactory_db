@@ -58,9 +58,9 @@
          "Deletion preserves parent/child module hierarchy"
        ],
        "priority": 8,
-       "passes": false,
+       "passes": true,
        "blocked": false,
-       "notes": ""
+       "notes": "Added delete button and confirmation modal to basic_object_details.html. Modal warns about deletion and preserves parent/child modules. Calls DELETE /api/basic_object/{id} endpoint."
      }
    ]
  }
