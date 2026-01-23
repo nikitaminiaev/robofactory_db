@@ -62,10 +62,9 @@ generating a db diagram:
     eralchemy2 -i postgresql://admin:root@db:5433/robofactory -o diagram.png --exclude-tables alembic_version
 
 ### migrations
-all commands execute from the api/database directory   
+all commands execute from the api directory   
 create migration
 
-    cd database
     alembic revision --autogenerate -m "Create parts_cad table"
 
 execute all new migrations:
