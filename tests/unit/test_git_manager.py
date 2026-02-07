@@ -1,7 +1,7 @@
 import pytest
 from uuid import UUID
 from unittest.mock import Mock, patch, MagicMock, call
-from service.git_manager import init_module_git_repo, commit_module_changes, get_module_commit_history
+from service.git_manager import init_module_git_repo, commit_module_changes, get_module_commit_history, checkout_module_commit
 from pathlib import Path
 import os
 
@@ -157,3 +157,51 @@ class TestGitManager:
         # Call and expect error
         with pytest.raises(Exception, match="git log failed"):
             get_module_commit_history(UUID('12345678-1234-5678-1234-567812345678'))
+
+    @patch('service.git_manager.Path')
+    @patch('service.git_manager.run')
+    def test_checkout_module_commit_success(self, mock_run, mock_path_class):
+        # Setup mocks
+        mock_repo_path = MagicMock()
+        mock_path_class.return_value = mock_repo_path
+        mock_run.return_value = MagicMock()
+        
+        # Call function
+        commit_hash = "abc123def456"
+        checkout_module_commit(UUID('12345678-1234-5678-1234-567812345678'), commit_hash)
+        
+        # Assertions
+        mock_path_class.assert_called_once_with('api/resources/brep_files/12345678-1234-5678-1234-567812345678')
+        mock_run.assert_called_once_with(
+            ["git", "checkout", commit_hash],
+            cwd=mock_repo_path,
+            check=True,
+            capture_output=True,
+            text=True
+        )
+
+    def test_checkout_module_commit_empty_hash(self):
+        # Test with empty commit hash
+        with pytest.raises(ValueError, match="Commit hash cannot be empty"):
+            checkout_module_commit(UUID('12345678-1234-5678-1234-567812345678'), "")
+        
+        # Test with whitespace-only commit hash
+        with pytest.raises(ValueError, match="Commit hash cannot be empty"):
+            checkout_module_commit(UUID('12345678-1234-5678-1234-567812345678'), "   ")
+        
+        # Test with None-like empty string
+        with pytest.raises(ValueError, match="Commit hash cannot be empty"):
+            checkout_module_commit(UUID('12345678-1234-5678-1234-567812345678'), "\t\n")
+
+    @patch('service.git_manager.Path')
+    @patch('service.git_manager.run')
+    def test_checkout_module_commit_git_error(self, mock_run, mock_path_class):
+        # Setup mocks to raise git error
+        mock_repo_path = MagicMock()
+        mock_path_class.return_value = mock_repo_path
+        from subprocess import CalledProcessError
+        mock_run.side_effect = CalledProcessError(1, "git checkout", stderr="error: pathspec 'invalid' did not match")
+        
+        # Call and expect error
+        with pytest.raises(CalledProcessError):
+            checkout_module_commit(UUID('12345678-1234-5678-1234-567812345678'), "invalid_hash")

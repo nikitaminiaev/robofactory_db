@@ -160,3 +160,26 @@ def get_module_commit_history(module_id: UUID) -> list[dict[str, str]]:
         return history
     except CalledProcessError as e:
         raise CalledProcessError(e.returncode, e.cmd, e.output, e.stderr) from e
+
+
+def checkout_module_commit(module_id: UUID, commit_hash: str) -> None:
+    """
+    Выполняет git checkout на указанный коммит для модуля.
+    
+    Args:
+        module_id: UUID модуля
+        commit_hash: Хеш коммита для checkout
+        
+    Raises:
+        CalledProcessError: Если git checkout не удался
+        ValueError: Если commit_hash пустой или невалидный
+    """
+    if not commit_hash or not commit_hash.strip():
+        raise ValueError("Commit hash cannot be empty")
+    
+    repo_path = Path(BREP_FILES_PATH) / str(module_id)
+    
+    try:
+        run(["git", "checkout", commit_hash], cwd=repo_path, check=True, capture_output=True, text=True)
+    except CalledProcessError as e:
+        raise CalledProcessError(e.returncode, e.cmd, e.output, e.stderr) from e

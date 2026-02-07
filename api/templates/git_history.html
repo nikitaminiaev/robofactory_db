@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block title %}Git History - {{ module_id }}{% endblock %}
+
+{% block extra_head %}
+<script src="https://unpkg.com/@gitgraph/js@1.4.0/lib/gitgraph.umd.min.js"></script>
+<link rel="stylesheet" href="/static/css/git-history.css">
+{% endblock %}
+
+{% block content %}
+<div class="git-history-container">
+    <div class="header">
+        <h1>История Git</h1>
+        <div class="module-info">
+            <span class="label">Модуль:</span>
+            <span class="value" id="module-id">{{ module_id }}</span>
+        </div>
+        <a href="/basic_object/{{ module_id }}" class="back-link">← Назад к модулю</a>
+    </div>
+
+    <div class="git-graph-container">
+        <div id="git-graph"></div>
+    </div>
+
+    <div class="commit-details" id="commit-details" style="display: none;">
+        <h2>Детали коммита</h2>
+        <div class="commit-info">
+            <div class="info-row">
+                <span class="label">Хеш:</span>
+                <span class="value" id="commit-hash"></span>
+            </div>
+            <div class="info-row">
+                <span class="label">Сообщение:</span>
+                <span class="value" id="commit-message"></span>
+            </div>
+            <div class="info-row">
+                <span class="label">Дата:</span>
+                <span class="value" id="commit-date"></span>
+            </div>
+        </div>
+        <button id="checkout-btn" class="checkout-button" disabled>
+            Checkout на эту ревизию
+        </button>
+        <div id="checkout-status" class="status-message"></div>
+    </div>
+
+    <div class="commits-list">
+        <h2>Список коммитов</h2>
+        <div id="commits-table-container">
+            <table id="commits-table">
+                <thead>
+                    <tr>
+                        <th>Хеш</th>
+                        <th>Сообщение</th>
+                        <th>Дата</th>
+                        <th>Действия</th>
+                    </tr>
+                </thead>
+                <tbody id="commits-tbody">
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script src="/static/js/git-history.js"></script>
+<script>
+    // Инициализация при загрузке страницы с проверкой загрузки библиотеки
+    function initGitHistory() {
+        if (typeof window.GitgraphJS === 'undefined') {
+            console.log('Waiting for GitgraphJS to load...');
+            setTimeout(initGitHistory, 100);
+            return;
+        }
+        console.log('GitgraphJS loaded successfully');
+        GitHistory.init('{{ module_id }}');
+    }
+    
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initGitHistory);
+    } else {
+        initGitHistory();
+    }
+</script>
+{% endblock %}
