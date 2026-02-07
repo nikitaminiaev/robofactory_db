@@ -1,11 +1,14 @@
 from typing import Optional, List
 from uuid import UUID
+
 from sqlalchemy.orm import selectinload
 from sqlalchemy import func
+
 from . import BaseRepository
 from .bounding_contour_repository import BoundingContourRepository
 from models import Module, ModuleBoundary, Stream, Platform
 from models.associations import parent_child_module, module_stream, module_platform, module_boundary
+from service.brep_storage import delete_module_brep_directory
 
 
 class ModuleRepository(BaseRepository):
@@ -394,6 +397,9 @@ class ModuleRepository(BaseRepository):
             db.execute(
                 parent_child_module.delete().where(parent_child_module.c.child_id == module_id)
             )
+
+            # Удалить файлы BREP модуля из файловой системы
+            delete_module_brep_directory(module_id)
 
             # Удалить модуль (versions удалятся автоматически из-за cascade)
             db.delete(module)
