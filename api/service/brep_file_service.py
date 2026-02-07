@@ -83,8 +83,7 @@ class BrepFileService:
 
         print(f"DEBUG BrepFileService: saved_paths = {saved_paths}")
         contour_repo = BoundingContourRepository()
-        updated_contour = contour_repo.update_brep_files(module_id, saved_paths)
-        print(f"DEBUG BrepFileService: update_brep_files returned, brep_files = {updated_contour.brep_files}")
+        contour_repo.update_brep_files(module_id, saved_paths)
 
         try:
             # Инициализировать git репозиторий если он не существует
