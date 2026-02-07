@@ -54,9 +54,14 @@
     overflow-x: auto;
 }
 
+#git-graph {
+    display: flex;
+    justify-content: flex-start;
+}
+
 #git-graph svg {
     display: block;
-    margin: 0 auto;
+    margin: 0;
 }
 
 .commit-details {
