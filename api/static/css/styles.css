@@ -193,6 +193,14 @@ button:hover {
     background-color: #2980b9;
 }
 
+.danger-btn {
+    background-color: #e74c3c;
+}
+
+.danger-btn:hover {
+    background-color: #c0392b;
+}
+
 .error-message {
     color: #e74c3c;
     padding: 20px;

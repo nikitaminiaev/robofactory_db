@@ -259,7 +259,7 @@ function renderObjectFullDetails(data) {
         <div class="action-buttons">
             <button id="edit-btn" onclick="toggleEditMode()">Edit</button>
             <button id="copy-btn" onclick="showCopyModal()">Copy Module</button>
-            <button id="delete-btn" onclick="showDeleteModal()">Delete Module</button>
+            <button id="delete-btn" class="danger-btn" onclick="showDeleteModal()">Delete Module</button>
             <button id="save-btn" class="save-btn" style="display: none;" onclick="saveObjectChanges()">Save</button>
             <button id="cancel-btn" class="cancel-btn" style="display: none;" onclick="toggleEditMode(false)">Cancel</button>
         </div>
@@ -372,7 +372,7 @@ function renderObjectFullDetails(data) {
                 <p>Are you sure you want to delete this module? This action cannot be undone.</p>
                 <p>Note: Parent and child modules will not be deleted, only their associations will be removed.</p>
                 <div class="modal-actions">
-                    <button type="button" onclick="confirmDeleteModule()">Delete</button>
+                    <button type="button" class="danger-btn" onclick="confirmDeleteModule()">Delete</button>
                     <button type="button" onclick="hideDeleteModal()">Cancel</button>
                 </div>
             </div>

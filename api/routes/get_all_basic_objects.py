@@ -1,5 +1,5 @@
 from uuid import UUID
-from service import BasicObjectExtractor
+from service.basic_object_extractor import BasicObjectExtractor
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from repository.module_repository import ModuleRepository
