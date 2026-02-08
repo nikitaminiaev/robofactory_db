@@ -87,7 +87,7 @@ class BrepFileService:
 
         try:
             # Инициализировать git репозиторий если он не существует
-            init_module_git_repo(module_id)
+            git_repo_path = init_module_git_repo(module_id)
             commit_hash = commit_module_changes(module_id, description)
         except Exception as e:
             raise RuntimeError(f"Не удалось выполнить Git коммит: {e}") from e
@@ -97,7 +97,8 @@ class BrepFileService:
             version_number="auto",
             description=description,
             commit_hash=commit_hash,
-            file_hash=current_hash
+            file_hash=current_hash,
+            git_repo_path=git_repo_path
         )
 
         return version
@@ -148,7 +149,7 @@ class BrepFileService:
 
         try:
             # Инициализировать git репозиторий если он не существует
-            init_module_git_repo(module_id)
+            git_repo_path = init_module_git_repo(module_id)
             commit_hash = commit_module_changes(module_id, description)
         except Exception as e:
             raise RuntimeError(f"Не удалось выполнить Git коммит: {e}") from e
@@ -158,7 +159,8 @@ class BrepFileService:
             version_number="auto",
             description=description,
             commit_hash=commit_hash,
-            file_hash=current_hash
+            file_hash=current_hash,
+            git_repo_path=git_repo_path
         )
 
         return version
