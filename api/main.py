@@ -3,7 +3,7 @@ from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from routes import get_all_basic_objects, get_basic_object, create_basic_object
-from routes import websocket_routes
+from routes import websocket_routes, copy_module, module_versions, brep_files
 import threading
 from service.web_soket_server import get_server_instance
 
@@ -17,6 +17,9 @@ app.include_router(get_basic_object.router)
 app.include_router(create_basic_object.router)
 app.include_router(load_freecad.router)
 app.include_router(websocket_routes.router)
+app.include_router(copy_module.router, prefix="/api")
+app.include_router(module_versions.router, prefix="/api")
+app.include_router(brep_files.router, prefix="/api")
 
 # Функция для запуска WebSocket-сервера в отдельном потоке
 def start_websocket_server_thread():
@@ -58,3 +61,8 @@ async def root(request: Request):
 @app.get("/basic_object/{id}")
 async def basic_object_details(request: Request, id: str):
     return templates.TemplateResponse("basic_object_details.html", {"request": request, "id": id})
+
+
+@app.get("/git_history/{module_id}")
+async def git_history_page(request: Request, module_id: str):
+    return templates.TemplateResponse("git_history.html", {"request": request, "module_id": module_id})

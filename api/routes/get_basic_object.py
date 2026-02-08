@@ -32,7 +32,24 @@ async def get_basic_object_by_id(request: Request, id: UUID, repo: ModuleReposit
     if not basic_object:
         raise HTTPException(status_code=404, detail=f"Объект с ID '{id}' не найден")
 
-    return BasicObjectDTO.from_module(basic_object)
+    result = BasicObjectDTO.from_module(basic_object)
+
+    if result.bounding_contour:
+        if hasattr(result.bounding_contour.brep_files, 'get'):
+            result.bounding_contour.brep_files.get('brep_string', 'NOT_FOUND')
+
+    return result
+
+
+@router.delete("/api/basic_object/{id}")
+async def delete_basic_object(request: Request, id: UUID, repo: ModuleRepository = Depends()):
+    try:
+        repo.delete_module(id)
+        return JSONResponse(content={"message": "Модуль успешно удален"}, status_code=200)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка при удалении модуля: {str(e)}")
 
 
 @router.get("/api/basic_object/{id}/parent_ids", response_model=List[str])

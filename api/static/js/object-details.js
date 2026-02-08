@@ -258,6 +258,9 @@ function renderObjectFullDetails(data) {
     let detailsHtml = `<div class="detail-view" id="object-detail-container">
         <div class="action-buttons">
             <button id="edit-btn" onclick="toggleEditMode()">Edit</button>
+            <button id="copy-btn" onclick="showCopyModal()">Copy Module</button>
+            <button id="delete-btn" class="danger-btn" onclick="showDeleteModal()">Delete Module</button>
+            <a href="/git_history/${data.id}" class="btn-link"><button id="git-history-btn">Git History</button></a>
             <button id="save-btn" class="save-btn" style="display: none;" onclick="saveObjectChanges()">Save</button>
             <button id="cancel-btn" class="cancel-btn" style="display: none;" onclick="toggleEditMode(false)">Cancel</button>
         </div>
@@ -340,6 +343,42 @@ function renderObjectFullDetails(data) {
 
     detailsHtml += renderRelatedObjectsList('Parents', data.parents, 'parentsList');
     detailsHtml += renderRelatedObjectsList('Children', data.children, 'childrenList');
+    detailsHtml += `
+        <div id="copy-modal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <h3>Copy Module</h3>
+                <form id="copy-form">
+                    <div class="form-group">
+                        <label for="copy-new-author">New Author:</label>
+                        <input type="text" id="copy-new-author" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="copy-version-number">Version Number:</label>
+                        <input type="text" id="copy-version-number" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="copy-description">Description:</label>
+                        <textarea id="copy-description" required></textarea>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" onclick="submitCopyModule()">Submit</button>
+                        <button type="button" onclick="hideCopyModal()">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <div id="delete-modal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <h3>Delete Module</h3>
+                <p>Are you sure you want to delete this module? This action cannot be undone.</p>
+                <p>Note: Parent and child modules will not be deleted, only their associations will be removed.</p>
+                <div class="modal-actions">
+                    <button type="button" class="danger-btn" onclick="confirmDeleteModule()">Delete</button>
+                    <button type="button" onclick="hideDeleteModal()">Cancel</button>
+                </div>
+            </div>
+        </div>
+    `;
     detailsHtml += `</div>`;
 
     return detailsHtml;
@@ -651,4 +690,136 @@ function renderObjectDetails(data) {
     }
     // Если это не массив, значит мы на детальной странице
     return renderObjectFullDetails(data);
+}
+
+// Функции для копирования модуля
+function showCopyModal() {
+    const modal = document.getElementById('copy-modal');
+    const currentData = window.currentObjectData;
+
+    // Заполняем поля по умолчанию
+    document.getElementById('copy-new-author').value = currentData.author || '';
+
+    // Автозаполнение версии
+    fetchLatestVersion(currentData.id);
+
+    document.getElementById('copy-description').value = '';
+
+    modal.style.display = 'flex';
+}
+
+function hideCopyModal() {
+    document.getElementById('copy-modal').style.display = 'none';
+}
+
+function showDeleteModal() {
+    document.getElementById('delete-modal').style.display = 'flex';
+}
+
+function hideDeleteModal() {
+    document.getElementById('delete-modal').style.display = 'none';
+}
+
+async function confirmDeleteModule() {
+    const moduleId = window.currentObjectData.id;
+
+    try {
+        const response = await fetch(`/api/basic_object/${moduleId}`, {
+            method: 'DELETE'
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Delete failed');
+        }
+
+        showToast('Module deleted successfully!', 'success');
+        hideDeleteModal();
+
+        // Redirect to home page after 1 second
+        setTimeout(() => {
+            window.location.href = '/';
+        }, 1000);
+    } catch (error) {
+        showToast('Error: ' + error.message, 'error');
+    }
+}
+
+async function fetchLatestVersion(moduleId) {
+    try {
+        const response = await fetch(`/api/modules/${moduleId}/versions/latest`);
+        if (response.ok) {
+            const data = await response.json();
+            // Увеличиваем версию: если 1.0 -> 1.1, если 1.9 -> 2.0
+            const currentVersion = data.version_number || '0.0';
+            const newVersion = incrementVersion(currentVersion);
+            document.getElementById('copy-version-number').value = newVersion;
+        } else {
+            document.getElementById('copy-version-number').value = '1.0';
+        }
+    } catch (error) {
+        console.error('Error fetching latest version:', error);
+        document.getElementById('copy-version-number').value = '1.0';
+    }
+}
+
+function incrementVersion(version) {
+    const parts = version.split('.');
+    if (parts.length >= 2) {
+        const major = parseInt(parts[0]) || 0;
+        const minor = parseInt(parts[1]) || 0;
+        return `${major}.${minor + 1}`;
+    }
+    return '1.0';
+}
+
+async function submitCopyModule() {
+    const form = document.getElementById('copy-form');
+    if (!form.checkValidity()) {
+        showToast('Please fill in all required fields', 'error');
+        return;
+    }
+
+    const versionNumber = document.getElementById('copy-version-number').value;
+    if (!isValidVersion(versionNumber)) {
+        showToast('Version number must be in format X.Y (e.g., 1.0)', 'error');
+        return;
+    }
+
+    const payload = {
+        new_author: document.getElementById('copy-new-author').value,
+        version_number: versionNumber,
+        description: document.getElementById('copy-description').value
+    };
+
+    const moduleId = window.currentObjectData.id;
+
+    try {
+        const response = await fetch(`/api/modules/${moduleId}/copy`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Copy failed');
+        }
+
+        const newModule = await response.json();
+        showToast('Module copied successfully!', 'success');
+        hideCopyModal();
+
+        // Переход на страницу нового модуля через 1 секунду
+        setTimeout(() => {
+            window.location.href = `/basic_object/${newModule.id}`;
+        }, 1000);
+    } catch (error) {
+        showToast('Error: ' + error.message, 'error');
+    }
+}
+
+function isValidVersion(version) {
+    const regex = /^\d+\.\d+$/;
+    return regex.test(version);
 }

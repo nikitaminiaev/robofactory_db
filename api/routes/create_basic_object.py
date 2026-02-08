@@ -8,6 +8,7 @@ from uuid import UUID
 import logging
 from models.associations import parent_child_module
 from models.module import ModuleStatus
+from service.brep_file_service import BrepFileService
 
 router = APIRouter()
 
@@ -59,7 +60,7 @@ async def create_basic_object(
         contour_data = {
             "is_assembly": item.is_assembly,
             "is_shell": item.is_shell,
-            "brep_files": item.brep_files,
+            "brep_files": {},  # BREP files will be handled by BrepFileService
         }
 
         # Execute all operations in one session
@@ -96,12 +97,23 @@ async def create_basic_object(
             # Set basic object ID for contour
             contour_data["module_id"] = basic_object.id
             contour = BoundingContour.create(**contour_data)
+            print(f"DEBUG create_basic_object: Created contour with id={contour.id}, brep_files={contour.brep_files}")
 
-            contour.basic_object_id = basic_object.id
+            contour.module_id = basic_object.id
             db.add(contour)
 
             db.commit()
             db.refresh(basic_object)
+            print(f"DEBUG create_basic_object: After commit, contour brep_files = {contour.brep_files}")
+
+            # Handle BREP files if provided
+            if item.brep_files:
+                service = BrepFileService()
+                service.save_brep_files_from_dict(
+                    basic_object.id,
+                    item.brep_files,
+                    f"Initial BREP files for {item.name}"
+                )
 
         return {"ok": True, "id": str(basic_object.id)}
 
@@ -271,7 +283,16 @@ async def update_basic_object(
                 contour = basic_object.bounding_contour
                 if contour:
                     for field, value in contour_data.items():
-                        setattr(contour, field, value)
+                        if field == "brep_files":
+                            if value:
+                                service = BrepFileService()
+                                service.save_brep_files_from_dict(
+                                    obj_id_uuid,
+                                    value,
+                                    f"Update BREP files for {basic_object.name}"
+                                )
+                        else:
+                            setattr(contour, field, value)
 
             db.commit()
             db.refresh(basic_object)

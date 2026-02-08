@@ -32,7 +32,7 @@ class BasicObjectDTO(BaseModel):
         # Если есть bounding_contour, создаем для него DTO и выносим флаги на верхний уровень
         if module.bounding_contour:
             contour_dict = module.bounding_contour.to_dict()
-            contour_dict["basic_object_id"] = str(module.id) 
+            contour_dict["basic_object_id"] = str(module.id)
             module_dict["bounding_contour"] = BoundingContourDTO(**contour_dict)
             module_dict["is_assembly"] = contour_dict.get("is_assembly")
             module_dict["is_shell"] = contour_dict.get("is_shell")

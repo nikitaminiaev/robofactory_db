@@ -1,6 +1,6 @@
 from uuid import UUID
 from models import Module
-from repository import ModuleRepository
+from repository.module_repository import ModuleRepository
 
 
 class BasicObjectExtractor:
