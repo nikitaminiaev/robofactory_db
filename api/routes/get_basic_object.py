@@ -41,6 +41,17 @@ async def get_basic_object_by_id(request: Request, id: UUID, repo: ModuleReposit
     return result
 
 
+@router.delete("/api/basic_object/{id}")
+async def delete_basic_object(request: Request, id: UUID, repo: ModuleRepository = Depends()):
+    try:
+        repo.delete_module(id)
+        return JSONResponse(content={"message": "Модуль успешно удален"}, status_code=200)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка при удалении модуля: {str(e)}")
+
+
 @router.get("/api/basic_object/{id}/parent_ids", response_model=List[str])
 async def get_basic_object_parents(request: Request, id: UUID, repo: ModuleRepository = Depends()):
     basic_object = repo.get_module_with_relations_by_id(id)

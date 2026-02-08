@@ -18,6 +18,7 @@ class ModuleVersion(Base):
     module_id: Mapped[UUID] = mapped_column(SQLUUID(as_uuid=True), ForeignKey("modules.id"))
     version_number: Mapped[str] = mapped_column(String)
     commit_hash: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    file_hash: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     description: Mapped[str] = mapped_column(Text)
     git_repo_path: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     is_released: Mapped[bool] = mapped_column(Boolean, default=False)

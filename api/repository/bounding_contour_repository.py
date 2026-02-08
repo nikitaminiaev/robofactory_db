@@ -15,7 +15,7 @@ class BoundingContourRepository(BaseRepository):
                 BoundingContour.module_id == module_id
             ).first()
 
-    def update_brep_files(self, module_id: UUID, brep_files: Dict[str, str]) -> BoundingContour:
+    def update_brep_files(self, module_id: UUID, brep_files: Dict[str, str]) -> Dict[str, str]:
         with self.db_session.session() as db:
             contour = db.query(BoundingContour).filter(
                 BoundingContour.module_id == module_id
@@ -29,7 +29,7 @@ class BoundingContourRepository(BaseRepository):
             db.flush()
             db.commit()
 
-            return contour
+            return dict(contour.brep_files or {})
 
     def copy_bounding_contour(self, original_module_id: UUID, new_module_id: UUID) -> Optional[BoundingContour]:
         """

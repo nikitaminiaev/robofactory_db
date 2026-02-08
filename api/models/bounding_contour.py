@@ -1,4 +1,5 @@
 import uuid
+from pathlib import Path
 from typing import Optional, Dict, TYPE_CHECKING
 
 from sqlalchemy import Column, JSON
@@ -10,9 +11,7 @@ if TYPE_CHECKING:
     from .module import Module
 
 from .base import Base
-from pathlib import Path
-
-BREP_FILES_PATH = "resources/brep_files"
+from service.constants import BREP_FILES_PATH
 
 class BoundingContour(Base):
     __tablename__ = "bounding_contours"

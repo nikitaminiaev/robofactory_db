@@ -1,5 +1,7 @@
+import shutil
 from pathlib import Path
 from uuid import UUID
+
 from service.constants import BREP_FILES_PATH
 
 
@@ -53,3 +55,28 @@ def save_brep_file(module_id: UUID, filename: str, file_content: bytes) -> str:
         return relative_path
     except OSError as e:
         raise OSError(f"Не удалось сохранить файл {filename} для модуля {module_id}: {e}") from e
+
+
+def delete_module_brep_directory(module_id: UUID) -> None:
+    """
+    Удаляет директорию с BREP файлами модуля.
+
+    Args:
+        module_id: UUID модуля
+
+    Raises:
+        OSError: Если не удается удалить директорию
+    """
+    base_path = Path(BREP_FILES_PATH)
+    module_path = base_path / str(module_id)
+
+    if not module_path.exists():
+        return
+
+    if not module_path.is_dir():
+        raise OSError(f"Путь {module_path} не является директорией")
+
+    try:
+        shutil.rmtree(module_path)
+    except OSError as e:
+        raise OSError(f"Не удалось удалить директорию {module_path}: {e}") from e

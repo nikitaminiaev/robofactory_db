@@ -22,6 +22,7 @@ services:
      volumes:
        - .:/usr/src
        - ./docker/api/requirements.txt:/usr/src/docker/api/requirements.txt
+       - ./db/resources:/usr/src/api/resources
      environment:
        - PYTHONPATH=/usr/src
      command: sh -c "uvicorn main:app --host 0.0.0.0 --reload"

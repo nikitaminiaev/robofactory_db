@@ -259,6 +259,8 @@ function renderObjectFullDetails(data) {
         <div class="action-buttons">
             <button id="edit-btn" onclick="toggleEditMode()">Edit</button>
             <button id="copy-btn" onclick="showCopyModal()">Copy Module</button>
+            <button id="delete-btn" class="danger-btn" onclick="showDeleteModal()">Delete Module</button>
+            <a href="/git_history/${data.id}" class="btn-link"><button id="git-history-btn">Git History</button></a>
             <button id="save-btn" class="save-btn" style="display: none;" onclick="saveObjectChanges()">Save</button>
             <button id="cancel-btn" class="cancel-btn" style="display: none;" onclick="toggleEditMode(false)">Cancel</button>
         </div>
@@ -363,6 +365,17 @@ function renderObjectFullDetails(data) {
                         <button type="button" onclick="hideCopyModal()">Cancel</button>
                     </div>
                 </form>
+            </div>
+        </div>
+        <div id="delete-modal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <h3>Delete Module</h3>
+                <p>Are you sure you want to delete this module? This action cannot be undone.</p>
+                <p>Note: Parent and child modules will not be deleted, only their associations will be removed.</p>
+                <div class="modal-actions">
+                    <button type="button" class="danger-btn" onclick="confirmDeleteModule()">Delete</button>
+                    <button type="button" onclick="hideDeleteModal()">Cancel</button>
+                </div>
             </div>
         </div>
     `;
@@ -697,6 +710,39 @@ function showCopyModal() {
 
 function hideCopyModal() {
     document.getElementById('copy-modal').style.display = 'none';
+}
+
+function showDeleteModal() {
+    document.getElementById('delete-modal').style.display = 'flex';
+}
+
+function hideDeleteModal() {
+    document.getElementById('delete-modal').style.display = 'none';
+}
+
+async function confirmDeleteModule() {
+    const moduleId = window.currentObjectData.id;
+
+    try {
+        const response = await fetch(`/api/basic_object/${moduleId}`, {
+            method: 'DELETE'
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Delete failed');
+        }
+
+        showToast('Module deleted successfully!', 'success');
+        hideDeleteModal();
+
+        // Redirect to home page after 1 second
+        setTimeout(() => {
+            window.location.href = '/';
+        }, 1000);
+    } catch (error) {
+        showToast('Error: ' + error.message, 'error');
+    }
 }
 
 async function fetchLatestVersion(moduleId) {

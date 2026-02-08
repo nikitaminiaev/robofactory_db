@@ -61,3 +61,8 @@ async def root(request: Request):
 @app.get("/basic_object/{id}")
 async def basic_object_details(request: Request, id: str):
     return templates.TemplateResponse("basic_object_details.html", {"request": request, "id": id})
+
+
+@app.get("/git_history/{module_id}")
+async def git_history_page(request: Request, module_id: str):
+    return templates.TemplateResponse("git_history.html", {"request": request, "module_id": module_id})
