@@ -1,10 +1,9 @@
 from typing import Optional, Dict
 from uuid import UUID
-from pathlib import Path
 from models import BoundingContour
 from . import BaseRepository
 from service.brep_storage import save_brep_file
-from service.constants import BREP_FILES_PATH
+from service.constants import resolve_brep_absolute_path
 
 
 class BoundingContourRepository(BaseRepository):
@@ -49,11 +48,10 @@ class BoundingContourRepository(BaseRepository):
 
             brep_files = original.brep_files or {}
             new_brep_files: Dict[str, str] = {}
-            base_path = Path(BREP_FILES_PATH)
             for filename, relative_path in brep_files.items():
                 if not relative_path:
                     continue
-                source_path = base_path / relative_path
+                source_path = resolve_brep_absolute_path(relative_path)
                 if not source_path.exists():
                     continue
                 file_content = source_path.read_bytes()

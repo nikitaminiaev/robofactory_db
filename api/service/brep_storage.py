@@ -1,8 +1,7 @@
 import shutil
-from pathlib import Path
 from uuid import UUID
 
-from service.constants import BREP_FILES_PATH
+from service.constants import build_brep_relative_path, get_module_brep_directory, get_module_resource_path
 
 
 def create_module_brep_directory(module_id: UUID) -> str:
@@ -18,14 +17,14 @@ def create_module_brep_directory(module_id: UUID) -> str:
     Raises:
         OSError: Если не удается создать директорию
     """
-    base_path = Path(BREP_FILES_PATH)
-    module_path = base_path / str(module_id)
-    
+    module_path_str = f"module {module_id}"
     try:
+        module_path = get_module_brep_directory(module_id)
+        module_path_str = str(module_path)
         module_path.mkdir(parents=True, exist_ok=True)
-        return str(module_path)
+        return module_path_str
     except OSError as e:
-        raise OSError(f"Не удалось создать директорию {module_path}: {e}") from e
+        raise OSError(f"Не удалось создать директорию {module_path_str}: {e}") from e
 
 
 def save_brep_file(module_id: UUID, filename: str, file_content: bytes) -> str:
@@ -43,16 +42,13 @@ def save_brep_file(module_id: UUID, filename: str, file_content: bytes) -> str:
     Raises:
         OSError: Если не удается создать директорию или записать файл
     """
-    base_path = Path(BREP_FILES_PATH)
-    module_path = base_path / str(module_id)
+    module_path = get_module_brep_directory(module_id)
     
     try:
         module_path.mkdir(parents=True, exist_ok=True)
         file_path = module_path / filename
         file_path.write_bytes(file_content)
-        # Относительный путь от resources/brep_files/
-        relative_path = f"{module_id}/{filename}"
-        return relative_path
+        return build_brep_relative_path(module_id, filename)
     except OSError as e:
         raise OSError(f"Не удалось сохранить файл {filename} для модуля {module_id}: {e}") from e
 
@@ -67,8 +63,7 @@ def delete_module_brep_directory(module_id: UUID) -> None:
     Raises:
         OSError: Если не удается удалить директорию
     """
-    base_path = Path(BREP_FILES_PATH)
-    module_path = base_path / str(module_id)
+    module_path = get_module_resource_path(module_id)
 
     if not module_path.exists():
         return

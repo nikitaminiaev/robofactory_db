@@ -4,7 +4,7 @@ from uuid import UUID
 import os
 import logging
 import hashlib
-from service.constants import BREP_FILES_PATH
+from service.constants import get_module_brep_directory, get_module_resource_path
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +19,7 @@ def calculate_brep_files_hash(module_id: UUID) -> str:
     Returns:
         SHA256 хеш в виде строки
     """
-    repo_path = Path(BREP_FILES_PATH) / str(module_id)
+    repo_path = get_module_brep_directory(module_id)
 
     if not repo_path.exists():
         return ""
@@ -46,6 +46,28 @@ def calculate_brep_files_hash(module_id: UUID) -> str:
     return hasher.hexdigest()
 
 
+def is_module_git_repo_initialized(module_id: UUID) -> bool:
+    git_dir = get_module_resource_path(module_id) / ".git"
+    return git_dir.exists() and git_dir.is_dir()
+
+
+def _write_initial_git_files(repo_path: Path) -> None:
+    gitignore_content = "\n".join(
+        [
+            "*",
+            "!.gitignore",
+            "!brep_files/",
+            "!brep_files/.gitkeep",
+            "",
+        ]
+    )
+    (repo_path / ".gitignore").write_text(gitignore_content, encoding="utf-8")
+
+    brep_dir = repo_path / "brep_files"
+    brep_dir.mkdir(parents=True, exist_ok=True)
+    (brep_dir / ".gitkeep").write_text("", encoding="utf-8")
+
+
 def init_module_git_repo(module_id: UUID) -> str:
     """
     Инициализирует Git репозиторий для модуля, если он еще не существует.
@@ -59,10 +81,12 @@ def init_module_git_repo(module_id: UUID) -> str:
     Raises:
         CalledProcessError: Если git init не удался
     """
-    repo_path = Path(BREP_FILES_PATH) / str(module_id)
+    repo_path = get_module_resource_path(module_id)
+    brep_dir = get_module_brep_directory(module_id)
 
-    # Создать директорию если она не существует
+    # Создать директории модуля если они не существуют
     os.makedirs(repo_path, exist_ok=True)
+    os.makedirs(brep_dir, exist_ok=True)
 
     # Проверить, является ли директория уже git репозиторием
     git_dir = repo_path / ".git"
@@ -76,6 +100,9 @@ def init_module_git_repo(module_id: UUID) -> str:
         # Настраиваем git пользователя (обязательно для коммитов)
         run(["git", "config", "user.name", "RoboFactory System"], cwd=repo_path, check=True, capture_output=True)
         run(["git", "config", "user.email", "system@robofactory.local"], cwd=repo_path, check=True, capture_output=True)
+        _write_initial_git_files(repo_path)
+        run(["git", "add", ".gitignore", "brep_files/.gitkeep"], cwd=repo_path, check=True, capture_output=True)
+        run(["git", "commit", "-m", "Initial repository setup"], cwd=repo_path, check=True, capture_output=True)
         return str(repo_path)
     except CalledProcessError as e:
         raise CalledProcessError(e.returncode, e.cmd, e.output, e.stderr) from e
@@ -95,39 +122,16 @@ def commit_module_changes(module_id: UUID, message: str) -> str:
     Raises:
         CalledProcessError: Если git команды не удались
     """
-    repo_path = Path(BREP_FILES_PATH) / str(module_id)
+    repo_path = get_module_resource_path(module_id)
 
     try:
-        # Получить список файлов в директории
-        files_in_dir = list(repo_path.glob("*"))
-        files_in_dir = [f for f in files_in_dir if f.is_file()]
-
-        if not files_in_dir:
-            # Нет файлов для коммита, создаем пустой коммит
-            try:
-                hash_result = run(["git", "rev-parse", "HEAD"], cwd=repo_path, check=True, capture_output=True, text=True)
-                return hash_result.stdout.strip()
-            except CalledProcessError:
-                # Репозиторий пустой, создадим пустой начальный коммит
-                run(["git", "commit", "--allow-empty", "-m", "Initial empty commit"], cwd=repo_path, check=True, capture_output=True, text=True)
-                hash_result = run(["git", "rev-parse", "HEAD"], cwd=repo_path, check=True, capture_output=True, text=True)
-                return hash_result.stdout.strip()
-
-        # Добавить все файлы по отдельности с --force
-        for file_path in files_in_dir:
-            run(["git", "add", "--force", file_path.name], cwd=repo_path, check=True, capture_output=True, text=True)
-
-        # Проверить статус после добавления
+        run(["git", "add", "--all"], cwd=repo_path, check=True, capture_output=True, text=True)
         status_result = run(["git", "status", "--porcelain"], cwd=repo_path, capture_output=True, text=True)
-
         if not status_result.stdout.strip():
-            # Нет изменений для коммита (файлы уже закоммичены)
             hash_result = run(["git", "rev-parse", "HEAD"], cwd=repo_path, check=True, capture_output=True, text=True)
             return hash_result.stdout.strip()
 
-        # git commit
-        result = run(["git", "commit", "-m", message], cwd=repo_path, check=True, capture_output=True, text=True)
-        # Получить хеш
+        run(["git", "commit", "-m", message], cwd=repo_path, check=True, capture_output=True, text=True)
         hash_result = run(["git", "rev-parse", "HEAD"], cwd=repo_path, check=True, capture_output=True, text=True)
         return hash_result.stdout.strip()
     except CalledProcessError as e:
@@ -147,7 +151,7 @@ def get_module_commit_history(module_id: UUID) -> list[dict[str, str]]:
     Raises:
         CalledProcessError: Если git log не удался
     """
-    repo_path = Path(BREP_FILES_PATH) / str(module_id)
+    repo_path = get_module_resource_path(module_id)
     
     try:
         result = run(["git", "log", "--pretty=format:%H|%s|%ai"], cwd=repo_path, check=True, capture_output=True, text=True)
@@ -177,7 +181,7 @@ def checkout_module_commit(module_id: UUID, commit_hash: str) -> None:
     if not commit_hash or not commit_hash.strip():
         raise ValueError("Commit hash cannot be empty")
     
-    repo_path = Path(BREP_FILES_PATH) / str(module_id)
+    repo_path = get_module_resource_path(module_id)
     
     try:
         run(["git", "checkout", commit_hash], cwd=repo_path, check=True, capture_output=True, text=True)

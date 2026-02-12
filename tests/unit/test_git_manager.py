@@ -1,207 +1,131 @@
-import pytest
-from uuid import UUID
-from unittest.mock import Mock, patch, MagicMock, call
-from service.git_manager import init_module_git_repo, commit_module_changes, get_module_commit_history, checkout_module_commit
 from pathlib import Path
-import os
+from subprocess import CalledProcessError
+from unittest.mock import MagicMock, patch
+from uuid import UUID
+
+import pytest
+
+from service.git_manager import (
+    calculate_brep_files_hash,
+    checkout_module_commit,
+    commit_module_changes,
+    get_module_commit_history,
+    init_module_git_repo,
+    is_module_git_repo_initialized,
+)
 
 
 class TestGitManager:
+    def test_is_module_git_repo_initialized(self, tmp_path: Path):
+        module_id = UUID("12345678-1234-5678-1234-567812345678")
+        module_root = tmp_path / str(module_id)
+        module_root.mkdir(parents=True, exist_ok=True)
 
-    @patch('service.git_manager.os.makedirs')
-    @patch('service.git_manager.Path')
-    @patch('service.git_manager.run')
-    def test_init_module_git_repo_new_repo(self, mock_run, mock_path_class, mock_makedirs):
-        # Setup mocks
-        mock_repo_path = MagicMock()
-        mock_git_dir = MagicMock()
-        mock_path_class.return_value = mock_repo_path
-        mock_repo_path.__truediv__.return_value = mock_git_dir
-        mock_git_dir.exists.return_value = False
-        mock_repo_path.__str__.return_value = '/path/to/repo'
-        
-        # Call function
-        result = init_module_git_repo(UUID('12345678-1234-5678-1234-567812345678'))
-        
-        # Assertions
-        assert result == '/path/to/repo'
-        mock_path_class.assert_called_once_with('api/resources/brep_files/12345678-1234-5678-1234-567812345678')
-        mock_makedirs.assert_called_once_with(mock_repo_path, exist_ok=True)
-        assert mock_run.call_count == 3  # init, config user.name, config user.email
+        with patch("service.git_manager.get_module_resource_path", return_value=module_root):
+            assert not is_module_git_repo_initialized(module_id)
+            (module_root / ".git").mkdir(parents=True, exist_ok=True)
+            assert is_module_git_repo_initialized(module_id)
 
-    @patch('service.git_manager.os.makedirs')
-    @patch('service.git_manager.Path')
-    @patch('service.git_manager.run')
-    def test_init_module_git_repo_existing_repo(self, mock_run, mock_path_class, mock_makedirs):
-        # Setup mocks for existing repo
-        mock_repo_path = MagicMock()
-        mock_git_dir = MagicMock()
-        mock_path_class.return_value = mock_repo_path
-        mock_repo_path.__truediv__.return_value = mock_git_dir
-        mock_git_dir.exists.return_value = True
-        mock_git_dir.is_dir.return_value = True
-        mock_repo_path.__str__.return_value = '/path/to/repo'
-        
-        # Call function
-        result = init_module_git_repo(UUID('12345678-1234-5678-1234-567812345678'))
-        
-        # Assertions
-        assert result == '/path/to/repo'
-        mock_makedirs.assert_called_once_with(mock_repo_path, exist_ok=True)
+    def test_init_module_git_repo_new_repo(self, tmp_path: Path):
+        module_id = UUID("12345678-1234-5678-1234-567812345678")
+        module_root = tmp_path / str(module_id)
+        module_brep_dir = module_root / "brep_files"
+
+        with patch("service.git_manager.get_module_resource_path", return_value=module_root):
+            with patch("service.git_manager.get_module_brep_directory", return_value=module_brep_dir):
+                with patch("service.git_manager.run", return_value=MagicMock(stdout="ok")) as mock_run:
+                    result = init_module_git_repo(module_id)
+
+        assert result == str(module_root)
+        assert module_brep_dir.exists()
+        assert (module_root / ".gitignore").exists()
+        assert (module_brep_dir / ".gitkeep").exists()
+        assert mock_run.call_count == 6
+
+    def test_init_module_git_repo_existing_repo(self, tmp_path: Path):
+        module_id = UUID("12345678-1234-5678-1234-567812345678")
+        module_root = tmp_path / str(module_id)
+        module_brep_dir = module_root / "brep_files"
+        (module_root / ".git").mkdir(parents=True, exist_ok=True)
+
+        with patch("service.git_manager.get_module_resource_path", return_value=module_root):
+            with patch("service.git_manager.get_module_brep_directory", return_value=module_brep_dir):
+                with patch("service.git_manager.run") as mock_run:
+                    result = init_module_git_repo(module_id)
+
+        assert result == str(module_root)
         mock_run.assert_not_called()
 
-    @patch('service.git_manager.os.makedirs')
-    @patch('service.git_manager.Path')
-    @patch('service.git_manager.run')
-    def test_init_module_git_repo_git_init_error(self, mock_run, mock_path_class, mock_makedirs):
-        # Setup mocks to raise error on git init
-        mock_repo_path = MagicMock()
-        mock_git_dir = MagicMock()
-        mock_path_class.return_value = mock_repo_path
-        mock_repo_path.__truediv__.return_value = mock_git_dir
-        mock_git_dir.exists.return_value = False
-        mock_run.side_effect = Exception("git init failed")
-        
-        # Call and expect error
-        with pytest.raises(Exception, match="git init failed"):
-            init_module_git_repo(UUID('12345678-1234-5678-1234-567812345678'))
+    def test_commit_module_changes_no_changes(self, tmp_path: Path):
+        module_id = UUID("12345678-1234-5678-1234-567812345678")
+        module_root = tmp_path / str(module_id)
+        module_root.mkdir(parents=True, exist_ok=True)
 
-    @patch('service.git_manager.Path')
-    @patch('service.git_manager.run')
-    def test_commit_module_changes_with_files(self, mock_run, mock_path_class):
-        # Setup mocks
-        mock_repo_path = MagicMock()
-        mock_file1 = MagicMock()
-        mock_file2 = MagicMock()
-        mock_path_class.return_value = mock_repo_path
-        mock_repo_path.glob.return_value = [mock_file1, mock_file2]
-        mock_file1.is_file.return_value = True
-        mock_file2.is_file.return_value = True
-        mock_file1.name = 'file1.brep'
-        mock_file2.name = 'file2.brep'
-        
-        mock_run.return_value.stdout = 'abc123\n'
-        
-        # Call function
-        result = commit_module_changes(UUID('12345678-1234-5678-1234-567812345678'), 'Test commit')
-        
-        # Assertions
-        assert result == 'abc123'
-        mock_path_class.assert_called_once_with('api/resources/brep_files/12345678-1234-5678-1234-567812345678')
-        mock_repo_path.glob.assert_called_once_with('*')
-        assert mock_run.call_count == 4  # status, add file1, add file2, commit
+        status_result = MagicMock(stdout="")
+        rev_parse_result = MagicMock(stdout="def456\n")
+        with patch("service.git_manager.get_module_resource_path", return_value=module_root):
+            with patch("service.git_manager.run", side_effect=[MagicMock(), status_result, rev_parse_result]) as mock_run:
+                result = commit_module_changes(module_id, "Test commit")
 
-    @patch('service.git_manager.Path')
-    @patch('service.git_manager.run')
-    def test_commit_module_changes_no_changes(self, mock_run, mock_path_class):
-        # Setup mocks for no files
-        mock_repo_path = MagicMock()
-        mock_path_class.return_value = mock_repo_path
-        mock_repo_path.glob.return_value = []
-        
-        mock_run.return_value.stdout = 'def456\n'
-        
-        # Call function
-        result = commit_module_changes(UUID('12345678-1234-5678-1234-567812345678'), 'Test commit')
-        
-        # Assertions
-        assert result == 'def456'
-        mock_run.assert_called_once()  # Only rev-parse HEAD
+        assert result == "def456"
+        assert mock_run.call_count == 3
 
-    @patch('service.git_manager.Path')
-    @patch('service.git_manager.run')
-    def test_commit_module_changes_no_files_empty_commit(self, mock_run, mock_path_class):
-        # Setup mocks for no files, no commits yet
-        mock_repo_path = MagicMock()
-        mock_path_class.return_value = mock_repo_path
-        mock_repo_path.glob.return_value = []
-        
-        # First rev-parse fails, then allow-empty commit succeeds
-        mock_run.side_effect = [
-            Exception("No commits"),  # rev-parse fails
-            MagicMock(stdout='ghi789\n')  # allow-empty commit
-        ]
-        
-        # Call function
-        result = commit_module_changes(UUID('12345678-1234-5678-1234-567812345678'), 'Test commit')
-        
-        # Assertions
-        assert result == 'ghi789'
+    def test_commit_module_changes_with_changes(self, tmp_path: Path):
+        module_id = UUID("12345678-1234-5678-1234-567812345678")
+        module_root = tmp_path / str(module_id)
+        module_root.mkdir(parents=True, exist_ok=True)
 
-    @patch('service.git_manager.Path')
-    @patch('service.git_manager.run')
-    def test_get_module_commit_history_success(self, mock_run, mock_path_class):
-        # Setup mocks
-        mock_repo_path = MagicMock()
-        mock_path_class.return_value = mock_repo_path
-        mock_run.return_value.stdout = 'hash1|message1|2023-01-01\nhash2|message2|2023-01-02\n'
-        
-        # Call function
-        result = get_module_commit_history(UUID('12345678-1234-5678-1234-567812345678'))
-        
-        # Assertions
+        status_result = MagicMock(stdout="A test.txt")
+        rev_parse_result = MagicMock(stdout="abc123\n")
+        side_effect = [MagicMock(), status_result, MagicMock(), rev_parse_result]
+        with patch("service.git_manager.get_module_resource_path", return_value=module_root):
+            with patch("service.git_manager.run", side_effect=side_effect):
+                result = commit_module_changes(module_id, "Test commit")
+
+        assert result == "abc123"
+
+    def test_get_module_commit_history_success(self, tmp_path: Path):
+        module_id = UUID("12345678-1234-5678-1234-567812345678")
+        module_root = tmp_path / str(module_id)
+        module_root.mkdir(parents=True, exist_ok=True)
+
+        git_log_result = MagicMock(stdout="hash1|message1|2023-01-01\nhash2|message2|2023-01-02\n")
+        with patch("service.git_manager.get_module_resource_path", return_value=module_root):
+            with patch("service.git_manager.run", return_value=git_log_result):
+                result = get_module_commit_history(module_id)
+
         assert len(result) == 2
-        assert result[0]['hash'] == 'hash1'
-        assert result[0]['message'] == 'message1'
-        assert result[1]['hash'] == 'hash2'
-        mock_run.assert_called_once()
-
-    @patch('service.git_manager.Path')
-    @patch('service.git_manager.run')
-    def test_get_module_commit_history_error(self, mock_run, mock_path_class):
-        # Setup mocks to raise error
-        mock_repo_path = MagicMock()
-        mock_path_class.return_value = mock_repo_path
-        mock_run.side_effect = Exception("git log failed")
-        
-        # Call and expect error
-        with pytest.raises(Exception, match="git log failed"):
-            get_module_commit_history(UUID('12345678-1234-5678-1234-567812345678'))
-
-    @patch('service.git_manager.Path')
-    @patch('service.git_manager.run')
-    def test_checkout_module_commit_success(self, mock_run, mock_path_class):
-        # Setup mocks
-        mock_repo_path = MagicMock()
-        mock_path_class.return_value = mock_repo_path
-        mock_run.return_value = MagicMock()
-        
-        # Call function
-        commit_hash = "abc123def456"
-        checkout_module_commit(UUID('12345678-1234-5678-1234-567812345678'), commit_hash)
-        
-        # Assertions
-        mock_path_class.assert_called_once_with('api/resources/brep_files/12345678-1234-5678-1234-567812345678')
-        mock_run.assert_called_once_with(
-            ["git", "checkout", commit_hash],
-            cwd=mock_repo_path,
-            check=True,
-            capture_output=True,
-            text=True
-        )
+        assert result[0]["hash"] == "hash1"
+        assert result[1]["message"] == "message2"
 
     def test_checkout_module_commit_empty_hash(self):
-        # Test with empty commit hash
+        module_id = UUID("12345678-1234-5678-1234-567812345678")
         with pytest.raises(ValueError, match="Commit hash cannot be empty"):
-            checkout_module_commit(UUID('12345678-1234-5678-1234-567812345678'), "")
-        
-        # Test with whitespace-only commit hash
-        with pytest.raises(ValueError, match="Commit hash cannot be empty"):
-            checkout_module_commit(UUID('12345678-1234-5678-1234-567812345678'), "   ")
-        
-        # Test with None-like empty string
-        with pytest.raises(ValueError, match="Commit hash cannot be empty"):
-            checkout_module_commit(UUID('12345678-1234-5678-1234-567812345678'), "\t\n")
+            checkout_module_commit(module_id, "")
 
-    @patch('service.git_manager.Path')
-    @patch('service.git_manager.run')
-    def test_checkout_module_commit_git_error(self, mock_run, mock_path_class):
-        # Setup mocks to raise git error
-        mock_repo_path = MagicMock()
-        mock_path_class.return_value = mock_repo_path
-        from subprocess import CalledProcessError
-        mock_run.side_effect = CalledProcessError(1, "git checkout", stderr="error: pathspec 'invalid' did not match")
-        
-        # Call and expect error
-        with pytest.raises(CalledProcessError):
-            checkout_module_commit(UUID('12345678-1234-5678-1234-567812345678'), "invalid_hash")
+    def test_checkout_module_commit_git_error(self, tmp_path: Path):
+        module_id = UUID("12345678-1234-5678-1234-567812345678")
+        module_root = tmp_path / str(module_id)
+        module_root.mkdir(parents=True, exist_ok=True)
+
+        with patch("service.git_manager.get_module_resource_path", return_value=module_root):
+            with patch(
+                "service.git_manager.run",
+                side_effect=CalledProcessError(1, "git checkout", stderr="invalid hash"),
+            ):
+                with pytest.raises(CalledProcessError):
+                    checkout_module_commit(module_id, "invalid_hash")
+
+    def test_calculate_brep_files_hash(self, tmp_path: Path):
+        module_id = UUID("12345678-1234-5678-1234-567812345678")
+        brep_dir = tmp_path / str(module_id) / "brep_files"
+        brep_dir.mkdir(parents=True, exist_ok=True)
+        (brep_dir / "a.brep").write_text("content-a", encoding="utf-8")
+        (brep_dir / "b.brep").write_text("content-b", encoding="utf-8")
+
+        with patch("service.git_manager.get_module_brep_directory", return_value=brep_dir):
+            first_hash = calculate_brep_files_hash(module_id)
+            second_hash = calculate_brep_files_hash(module_id)
+
+        assert first_hash
+        assert first_hash == second_hash

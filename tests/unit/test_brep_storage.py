@@ -1,84 +1,57 @@
-import pytest
-from uuid import UUID
-from unittest.mock import Mock, patch, MagicMock
-from service.brep_storage import create_module_brep_directory, save_brep_file
 from pathlib import Path
+from unittest.mock import patch
+from uuid import UUID
+
+import pytest
+
+from service.brep_storage import create_module_brep_directory, delete_module_brep_directory, save_brep_file
 
 
 class TestBrepStorage:
+    def test_create_module_brep_directory_success(self, tmp_path: Path):
+        module_id = UUID("12345678-1234-5678-1234-567812345678")
+        module_brep_dir = tmp_path / "module" / "brep_files"
 
-    @patch('service.brep_storage.Path')
-    def test_create_module_brep_directory_success(self, mock_path_class):
-        # Setup mocks
-        mock_base_path = MagicMock()
-        mock_module_path = MagicMock()
-        mock_path_class.return_value = mock_base_path
-        mock_base_path.__truediv__.return_value = mock_module_path
-        mock_module_path.mkdir.return_value = None
-        mock_module_path.__str__.return_value = '/path/to/module'
-        
-        # Call function
-        result = create_module_brep_directory(UUID('12345678-1234-5678-1234-567812345678'))
-        
-        # Assertions
-        assert result == '/path/to/module'
-        mock_path_class.assert_called_once_with('api/resources/brep_files')  # Assuming BREP_FILES_PATH
-        mock_base_path.__truediv__.assert_called_once_with('12345678-1234-5678-1234-567812345678')
-        mock_module_path.mkdir.assert_called_once_with(parents=True, exist_ok=True)
+        with patch("service.brep_storage.get_module_brep_directory", return_value=module_brep_dir):
+            result = create_module_brep_directory(module_id)
 
-    @patch('service.brep_storage.Path')
-    def test_create_module_brep_directory_os_error(self, mock_path_class):
-        # Setup mocks to raise OSError
-        mock_base_path = MagicMock()
-        mock_module_path = MagicMock()
-        mock_path_class.return_value = mock_base_path
-        mock_base_path.__truediv__.return_value = mock_module_path
-        mock_module_path.mkdir.side_effect = OSError("Permission denied")
-        
-        # Call and expect error
-        with pytest.raises(OSError, match="Не удалось создать директорию"):
-            create_module_brep_directory(UUID('12345678-1234-5678-1234-567812345678'))
+        assert result == str(module_brep_dir)
+        assert module_brep_dir.exists()
 
-    @patch('service.brep_storage.Path')
-    def test_save_brep_file_success(self, mock_path_class):
-        # Setup mocks
-        mock_base_path = MagicMock()
-        mock_module_path = MagicMock()
-        mock_file_path = MagicMock()
-        mock_path_class.return_value = mock_base_path
-        mock_base_path.__truediv__.return_value = mock_module_path
-        mock_module_path.__truediv__.return_value = mock_file_path
-        mock_file_path.write_bytes.return_value = None
-        
-        # Call function
-        result = save_brep_file(
-            UUID('12345678-1234-5678-1234-567812345678'),
-            'test.brep',
-            b'file content'
-        )
-        
-        # Assertions
-        assert result == '12345678-1234-5678-1234-567812345678/test.brep'
-        mock_path_class.assert_called_once_with('api/resources/brep_files')
-        mock_base_path.__truediv__.assert_called_once_with('12345678-1234-5678-1234-567812345678')
-        mock_module_path.__truediv__.assert_called_once_with('test.brep')
-        mock_file_path.write_bytes.assert_called_once_with(b'file content')
+    def test_create_module_brep_directory_os_error(self):
+        module_id = UUID("12345678-1234-5678-1234-567812345678")
 
-    @patch('service.brep_storage.Path')
-    def test_save_brep_file_os_error(self, mock_path_class):
-        # Setup mocks to raise OSError
-        mock_base_path = MagicMock()
-        mock_module_path = MagicMock()
-        mock_file_path = MagicMock()
-        mock_path_class.return_value = mock_base_path
-        mock_base_path.__truediv__.return_value = mock_module_path
-        mock_module_path.__truediv__.return_value = mock_file_path
-        mock_file_path.write_bytes.side_effect = OSError("Write failed")
-        
-        # Call and expect error
-        with pytest.raises(OSError, match="Не удалось сохранить файл"):
-            save_brep_file(
-                UUID('12345678-1234-5678-1234-567812345678'),
-                'test.brep',
-                b'file content'
-            )
+        with patch("service.brep_storage.get_module_brep_directory", side_effect=OSError("Permission denied")):
+            with pytest.raises(OSError, match="Не удалось создать директорию"):
+                create_module_brep_directory(module_id)
+
+    def test_save_brep_file_success(self, tmp_path: Path):
+        module_id = UUID("12345678-1234-5678-1234-567812345678")
+        module_brep_dir = tmp_path / str(module_id) / "brep_files"
+
+        with patch("service.brep_storage.get_module_brep_directory", return_value=module_brep_dir):
+            result = save_brep_file(module_id, "test.brep", b"file content")
+
+        assert result == "12345678-1234-5678-1234-567812345678/brep_files/test.brep"
+        assert (module_brep_dir / "test.brep").read_bytes() == b"file content"
+
+    def test_save_brep_file_os_error(self, tmp_path: Path):
+        module_id = UUID("12345678-1234-5678-1234-567812345678")
+        module_brep_dir = tmp_path / str(module_id) / "brep_files"
+        module_brep_dir.mkdir(parents=True, exist_ok=True)
+
+        with patch.object(Path, "write_bytes", side_effect=OSError("Write failed")):
+            with patch("service.brep_storage.get_module_brep_directory", return_value=module_brep_dir):
+                with pytest.raises(OSError, match="Не удалось сохранить файл"):
+                    save_brep_file(module_id, "test.brep", b"file content")
+
+    def test_delete_module_brep_directory_success(self, tmp_path: Path):
+        module_id = UUID("12345678-1234-5678-1234-567812345678")
+        module_root_dir = tmp_path / str(module_id)
+        (module_root_dir / "brep_files").mkdir(parents=True, exist_ok=True)
+        (module_root_dir / "brep_files" / "a.brep").write_text("x", encoding="utf-8")
+
+        with patch("service.brep_storage.get_module_resource_path", return_value=module_root_dir):
+            delete_module_brep_directory(module_id)
+
+        assert not module_root_dir.exists()
