@@ -2,10 +2,24 @@
 {% extends "base.html" %}
 
 {% block title %}Module details{% endblock %}
+{% block extra_head %}
+<script src="/static/js/cad-agent-ui.js"></script>
+{% endblock %}
 
 {% block content %}
 <h1>Module details</h1>
 <div id="objectDetails"></div>
+<div id="cad-agent-panel" style="margin-top: 24px; border: 1px solid #ddd; padding: 16px; border-radius: 8px;">
+    <h2>CAD Agent</h2>
+    <div style="margin-bottom: 6px; font-size: 13px; color: #555;">
+        Синтаксис: <code>agent &lt;промпт&gt;</code> · <code>git &lt;аргументы&gt;</code> · <code>render &lt;file.scad&gt; [file.stl]</code>
+    </div>
+    <div style="display: grid; gap: 8px;">
+        <textarea id="cad-command" rows="3" placeholder="Например: agent создай корпус 80x50x30&#10;git status&#10;render model.scad" style="width: 100%; box-sizing: border-box;"></textarea>
+        <button id="cad-send-btn" type="button" style="width: fit-content;">Send to CAD Agent</button>
+        <pre id="cad-agent-output" style="background: #f7f7f7; border: 1px solid #ddd; padding: 12px; min-height: 120px; overflow: auto;"></pre>
+    </div>
+</div>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
@@ -15,9 +29,11 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(response => response.json())
         .then(data => {
             document.getElementById('objectDetails').innerHTML = renderObjectDetails(data);
-            // Обновляем видимость кнопок FreeCad после загрузки деталей объекта
             if (typeof updateFreeCadButtonsVisibility === 'function') {
                 updateFreeCadButtonsVisibility();
+            }
+            if (typeof checkScadAndActivateCommit === 'function') {
+                checkScadAndActivateCommit(id);
             }
         })
         .catch(error => {

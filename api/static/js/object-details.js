@@ -261,6 +261,7 @@ function renderObjectFullDetails(data) {
             <button id="copy-btn" onclick="showCopyModal()">Copy Module</button>
             <button id="delete-btn" class="danger-btn" onclick="showDeleteModal()">Delete Module</button>
             <a href="/git_history/${data.id}" class="btn-link"><button id="git-history-btn">Git History</button></a>
+            <button id="commit-btn" onclick="commitScadChanges()" disabled title="Нет .scad файла в директории модуля">Commit</button>
             <button id="save-btn" class="save-btn" style="display: none;" onclick="saveObjectChanges()">Save</button>
             <button id="cancel-btn" class="cancel-btn" style="display: none;" onclick="toggleEditMode(false)">Cancel</button>
         </div>
@@ -822,4 +823,59 @@ async function submitCopyModule() {
 function isValidVersion(version) {
     const regex = /^\d+\.\d+$/;
     return regex.test(version);
+}
+
+async function checkScadAndActivateCommit(moduleId) {
+    const btn = document.getElementById('commit-btn');
+    if (!btn) return;
+
+    try {
+        const response = await fetch(`/api/modules/${moduleId}/cad-agent/has-scad`);
+        if (!response.ok) return;
+        const data = await response.json();
+        if (!data.has_scad) return;
+        btn.disabled = false;
+        btn.title = 'Зафиксировать изменения .scad файла в git';
+    } catch (error) {
+        console.error('Error checking scad files:', error);
+    }
+}
+
+async function commitScadChanges() {
+    const moduleId = window.currentObjectData && window.currentObjectData.id;
+    if (!moduleId) return;
+
+    const commitMessage = window.prompt('Сообщение коммита:');
+    if (!commitMessage || !commitMessage.trim()) return;
+
+    const btn = document.getElementById('commit-btn');
+    btn.disabled = true;
+
+    try {
+        const addResponse = await fetch(`/api/modules/${moduleId}/cad-agent/execute`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: 'git add .' }),
+        });
+        if (!addResponse.ok) {
+            const err = await addResponse.json();
+            throw new Error(err.detail || 'git add failed');
+        }
+
+        const commitResponse = await fetch(`/api/modules/${moduleId}/cad-agent/execute`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: `git commit -m "${commitMessage.trim().replace(/"/g, '\\"')}"` }),
+        });
+        if (!commitResponse.ok) {
+            const err = await commitResponse.json();
+            throw new Error(err.detail || 'git commit failed');
+        }
+
+        showToast('Коммит создан успешно!', 'success');
+    } catch (error) {
+        showToast('Ошибка коммита: ' + error.message, 'error');
+    } finally {
+        btn.disabled = false;
+    }
 }

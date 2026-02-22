@@ -10,3 +10,4 @@ api/database/alembic/versions/*
 api/resources/*
 db/resources/*
 opencode.json
+.env

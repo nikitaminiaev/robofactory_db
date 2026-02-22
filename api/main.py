@@ -3,7 +3,7 @@ from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from routes import get_all_basic_objects, get_basic_object, create_basic_object
-from routes import websocket_routes, copy_module, module_versions, brep_files
+from routes import websocket_routes, copy_module, module_versions, brep_files, cad_agent_proxy
 import threading
 from service.web_soket_server import get_server_instance
 
@@ -20,6 +20,7 @@ app.include_router(websocket_routes.router)
 app.include_router(copy_module.router, prefix="/api")
 app.include_router(module_versions.router, prefix="/api")
 app.include_router(brep_files.router, prefix="/api")
+app.include_router(cad_agent_proxy.router, prefix="/api")
 
 # Функция для запуска WebSocket-сервера в отдельном потоке
 def start_websocket_server_thread():
@@ -51,11 +52,11 @@ async def shutdown_event():
     print("WebSocket-сервер остановлен")
 
 @app.get("/")
-def root(request: Request):
+def root_page(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
 @app.get("/basic_object")
-async def root(request: Request):
+async def basic_object_page(request: Request):
     return templates.TemplateResponse("basic_object_search.html", {"request": request})
 
 @app.get("/basic_object/{id}")

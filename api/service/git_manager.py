@@ -56,8 +56,10 @@ def _write_initial_git_files(repo_path: Path) -> None:
         [
             "*",
             "!.gitignore",
+            "!*.scad",
             "!brep_files/",
             "!brep_files/.gitkeep",
+            "stl_files/",
             "",
         ]
     )
