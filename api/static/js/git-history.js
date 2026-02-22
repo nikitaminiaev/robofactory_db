@@ -20,24 +20,30 @@ const GitHistory = (function() {
     }
 
     /**
-     * Загрузка истории коммитов с сервера
+     * Загрузка истории коммитов и текущего HEAD параллельно,
+     * рендеринг только после получения обоих ответов.
      */
     function loadCommitHistory() {
         showLoading();
 
-        $.ajax({
-            url: `/api/modules/${moduleId}/commits`,
-            method: 'GET',
-            success: function(data) {
-                commits = data;
+        const commitsReq = $.ajax({ url: `/api/modules/${moduleId}/commits`, method: 'GET' });
+        const headReq    = $.ajax({ url: `/api/modules/${moduleId}/git-head`, method: 'GET' });
+
+        $.when(commitsReq, headReq)
+            .done(function(commitsResp, headResp) {
+                commits            = commitsResp[0];
+                currentCommitHash  = (headResp[0] && headResp[0].head) || null;
+                // Если HEAD не определён, считаем первый коммит текущим
+                if (!currentCommitHash && commits.length > 0) {
+                    currentCommitHash = commits[0].hash;
+                }
                 renderGraph();
                 renderCommitsTable();
                 hideLoading();
-            },
-            error: function(xhr, status, error) {
+            })
+            .fail(function(xhr, status, error) {
                 showError('Ошибка загрузки истории коммитов: ' + error);
-            }
-        });
+            });
     }
 
     /**
@@ -69,9 +75,6 @@ const GitHistory = (function() {
             $('#git-graph').html('<div class="loading">Нет коммитов для отображения</div>');
             return;
         }
-
-        // Определяем текущий HEAD
-        determineCurrentHead();
 
         // Инициализация GitGraph
         const graphContainer = document.getElementById('git-graph');
@@ -114,34 +117,9 @@ const GitHistory = (function() {
     }
 
     /**
-     * Определение текущего HEAD коммита
-     */
-    function determineCurrentHead() {
-        // Получаем текущую версию модуля
-        $.ajax({
-            url: `/api/modules/${moduleId}/versions/latest`,
-            method: 'GET',
-            success: function(version) {
-                if (version && version.commit_hash) {
-                    currentCommitHash = version.commit_hash;
-                    updateCurrentCommitDisplay();
-                }
-            },
-            error: function() {
-                // Если не удалось получить версию, используем первый коммит
-                if (commits.length > 0) {
-                    currentCommitHash = commits[0].hash;
-                    updateCurrentCommitDisplay();
-                }
-            }
-        });
-    }
-
-    /**
-     * Обновление отображения текущего коммита
+     * Обновление подсветки текущего коммита в таблице без перерисовки всего
      */
     function updateCurrentCommitDisplay() {
-        // Обновляем таблицу
         $('#commits-tbody tr').removeClass('current');
         $(`#commits-tbody tr[data-hash="${currentCommitHash}"]`).addClass('current');
     }

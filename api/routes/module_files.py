@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from service.constants import get_module_resource_path, get_module_stl_directory
-from service.git_manager import commit_module_changes, get_module_git_diff
+from service.git_manager import commit_module_changes, get_module_git_diff, get_module_head_hash
 
 router = APIRouter()
 
@@ -162,6 +162,16 @@ async def list_stl_files(module_id: str):
         return []
 
     return [f.name for f in sorted(stl_dir.glob("*.stl"))]
+
+
+@router.get("/modules/{module_id}/git-head")
+async def get_git_head(module_id: str):
+    try:
+        module_uuid = UUID(module_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Некорректный module_id") from exc
+
+    return {"head": get_module_head_hash(module_uuid)}
 
 
 @router.get("/modules/{module_id}/git-diff")

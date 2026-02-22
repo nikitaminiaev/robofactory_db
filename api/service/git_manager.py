@@ -139,29 +139,81 @@ def commit_module_changes(module_id: UUID, message: str) -> str:
         raise CalledProcessError(e.returncode, e.cmd, e.output, e.stderr) from e
 
 
+def _get_main_branch(repo_path: Path) -> str:
+    """
+    Возвращает имя основной ветки (master/main).
+    Если находимся в detached HEAD, всё равно возвращает имя ветки.
+    """
+    branch_result = run(["git", "branch", "--show-current"], cwd=repo_path, capture_output=True, text=True)
+    branch = branch_result.stdout.strip()
+    if branch:
+        return branch
+
+    # Detached HEAD — ищем существующую ветку
+    branches_result = run(["git", "branch"], cwd=repo_path, capture_output=True, text=True)
+    for candidate in ("master", "main"):
+        if candidate in branches_result.stdout:
+            return candidate
+
+    return "HEAD"
+
+
+def get_module_head_hash(module_id: UUID) -> str:
+    """
+    Возвращает хеш текущего git HEAD (реальная позиция HEAD в репозитории).
+
+    Args:
+        module_id: UUID модуля
+
+    Returns:
+        Хеш коммита HEAD или пустая строка если репозиторий не инициализирован
+    """
+    repo_path = get_module_resource_path(module_id)
+
+    if not (repo_path / ".git").exists():
+        return ""
+
+    try:
+        result = run(["git", "rev-parse", "HEAD"], cwd=repo_path, check=True, capture_output=True, text=True)
+        return result.stdout.strip()
+    except CalledProcessError:
+        return ""
+
+
 def get_module_commit_history(module_id: UUID) -> list[dict[str, str]]:
     """
     Получает историю коммитов для модуля.
-    
+
+    Всегда читает историю с основной ветки (master/main), а не с HEAD,
+    чтобы полная история была видна даже в состоянии detached HEAD.
+
     Args:
         module_id: UUID модуля
-        
+
     Returns:
         Список словарей с хешем, сообщением и датой
-        
+
     Raises:
         CalledProcessError: Если git log не удался
     """
     repo_path = get_module_resource_path(module_id)
-    
+
+    branch = _get_main_branch(repo_path)
+
     try:
-        result = run(["git", "log", "--pretty=format:%H|%s|%ai"], cwd=repo_path, check=True, capture_output=True, text=True)
-        lines = result.stdout.strip().split('\n')
+        result = run(
+            ["git", "log", branch, "--pretty=format:%H|%s|%ai"],
+            cwd=repo_path,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
         history = []
-        for line in lines:
-            if line:
-                commit_hash, message, date = line.split('|', 2)
-                history.append({"hash": commit_hash, "message": message, "date": date})
+        for line in result.stdout.strip().split("\n"):
+            if not line:
+                continue
+            commit_hash, message, date = line.split("|", 2)
+            history.append({"hash": commit_hash, "message": message, "date": date})
         return history
     except CalledProcessError as e:
         raise CalledProcessError(e.returncode, e.cmd, e.output, e.stderr) from e
@@ -210,15 +262,15 @@ def _ensure_on_branch(repo_path: Path) -> None:
 
 def checkout_module_commit(module_id: UUID, commit_hash: str) -> None:
     """
-    Восстанавливает файлы рабочего дерева до состояния указанного коммита,
-    не перемещая HEAD и не входя в detached HEAD.
+    Переключает HEAD на указанный коммит (detached HEAD).
 
-    Использует `git checkout <hash> -- .` вместо `git checkout <hash>`,
-    чтобы история коммитов оставалась нетронутой.
+    Перед переключением возвращается на основную ветку чтобы не стаковать
+    detached HEAD состояния. История всегда читается через _get_main_branch,
+    поэтому все коммиты ветки видны вне зависимости от позиции HEAD.
 
     Args:
         module_id: UUID модуля
-        commit_hash: Хеш коммита для восстановления файлов
+        commit_hash: Хеш коммита
 
     Raises:
         CalledProcessError: Если git команды не удались
@@ -230,9 +282,7 @@ def checkout_module_commit(module_id: UUID, commit_hash: str) -> None:
     repo_path = get_module_resource_path(module_id)
 
     try:
-        # Если были в detached HEAD от предыдущего checkout — возвращаемся на ветку
         _ensure_on_branch(repo_path)
-        # Восстанавливаем файлы без перемещения HEAD
-        run(["git", "checkout", commit_hash, "--", "."], cwd=repo_path, check=True, capture_output=True, text=True)
+        run(["git", "checkout", commit_hash], cwd=repo_path, check=True, capture_output=True, text=True)
     except CalledProcessError as e:
         raise CalledProcessError(e.returncode, e.cmd, e.output, e.stderr) from e
