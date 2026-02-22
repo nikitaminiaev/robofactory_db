@@ -57,10 +57,6 @@ def _write_initial_git_files(repo_path: Path) -> None:
             "*",
             "!.gitignore",
             "!*.scad",
-            "!brep_files/",
-            "!brep_files/**",
-            "!stl_files/",
-            "!stl_files/**",
             "",
         ]
     )
@@ -68,11 +64,9 @@ def _write_initial_git_files(repo_path: Path) -> None:
 
     brep_dir = repo_path / "brep_files"
     brep_dir.mkdir(parents=True, exist_ok=True)
-    (brep_dir / ".gitkeep").write_text("", encoding="utf-8")
 
     stl_dir = repo_path / "stl_files"
     stl_dir.mkdir(parents=True, exist_ok=True)
-    (stl_dir / ".gitkeep").write_text("", encoding="utf-8")
 
 
 def init_module_git_repo(module_id: UUID) -> str:
@@ -108,7 +102,7 @@ def init_module_git_repo(module_id: UUID) -> str:
         run(["git", "config", "user.name", "RoboFactory System"], cwd=repo_path, check=True, capture_output=True)
         run(["git", "config", "user.email", "system@robofactory.local"], cwd=repo_path, check=True, capture_output=True)
         _write_initial_git_files(repo_path)
-        run(["git", "add", ".gitignore", "brep_files/.gitkeep", "stl_files/.gitkeep"], cwd=repo_path, check=True, capture_output=True)
+        run(["git", "add", ".gitignore"], cwd=repo_path, check=True, capture_output=True)
         run(["git", "commit", "-m", "Initial repository setup"], cwd=repo_path, check=True, capture_output=True)
         return str(repo_path)
     except CalledProcessError as e:
@@ -173,24 +167,72 @@ def get_module_commit_history(module_id: UUID) -> list[dict[str, str]]:
         raise CalledProcessError(e.returncode, e.cmd, e.output, e.stderr) from e
 
 
-def checkout_module_commit(module_id: UUID, commit_hash: str) -> None:
+def get_module_git_diff(module_id: UUID) -> str:
     """
-    Выполняет git checkout на указанный коммит для модуля.
-    
+    Возвращает git diff HEAD — все незакоммиченные изменения относительно последнего коммита.
+
     Args:
         module_id: UUID модуля
-        commit_hash: Хеш коммита для checkout
-        
+
+    Returns:
+        Строка с диффом (пустая, если нет изменений)
+    """
+    repo_path = get_module_resource_path(module_id)
+
+    if not (repo_path / ".git").exists():
+        return ""
+
+    try:
+        result = run(
+            ["git", "diff", "HEAD"],
+            cwd=repo_path,
+            capture_output=True,
+            text=True,
+        )
+        return result.stdout
+    except CalledProcessError:
+        return ""
+
+
+def _ensure_on_branch(repo_path: Path) -> None:
+    """
+    Если репозиторий в detached HEAD, переключается обратно на основную ветку.
+    """
+    result = run(["git", "branch", "--show-current"], cwd=repo_path, capture_output=True, text=True)
+    if result.stdout.strip():
+        return
+
+    for branch in ("master", "main"):
+        r = run(["git", "checkout", branch], cwd=repo_path, capture_output=True, text=True)
+        if r.returncode == 0:
+            return
+
+
+def checkout_module_commit(module_id: UUID, commit_hash: str) -> None:
+    """
+    Восстанавливает файлы рабочего дерева до состояния указанного коммита,
+    не перемещая HEAD и не входя в detached HEAD.
+
+    Использует `git checkout <hash> -- .` вместо `git checkout <hash>`,
+    чтобы история коммитов оставалась нетронутой.
+
+    Args:
+        module_id: UUID модуля
+        commit_hash: Хеш коммита для восстановления файлов
+
     Raises:
-        CalledProcessError: Если git checkout не удался
+        CalledProcessError: Если git команды не удались
         ValueError: Если commit_hash пустой или невалидный
     """
     if not commit_hash or not commit_hash.strip():
         raise ValueError("Commit hash cannot be empty")
-    
+
     repo_path = get_module_resource_path(module_id)
-    
+
     try:
-        run(["git", "checkout", commit_hash], cwd=repo_path, check=True, capture_output=True, text=True)
+        # Если были в detached HEAD от предыдущего checkout — возвращаемся на ветку
+        _ensure_on_branch(repo_path)
+        # Восстанавливаем файлы без перемещения HEAD
+        run(["git", "checkout", commit_hash, "--", "."], cwd=repo_path, check=True, capture_output=True, text=True)
     except CalledProcessError as e:
         raise CalledProcessError(e.returncode, e.cmd, e.output, e.stderr) from e

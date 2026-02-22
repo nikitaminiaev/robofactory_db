@@ -260,8 +260,6 @@ function renderObjectFullDetails(data) {
             <button id="edit-btn" onclick="toggleEditMode()">Edit</button>
             <button id="copy-btn" onclick="showCopyModal()">Copy Module</button>
             <button id="delete-btn" class="danger-btn" onclick="showDeleteModal()">Delete Module</button>
-            <a href="/git_history/${data.id}" class="btn-link"><button id="git-history-btn">Git History</button></a>
-            <button id="commit-btn" onclick="commitScadChanges()" disabled title="Нет .scad файла в директории модуля">Commit</button>
             <button id="save-btn" class="save-btn" style="display: none;" onclick="saveObjectChanges()">Save</button>
             <button id="cancel-btn" class="cancel-btn" style="display: none;" onclick="toggleEditMode(false)">Cancel</button>
         </div>

@@ -1,49 +1,560 @@
-<!-- templates/object_details.html -->
 {% extends "base.html" %}
 
 {% block title %}Module details{% endblock %}
+
 {% block extra_head %}
-<script src="/static/js/cad-agent-ui.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<style>
+  .page-layout { display: flex; flex-direction: column; gap: 24px; }
+
+  .section-card {
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 16px;
+    background: #fff;
+  }
+  .section-card h2 { margin: 0 0 12px; font-size: 1.1rem; }
+
+  /* Agent prompt */
+  #agent-prompt {
+    width: 100%;
+    box-sizing: border-box;
+    resize: vertical;
+    font-size: 14px;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-family: inherit;
+  }
+  #agent-output {
+    background: #f7f7f7;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 12px;
+    min-height: 80px;
+    max-height: 300px;
+    overflow: auto;
+    white-space: pre-wrap;
+    font-size: 13px;
+    font-family: monospace;
+  }
+
+  /* SCAD + viewer row */
+  .scad-viewer-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  @media (max-width: 900px) {
+    .scad-viewer-row { grid-template-columns: 1fr; }
+  }
+
+  .scad-editor-col { display: flex; flex-direction: column; gap: 8px; }
+  .scad-file-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 13px;
+    color: #555;
+    font-weight: 500;
+  }
+  .scad-textarea {
+    width: 100%;
+    box-sizing: border-box;
+    resize: vertical;
+    font-family: monospace;
+    font-size: 13px;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    min-height: 380px;
+  }
+  .scad-status {
+    font-size: 12px;
+    min-height: 18px;
+    color: #555;
+  }
+  .scad-status.ok { color: #2a7a2a; }
+  .scad-status.err { color: #c0392b; }
+
+  /* STL viewer */
+  .viewer-col { display: flex; flex-direction: column; gap: 8px; }
+  .viewer-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 13px;
+    color: #555;
+    font-weight: 500;
+  }
+  #stl-canvas-container {
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    overflow: hidden;
+    background: #2a2a2e;
+    position: relative;
+    height: 420px;
+  }
+  #stl-canvas-container canvas { display: block; }
+  #viewer-placeholder {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #888;
+    font-size: 13px;
+    pointer-events: none;
+  }
+  #stl-select {
+    font-size: 13px;
+    padding: 3px 6px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+  }
+
+  /* Buttons */
+  .btn {
+    display: inline-block;
+    padding: 6px 14px;
+    font-size: 13px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    background: #3a7bd5;
+    color: #fff;
+  }
+  .btn:hover { background: #2f65b5; }
+  .btn:disabled { opacity: 0.5; cursor: default; }
+  .btn-secondary { background: #6c757d; }
+  .btn-secondary:hover { background: #565e64; }
+  .btn-small { padding: 4px 10px; font-size: 12px; }
+
+  .row-btns { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+</style>
 {% endblock %}
 
 {% block content %}
-<h1>Module details</h1>
-<div id="objectDetails"></div>
-<div id="cad-agent-panel" style="margin-top: 24px; border: 1px solid #ddd; padding: 16px; border-radius: 8px;">
+<div class="page-layout">
+
+  <h1 id="module-title">Module details</h1>
+  <div id="objectDetails"></div>
+
+  <!-- ── CAD Agent prompt ───────────────────────────────────────── -->
+  <div class="section-card">
     <h2>CAD Agent</h2>
-    <div style="margin-bottom: 6px; font-size: 13px; color: #555;">
-        Синтаксис: <code>agent &lt;промпт&gt;</code> · <code>git &lt;аргументы&gt;</code> · <code>render &lt;file.scad&gt; [file.stl]</code>
+    <div style="display:grid; gap:8px;">
+      <textarea id="agent-prompt" rows="8"
+        placeholder="Опишите что нужно изменить или создать в .scad файле..."></textarea>
+      <div class="row-btns">
+        <button id="agent-send-btn" class="btn" type="button">Отправить агенту</button>
+        <span id="agent-status" style="font-size:12px; color:#555;"></span>
+      </div>
+      <div id="agent-output"></div>
     </div>
-    <div style="display: grid; gap: 8px;">
-        <textarea id="cad-command" rows="3" placeholder="Например: agent создай корпус 80x50x30&#10;git status&#10;render model.scad" style="width: 100%; box-sizing: border-box;"></textarea>
-        <button id="cad-send-btn" type="button" style="width: fit-content;">Send to CAD Agent</button>
-        <pre id="cad-agent-output" style="background: #f7f7f7; border: 1px solid #ddd; padding: 12px; min-height: 120px; overflow: auto;"></pre>
+  </div>
+
+  <!-- ── SCAD editor + STL viewer ──────────────────────────────── -->
+  <div class="section-card">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+      <h2 style="margin:0;">SCAD файлы</h2>
+      <a id="git-history-link" href="#" style="font-size:13px; color:#3a7bd5; text-decoration:none;">
+        &#x27A6; Git info
+      </a>
     </div>
+    <div class="scad-viewer-row">
+
+      <!-- SCAD editor -->
+      <div class="scad-editor-col">
+        <div class="scad-file-header">
+          <span id="scad-filename-label">Загрузка...</span>
+          <div class="row-btns">
+            <select id="scad-file-select" style="display:none; font-size:13px; padding:3px 6px; border:1px solid #ccc; border-radius:4px;"></select>
+          </div>
+        </div>
+        <textarea id="scad-editor" class="scad-textarea"
+          placeholder="Вставьте SCAD код и нажмите «Сохранить и рендерить» — будет предложено имя файла."></textarea>
+        <div class="row-btns">
+          <button id="save-render-btn" class="btn" type="button">Сохранить и рендерить</button>
+          <span id="scad-status" class="scad-status"></span>
+        </div>
+      </div>
+
+      <!-- STL viewer -->
+      <div class="viewer-col">
+        <div class="viewer-header">
+          <span>3D просмотр</span>
+          <div class="row-btns">
+            <select id="stl-select" style="display:none;"></select>
+            <button id="reload-stl-btn" class="btn btn-secondary btn-small" type="button">&#x21bb; Обновить</button>
+          </div>
+        </div>
+        <div id="stl-canvas-container">
+          <div id="viewer-placeholder">Нет STL файла для отображения</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
 </div>
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    const id = window.location.pathname.split('/').pop();
+// ────────────────────────────────────────────────────────────────
+//  Helpers
+// ────────────────────────────────────────────────────────────────
+function getModuleId() {
+  return window.location.pathname.split('/').pop();
+}
 
-    fetch('/api/basic_object/' + id)
-        .then(response => response.json())
-        .then(data => {
-            document.getElementById('objectDetails').innerHTML = renderObjectDetails(data);
-            if (typeof updateFreeCadButtonsVisibility === 'function') {
-                updateFreeCadButtonsVisibility();
-            }
-            if (typeof checkScadAndActivateCommit === 'function') {
-                checkScadAndActivateCommit(id);
-            }
-        })
-        .catch(error => {
-            console.error('Error loading object details:', error);
-            document.getElementById('objectDetails').innerHTML = `
-                <div class="error-message">
-                    Error loading object details. Please try again later.
-                </div>`;
-        });
+// ────────────────────────────────────────────────────────────────
+//  Module info
+// ────────────────────────────────────────────────────────────────
+async function loadModuleInfo() {
+  const id = getModuleId();
+  // Устанавливаем ссылку Git History как только знаем id
+  const gitLink = document.getElementById('git-history-link');
+  if (gitLink) gitLink.href = `/git_history/${id}`;
+
+  try {
+    const res = await fetch(`/api/basic_object/${id}`);
+    if (!res.ok) throw new Error(res.status);
+    const data = await res.json();
+    document.getElementById('objectDetails').innerHTML = renderObjectDetails(data);
+    if (typeof updateFreeCadButtonsVisibility === 'function') updateFreeCadButtonsVisibility();
+    if (typeof checkScadAndActivateCommit === 'function') checkScadAndActivateCommit(id);
+  } catch (e) {
+    document.getElementById('objectDetails').innerHTML =
+      `<div class="error-message">Ошибка загрузки данных: ${e.message}</div>`;
+  }
+}
+
+// ────────────────────────────────────────────────────────────────
+//  CAD Agent
+// ────────────────────────────────────────────────────────────────
+const agentSendBtn = document.getElementById('agent-send-btn');
+const agentOutput  = document.getElementById('agent-output');
+const agentStatus  = document.getElementById('agent-status');
+const agentPrompt  = document.getElementById('agent-prompt');
+
+agentSendBtn.addEventListener('click', async () => {
+  const moduleId = getModuleId();
+  const prompt = agentPrompt.value.trim();
+  if (!prompt) { agentOutput.textContent = 'Введите промпт.'; return; }
+
+  agentSendBtn.disabled = true;
+  agentStatus.textContent = 'Выполняю...';
+  agentOutput.textContent = '';
+
+  try {
+    const res = await fetch(`/api/modules/${moduleId}/cad-agent/execute`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: `agent ${prompt}` }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      agentOutput.textContent = `Ошибка: ${data.detail || 'Неизвестная ошибка'}`;
+      agentStatus.textContent = '';
+    } else {
+      agentOutput.textContent = JSON.stringify(data, null, 2);
+      agentStatus.textContent = 'Готово';
+      // Перезагружаем SCAD редактор, т.к. агент мог изменить файлы
+      await loadScadFiles();
+      await refreshStlList();
+    }
+  } catch (e) {
+    agentOutput.textContent = `Ошибка сети: ${e.message}`;
+    agentStatus.textContent = '';
+  } finally {
+    agentSendBtn.disabled = false;
+  }
+});
+
+// ────────────────────────────────────────────────────────────────
+//  SCAD editor
+// ────────────────────────────────────────────────────────────────
+let scadFiles = [];   // [{filename, content}]
+let currentScadIdx = 0;
+
+const scadEditor      = document.getElementById('scad-editor');
+const scadFileSelect  = document.getElementById('scad-file-select');
+const scadFilenameLabel = document.getElementById('scad-filename-label');
+const saveRenderBtn   = document.getElementById('save-render-btn');
+const scadStatus      = document.getElementById('scad-status');
+
+async function loadScadFiles() {
+  const moduleId = getModuleId();
+  try {
+    const res = await fetch(`/api/modules/${moduleId}/scad-files`);
+    if (!res.ok) throw new Error(res.status);
+    scadFiles = await res.json();
+  } catch (e) {
+    scadFiles = [];
+  }
+
+  if (scadFiles.length === 0) {
+    scadFilenameLabel.textContent = 'Нет .scad файлов — введите код и сохраните';
+    scadEditor.value = '';
+    scadFileSelect.style.display = 'none';
+    return;
+  }
+
+  if (scadFiles.length === 1) {
+    scadFilenameLabel.textContent = scadFiles[0].filename;
+    scadFileSelect.style.display = 'none';
+    currentScadIdx = 0;
+  } else {
+    scadFilenameLabel.textContent = '';
+    scadFileSelect.style.display = '';
+    scadFileSelect.innerHTML = scadFiles
+      .map((f, i) => `<option value="${i}">${f.filename}</option>`)
+      .join('');
+    scadFileSelect.value = currentScadIdx;
+  }
+
+  scadEditor.value = scadFiles[currentScadIdx].content;
+}
+
+scadFileSelect.addEventListener('change', () => {
+  currentScadIdx = parseInt(scadFileSelect.value, 10);
+  scadEditor.value = scadFiles[currentScadIdx].content;
+});
+
+saveRenderBtn.addEventListener('click', async () => {
+  const moduleId = getModuleId();
+  const content  = scadEditor.value.trim();
+
+  if (!content) {
+    scadStatus.className = 'scad-status err';
+    scadStatus.textContent = 'Редактор пуст — введите SCAD код.';
+    return;
+  }
+
+  let filename;
+  if (scadFiles.length === 0) {
+    // Предлагаем имя нового файла
+    const suggested = prompt('Введите имя нового .scad файла:', 'model.scad');
+    if (!suggested) return;
+    filename = suggested.endsWith('.scad') ? suggested : suggested + '.scad';
+    // Убираем опасные символы из имени
+    filename = filename.replace(/[^a-zA-Z0-9._\-]/g, '_');
+  } else {
+    filename = scadFiles[currentScadIdx].filename;
+  }
+
+  saveRenderBtn.disabled = true;
+  scadStatus.className = 'scad-status';
+  scadStatus.textContent = 'Сохраняю и рендерю...';
+
+  try {
+    const res = await fetch(`/api/modules/${moduleId}/scad-files/${encodeURIComponent(filename)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      scadStatus.className = 'scad-status err';
+      scadStatus.textContent = `Ошибка: ${data.detail || res.status}`;
+      return;
+    }
+    if (data.render_error) {
+      scadStatus.className = 'scad-status err';
+      scadStatus.textContent = `Сохранено, рендер провален: ${data.render_error}`;
+    } else {
+      scadStatus.className = 'scad-status ok';
+      scadStatus.textContent = `Сохранено и отрендерено → ${data.stl_filename || ''}`;
+    }
+    // Sync in-memory content или добавляем новый файл в список
+    if (scadFiles.length === 0) {
+      await loadScadFiles();
+    } else {
+      scadFiles[currentScadIdx].content = content;
+    }
+    // Reload STL list and auto-load new STL
+    await refreshStlList();
+    if (data.stl_filename) {
+      loadStlIntoViewer(data.stl_filename);
+    }
+  } catch (e) {
+    scadStatus.className = 'scad-status err';
+    scadStatus.textContent = `Ошибка сети: ${e.message}`;
+  } finally {
+    saveRenderBtn.disabled = false;
+  }
+});
+
+// ────────────────────────────────────────────────────────────────
+//  Three.js STL Viewer
+// ────────────────────────────────────────────────────────────────
+let threeRenderer = null;
+let threeScene    = null;
+let threeCamera   = null;
+let threeControls = null;
+let threeAnimId   = null;
+let threeMesh     = null;
+
+function initThreeViewer() {
+  if (typeof THREE === 'undefined') {
+    throw new Error('Three.js не загружен');
+  }
+  const container = document.getElementById('stl-canvas-container');
+  const w = container.clientWidth;
+  const h = container.clientHeight;
+
+  threeScene = new THREE.Scene();
+  threeScene.background = new THREE.Color(0x2a2a2e);
+
+  threeCamera = new THREE.PerspectiveCamera(45, w / h, 0.1, 5000);
+  threeCamera.position.set(0, 0, 200);
+
+  threeRenderer = new THREE.WebGLRenderer({ antialias: true });
+  threeRenderer.setPixelRatio(window.devicePixelRatio);
+  threeRenderer.setSize(w, h);
+  container.appendChild(threeRenderer.domElement);
+
+  threeControls = new THREE.OrbitControls(threeCamera, threeRenderer.domElement);
+  threeControls.enableDamping = true;
+  threeControls.dampingFactor = 0.05;
+
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+  threeScene.add(ambientLight);
+  const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+  dirLight.position.set(1, 2, 3);
+  threeScene.add(dirLight);
+  const dirLight2 = new THREE.DirectionalLight(0x8888ff, 0.3);
+  dirLight2.position.set(-2, -1, -1);
+  threeScene.add(dirLight2);
+
+  function animate() {
+    threeAnimId = requestAnimationFrame(animate);
+    threeControls.update();
+    threeRenderer.render(threeScene, threeCamera);
+  }
+  animate();
+
+  window.addEventListener('resize', () => {
+    const nw = container.clientWidth;
+    const nh = container.clientHeight;
+    threeCamera.aspect = nw / nh;
+    threeCamera.updateProjectionMatrix();
+    threeRenderer.setSize(nw, nh);
+  });
+}
+
+function loadStlIntoViewer(filename) {
+  const moduleId = getModuleId();
+  const placeholder = document.getElementById('viewer-placeholder');
+
+  if (threeMesh) {
+    threeScene.remove(threeMesh);
+    threeMesh.geometry.dispose();
+    threeMesh.material.dispose();
+    threeMesh = null;
+  }
+
+  placeholder.textContent = 'Загрузка...';
+
+  const loader = new THREE.STLLoader();
+  const url = `/api/modules/${moduleId}/stl-file/${encodeURIComponent(filename)}?t=${Date.now()}`;
+
+  loader.load(
+    url,
+    (geometry) => {
+      geometry.computeBoundingBox();
+      const box = geometry.boundingBox;
+      const center = new THREE.Vector3();
+      box.getCenter(center);
+      geometry.translate(-center.x, -center.y, -center.z);
+
+      const size = new THREE.Vector3();
+      box.getSize(size);
+      const maxDim = Math.max(size.x, size.y, size.z);
+      const fitDist = maxDim * 1.8;
+      threeCamera.position.set(fitDist * 0.6, fitDist * 0.4, fitDist);
+      threeCamera.near = fitDist * 0.001;
+      threeCamera.far  = fitDist * 100;
+      threeCamera.updateProjectionMatrix();
+      threeControls.target.set(0, 0, 0);
+      threeControls.update();
+
+      const material = new THREE.MeshPhongMaterial({
+        color: 0x4a9eff,
+        specular: 0x222222,
+        shininess: 40,
+        side: THREE.DoubleSide,
+      });
+      threeMesh = new THREE.Mesh(geometry, material);
+      threeScene.add(threeMesh);
+      placeholder.textContent = '';
+    },
+    undefined,
+    (err) => {
+      placeholder.textContent = `Ошибка загрузки STL: ${err.message || err}`;
+    }
+  );
+
+  // Sync STL select dropdown
+  const stlSelect = document.getElementById('stl-select');
+  if (stlSelect) stlSelect.value = filename;
+}
+
+// ────────────────────────────────────────────────────────────────
+//  STL file list
+// ────────────────────────────────────────────────────────────────
+const stlSelect = document.getElementById('stl-select');
+const reloadStlBtn = document.getElementById('reload-stl-btn');
+
+async function refreshStlList() {
+  const moduleId = getModuleId();
+  try {
+    const res = await fetch(`/api/modules/${moduleId}/stl-files`);
+    if (!res.ok) return;
+    const files = await res.json();
+
+    if (files.length === 0) {
+      stlSelect.style.display = 'none';
+      stlSelect.innerHTML = '';
+      return;
+    }
+    stlSelect.style.display = '';
+    const current = stlSelect.value;
+    stlSelect.innerHTML = files.map(f => `<option value="${f}">${f}</option>`).join('');
+    if (files.includes(current)) stlSelect.value = current;
+  } catch (_) {}
+}
+
+stlSelect.addEventListener('change', () => {
+  if (stlSelect.value) loadStlIntoViewer(stlSelect.value);
+});
+
+reloadStlBtn.addEventListener('click', async () => {
+  await refreshStlList();
+  if (stlSelect.value) loadStlIntoViewer(stlSelect.value);
+});
+
+// ────────────────────────────────────────────────────────────────
+//  Init
+// ────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', async () => {
+  // Module info runs unconditionally — must not depend on Three.js
+  await loadModuleInfo();
+  await loadScadFiles();
+  await refreshStlList();
+
+  try {
+    initThreeViewer();
+    if (stlSelect.options.length > 0) {
+      loadStlIntoViewer(stlSelect.value);
+    }
+  } catch (e) {
+    console.error('3D viewer init failed:', e);
+    const ph = document.getElementById('viewer-placeholder');
+    if (ph) ph.textContent = 'Ошибка инициализации 3D вьювера: ' + e.message;
+  }
 });
 </script>
-
 {% endblock %}
