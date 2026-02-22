@@ -9,6 +9,7 @@ import logging
 from models.associations import parent_child_module
 from models.module import ModuleStatus
 from service.brep_file_service import BrepFileService
+from service.git_manager import init_module_git_repo, is_module_git_repo_initialized
 
 router = APIRouter()
 
@@ -30,14 +31,14 @@ logger.addHandler(console_handler)
 
 class BasicObjectCreate(BaseModel):
     name: str
-    author: str
+    author: Optional[str] = None
     description: Optional[str] = None
     coordinates: Optional[Dict] = None
     role: Optional[str] = None
     role_description: Optional[str] = None
-    is_assembly: bool
+    is_assembly: bool = False
     is_shell: bool = False
-    brep_files: Dict[str, str]
+    brep_files: Optional[Dict[str, str]] = None
     parent_id: Optional[str] = None
     status: Optional[ModuleStatus] = None
 
@@ -51,36 +52,31 @@ async def create_basic_object(
     try:
         basic_object_data = {
             "name": item.name,
-            "author": item.author,
+            "author": item.author or "unknown",
             "description": item.description,
             "status": item.status if item.status else ModuleStatus.SKETCH
         }
 
-        # Prepare bounding contour data
         contour_data = {
             "is_assembly": item.is_assembly,
             "is_shell": item.is_shell,
-            "brep_files": {},  # BREP files will be handled by BrepFileService
+            "brep_files": {},
         }
 
-        # Execute all operations in one session
         with basic_repo.db_session.session() as db:
             basic_object = Module.create(**basic_object_data)
             db.add(basic_object)
             db.flush()
             logger.info(f"parent_id: {item.parent_id}, coordinates: {item.coordinates}")
 
-            # Если есть parent_id и coordinates, проверяем существование родителя и создаем связь
             if item.parent_id and item.coordinates:
-                # Проверяем существование родительского модуля
                 parent_module = db.query(Module).filter(Module.id == item.parent_id).first()
                 if not parent_module:
                     raise HTTPException(
                         status_code=404,
                         detail=f"Родительский модуль с ID {item.parent_id} не найден"
                     )
-                
-                # Получаем или создаем роль
+
                 role_id = None
                 if item.role:
                     role = role_repo.get_or_create_role(db, item.role, item.role_description)
@@ -94,28 +90,28 @@ async def create_basic_object(
                 )
                 db.execute(parent_child)
 
-            # Set basic object ID for contour
             contour_data["module_id"] = basic_object.id
             contour = BoundingContour.create(**contour_data)
-            print(f"DEBUG create_basic_object: Created contour with id={contour.id}, brep_files={contour.brep_files}")
-
             contour.module_id = basic_object.id
             db.add(contour)
 
             db.commit()
             db.refresh(basic_object)
-            print(f"DEBUG create_basic_object: After commit, contour brep_files = {contour.brep_files}")
 
-            # Handle BREP files if provided
-            if item.brep_files:
-                service = BrepFileService()
-                service.save_brep_files_from_dict(
-                    basic_object.id,
-                    item.brep_files,
-                    f"Initial BREP files for {item.name}"
-                )
+            module_id = basic_object.id
 
-        return {"ok": True, "id": str(basic_object.id)}
+        if not is_module_git_repo_initialized(module_id):
+            init_module_git_repo(module_id)
+
+        if item.brep_files:
+            service = BrepFileService()
+            service.save_brep_files_from_dict(
+                module_id,
+                item.brep_files,
+                f"Initial BREP files for {item.name}"
+            )
+
+        return {"ok": True, "id": str(module_id)}
 
     except Exception as e:
         logger.error(f"Ошибка при создании объекта: {str(e)}", exc_info=True)

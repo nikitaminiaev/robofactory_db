@@ -3,10 +3,343 @@
 
 {% block title %}Welcome{% endblock %}
 
+{% block extra_head %}
+<style>
+    .page-actions {
+        margin: 24px 0;
+        display: flex;
+        gap: 12px;
+        align-items: center;
+    }
+
+    .btn-primary {
+        background: #3498db;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background 0.2s;
+    }
+
+    .btn-primary:hover {
+        background: #2980b9;
+    }
+
+    .btn-secondary {
+        background: white;
+        color: #555;
+        border: 1px solid #ddd;
+        padding: 10px 20px;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background 0.2s, border-color 0.2s;
+    }
+
+    .btn-secondary:hover {
+        background: #f5f5f5;
+        border-color: #bbb;
+    }
+
+    /* Modal */
+    .modal-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.45);
+        z-index: 1000;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .modal-overlay.active {
+        display: flex;
+    }
+
+    .modal {
+        background: white;
+        border-radius: 10px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+        padding: 32px;
+        width: 100%;
+        max-width: 480px;
+        position: relative;
+    }
+
+    .modal-title {
+        font-size: 1.2em;
+        font-weight: 600;
+        color: #2c3e50;
+        margin: 0 0 24px 0;
+        padding-bottom: 12px;
+        border-bottom: 1px solid #eee;
+    }
+
+    .modal-close {
+        position: absolute;
+        top: 16px;
+        right: 18px;
+        background: none;
+        border: none;
+        font-size: 20px;
+        color: #999;
+        cursor: pointer;
+        line-height: 1;
+        padding: 4px;
+    }
+
+    .modal-close:hover {
+        color: #555;
+    }
+
+    .form-group {
+        margin-bottom: 18px;
+    }
+
+    .form-group label {
+        display: block;
+        font-size: 13px;
+        font-weight: 500;
+        color: #444;
+        margin-bottom: 6px;
+    }
+
+    .form-group label .required {
+        color: #e74c3c;
+        margin-left: 2px;
+    }
+
+    .form-group input[type="text"],
+    .form-group textarea {
+        width: 100%;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        padding: 9px 12px;
+        font-size: 14px;
+        color: #333;
+        box-sizing: border-box;
+        transition: border-color 0.2s;
+        font-family: inherit;
+    }
+
+    .form-group input[type="text"]:focus,
+    .form-group textarea:focus {
+        outline: none;
+        border-color: #3498db;
+        box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.12);
+    }
+
+    .form-group textarea {
+        resize: vertical;
+        min-height: 80px;
+    }
+
+    .form-group .hint {
+        font-size: 12px;
+        color: #999;
+        margin-top: 4px;
+    }
+
+    .checkbox-group {
+        display: flex;
+        gap: 24px;
+        margin-top: 4px;
+    }
+
+    .checkbox-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 14px;
+        color: #444;
+        cursor: pointer;
+        user-select: none;
+    }
+
+    .checkbox-label input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+        cursor: pointer;
+        accent-color: #3498db;
+    }
+
+    .modal-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 28px;
+        padding-top: 16px;
+        border-top: 1px solid #eee;
+    }
+
+    .error-message {
+        color: #e74c3c;
+        font-size: 13px;
+        margin-top: 12px;
+        display: none;
+    }
+
+    .success-message {
+        color: #27ae60;
+        font-size: 13px;
+        margin-top: 12px;
+        display: none;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <h1>Welcome to the Module API</h1>
-<p>
-    You can search for and view details of modules on the
-    <a href="/basic_object">Search Modules</a> page.
-</p>
+
+<div class="page-actions">
+    <button class="btn-primary" id="openCreateModal">+ Создать модуль</button>
+    <a href="/basic_object" class="btn-secondary">Поиск модулей</a>
+</div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="createModuleOverlay">
+    <div class="modal">
+        <button class="modal-close" id="closeModal" title="Закрыть">&times;</button>
+        <h2 class="modal-title">Новый модуль</h2>
+
+        <form id="createModuleForm" novalidate>
+            <div class="form-group">
+                <label for="moduleName">Название <span class="required">*</span></label>
+                <input type="text" id="moduleName" name="name" placeholder="Введите название модуля" autocomplete="off">
+            </div>
+
+            <div class="form-group">
+                <label for="moduleAuthor">Автор</label>
+                <input type="text" id="moduleAuthor" name="author" placeholder="Имя автора (необязательно)" autocomplete="off">
+            </div>
+
+            <div class="form-group">
+                <label for="moduleDescription">Описание</label>
+                <textarea id="moduleDescription" name="description" placeholder="Краткое описание модуля (необязательно)"></textarea>
+            </div>
+
+            <div class="form-group">
+                <label>Тип контура</label>
+                <div class="checkbox-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="isAssembly" name="is_assembly">
+                        Сборка
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="isShell" name="is_shell">
+                        Оболочка
+                    </label>
+                </div>
+                <div class="hint">Отметьте, если модуль является сборкой или оболочкой</div>
+            </div>
+
+            <div class="error-message" id="formError"></div>
+            <div class="success-message" id="formSuccess"></div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn-secondary" id="cancelCreate">Отмена</button>
+                <button type="submit" class="btn-primary" id="submitCreate">Создать</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    const overlay = document.getElementById('createModuleOverlay');
+    const form = document.getElementById('createModuleForm');
+    const errorEl = document.getElementById('formError');
+    const successEl = document.getElementById('formSuccess');
+    const submitBtn = document.getElementById('submitCreate');
+
+    function openModal() {
+        overlay.classList.add('active');
+        document.getElementById('moduleName').focus();
+    }
+
+    function closeModal() {
+        overlay.classList.remove('active');
+        form.reset();
+        errorEl.style.display = 'none';
+        successEl.style.display = 'none';
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Создать';
+    }
+
+    document.getElementById('openCreateModal').addEventListener('click', openModal);
+    document.getElementById('closeModal').addEventListener('click', closeModal);
+    document.getElementById('cancelCreate').addEventListener('click', closeModal);
+
+    overlay.addEventListener('click', function (e) {
+        if (e.target === overlay) closeModal();
+    });
+
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') closeModal();
+    });
+
+    form.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        errorEl.style.display = 'none';
+        successEl.style.display = 'none';
+
+        const name = document.getElementById('moduleName').value.trim();
+        if (!name) {
+            errorEl.textContent = 'Название модуля обязательно для заполнения.';
+            errorEl.style.display = 'block';
+            document.getElementById('moduleName').focus();
+            return;
+        }
+
+        const author = document.getElementById('moduleAuthor').value.trim() || null;
+        const description = document.getElementById('moduleDescription').value.trim() || null;
+        const isAssembly = document.getElementById('isAssembly').checked;
+        const isShell = document.getElementById('isShell').checked;
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Создание...';
+
+        try {
+            const response = await fetch('/api/basic_object/', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    name,
+                    author,
+                    description,
+                    is_assembly: isAssembly,
+                    is_shell: isShell,
+                })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                errorEl.textContent = data.detail || 'Ошибка при создании модуля.';
+                errorEl.style.display = 'block';
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Создать';
+                return;
+            }
+
+            successEl.textContent = `Модуль создан успешно. ID: ${data.id}`;
+            successEl.style.display = 'block';
+            submitBtn.textContent = 'Создать ещё';
+            submitBtn.disabled = false;
+
+            setTimeout(() => {
+                window.location.href = `/basic_object/${data.id}`;
+            }, 1200);
+
+        } catch (err) {
+            errorEl.textContent = 'Сетевая ошибка. Проверьте соединение.';
+            errorEl.style.display = 'block';
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Создать';
+        }
+    });
+</script>
 {% endblock %}
