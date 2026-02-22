@@ -58,8 +58,9 @@ def _write_initial_git_files(repo_path: Path) -> None:
             "!.gitignore",
             "!*.scad",
             "!brep_files/",
-            "!brep_files/.gitkeep",
-            "stl_files/",
+            "!brep_files/**",
+            "!stl_files/",
+            "!stl_files/**",
             "",
         ]
     )
@@ -68,6 +69,10 @@ def _write_initial_git_files(repo_path: Path) -> None:
     brep_dir = repo_path / "brep_files"
     brep_dir.mkdir(parents=True, exist_ok=True)
     (brep_dir / ".gitkeep").write_text("", encoding="utf-8")
+
+    stl_dir = repo_path / "stl_files"
+    stl_dir.mkdir(parents=True, exist_ok=True)
+    (stl_dir / ".gitkeep").write_text("", encoding="utf-8")
 
 
 def init_module_git_repo(module_id: UUID) -> str:
@@ -103,7 +108,7 @@ def init_module_git_repo(module_id: UUID) -> str:
         run(["git", "config", "user.name", "RoboFactory System"], cwd=repo_path, check=True, capture_output=True)
         run(["git", "config", "user.email", "system@robofactory.local"], cwd=repo_path, check=True, capture_output=True)
         _write_initial_git_files(repo_path)
-        run(["git", "add", ".gitignore", "brep_files/.gitkeep"], cwd=repo_path, check=True, capture_output=True)
+        run(["git", "add", ".gitignore", "brep_files/.gitkeep", "stl_files/.gitkeep"], cwd=repo_path, check=True, capture_output=True)
         run(["git", "commit", "-m", "Initial repository setup"], cwd=repo_path, check=True, capture_output=True)
         return str(repo_path)
     except CalledProcessError as e:

@@ -72,37 +72,18 @@
     }
 
     .modal-header {
-        display: flex;
         flex-shrink: 0;
-        align-items: center;
-        justify-content: space-between;
-        padding: 16px 20px;
-        background: #2c3e50;
+        padding: 14px 20px;
+        background: #f0f4f8;
+        border-bottom: 1px solid #dde3ea;
     }
 
     .modal-title {
-        font-size: 15px;
+        font-size: 14px;
         font-weight: 600;
-        color: white;
+        color: #2c3e50;
         margin: 0;
         letter-spacing: 0.01em;
-    }
-
-    .modal-close {
-        background: none;
-        border: none;
-        font-size: 20px;
-        color: rgba(255, 255, 255, 0.7);
-        cursor: pointer;
-        line-height: 1;
-        padding: 2px 4px;
-        border-radius: 4px;
-        transition: color 0.15s, background 0.15s;
-    }
-
-    .modal-close:hover {
-        color: white;
-        background: rgba(255, 255, 255, 0.12);
     }
 
     .modal-body {
@@ -193,6 +174,61 @@
         border-top: 1px solid #eee;
     }
 
+    .file-drop-area {
+        border: 2px dashed #c8d6e5;
+        border-radius: 6px;
+        padding: 16px;
+        text-align: center;
+        cursor: pointer;
+        transition: border-color 0.2s, background 0.2s;
+        position: relative;
+    }
+
+    .file-drop-area:hover,
+    .file-drop-area.drag-over {
+        border-color: #3498db;
+        background: #f0f8ff;
+    }
+
+    .file-drop-area input[type="file"] {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        cursor: pointer;
+        width: 100%;
+        height: 100%;
+    }
+
+    .file-drop-label {
+        font-size: 13px;
+        color: #888;
+        pointer-events: none;
+    }
+
+    .file-drop-label span {
+        color: #3498db;
+        font-weight: 500;
+    }
+
+    .file-list {
+        margin-top: 8px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    .file-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        background: #eaf4fd;
+        color: #2471a3;
+        border: 1px solid #aed6f1;
+        border-radius: 4px;
+        padding: 3px 8px;
+        font-size: 12px;
+    }
+
     .error-message {
         color: #e74c3c;
         font-size: 13px;
@@ -222,7 +258,6 @@
     <div class="modal">
         <div class="modal-header">
             <h2 class="modal-title">New Module</h2>
-            <button class="modal-close" id="closeModal" title="Close">&times;</button>
         </div>
 
         <form id="createModuleForm" novalidate>
@@ -257,6 +292,17 @@
                     <div class="hint">Check if the module is an assembly or shell</div>
                 </div>
 
+                <div class="form-group">
+                    <label>Files <span style="font-weight:400;color:#999">(optional — .brep, .stl, .scad)</span></label>
+                    <div class="file-drop-area" id="fileDropArea">
+                        <input type="file" id="moduleFiles" name="files" multiple accept=".brep,.stl,.scad">
+                        <div class="file-drop-label">
+                            <span>Click to select</span> or drag files here
+                        </div>
+                    </div>
+                    <div class="file-list" id="fileList"></div>
+                </div>
+
                 <div class="error-message" id="formError"></div>
                 <div class="success-message" id="formSuccess"></div>
             </div>
@@ -275,6 +321,9 @@
     const errorEl = document.getElementById('formError');
     const successEl = document.getElementById('formSuccess');
     const submitBtn = document.getElementById('submitCreate');
+    const fileInput = document.getElementById('moduleFiles');
+    const fileList = document.getElementById('fileList');
+    const dropArea = document.getElementById('fileDropArea');
 
     function openModal() {
         overlay.classList.add('active');
@@ -284,14 +333,46 @@
     function closeModal() {
         overlay.classList.remove('active');
         form.reset();
+        fileList.innerHTML = '';
         errorEl.style.display = 'none';
         successEl.style.display = 'none';
         submitBtn.disabled = false;
         submitBtn.textContent = 'Create';
     }
 
+    function renderFileList(files) {
+        fileList.innerHTML = '';
+        Array.from(files).forEach(function (f) {
+            const tag = document.createElement('span');
+            tag.className = 'file-tag';
+            tag.textContent = f.name;
+            fileList.appendChild(tag);
+        });
+    }
+
+    fileInput.addEventListener('change', function () {
+        renderFileList(this.files);
+    });
+
+    dropArea.addEventListener('dragover', function (e) {
+        e.preventDefault();
+        dropArea.classList.add('drag-over');
+    });
+
+    dropArea.addEventListener('dragleave', function () {
+        dropArea.classList.remove('drag-over');
+    });
+
+    dropArea.addEventListener('drop', function (e) {
+        e.preventDefault();
+        dropArea.classList.remove('drag-over');
+        const dt = new DataTransfer();
+        Array.from(e.dataTransfer.files).forEach(function (f) { dt.items.add(f); });
+        fileInput.files = dt.files;
+        renderFileList(fileInput.files);
+    });
+
     document.getElementById('openCreateModal').addEventListener('click', openModal);
-    document.getElementById('closeModal').addEventListener('click', closeModal);
     document.getElementById('cancelCreate').addEventListener('click', closeModal);
 
     overlay.addEventListener('click', function (e) {
@@ -315,25 +396,29 @@
             return;
         }
 
-        const author = document.getElementById('moduleAuthor').value.trim() || null;
-        const description = document.getElementById('moduleDescription').value.trim() || null;
-        const isAssembly = document.getElementById('isAssembly').checked;
-        const isShell = document.getElementById('isShell').checked;
+        const formData = new FormData();
+        formData.append('name', name);
+
+        const author = document.getElementById('moduleAuthor').value.trim();
+        if (author) formData.append('author', author);
+
+        const description = document.getElementById('moduleDescription').value.trim();
+        if (description) formData.append('description', description);
+
+        formData.append('is_assembly', document.getElementById('isAssembly').checked);
+        formData.append('is_shell', document.getElementById('isShell').checked);
+
+        Array.from(fileInput.files).forEach(function (f) {
+            formData.append('files', f, f.name);
+        });
 
         submitBtn.disabled = true;
         submitBtn.textContent = 'Creating...';
 
         try {
-            const response = await fetch('/api/basic_object/', {
+            const response = await fetch('/api/basic_object/form', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    name,
-                    author,
-                    description,
-                    is_assembly: isAssembly,
-                    is_shell: isShell,
-                })
+                body: formData,
             });
 
             const data = await response.json();
@@ -348,10 +433,8 @@
 
             successEl.textContent = `Module created. ID: ${data.id}`;
             successEl.style.display = 'block';
-            submitBtn.textContent = 'Create another';
-            submitBtn.disabled = false;
 
-            setTimeout(() => {
+            setTimeout(function () {
                 window.location.href = `/basic_object/${data.id}`;
             }, 1200);
 

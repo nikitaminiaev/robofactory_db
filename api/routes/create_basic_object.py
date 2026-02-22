@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
+from pathlib import Path
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 from repository.module_repository import ModuleRepository
 from repository.role_repository import RoleRepository
@@ -9,7 +10,9 @@ import logging
 from models.associations import parent_child_module
 from models.module import ModuleStatus
 from service.brep_file_service import BrepFileService
-from service.git_manager import init_module_git_repo, is_module_git_repo_initialized
+from service.constants import get_module_resource_path, get_module_stl_directory, build_brep_relative_path, build_stl_relative_path
+from service.git_manager import commit_module_changes, init_module_git_repo, is_module_git_repo_initialized
+from repository.bounding_contour_repository import BoundingContourRepository
 
 router = APIRouter()
 
@@ -29,6 +32,46 @@ console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
 
 
+_EXTENSION_SUBDIR: Dict[str, Optional[str]] = {
+    ".brep": "brep_files",
+    ".stl": "stl_files",
+    ".scad": None,  # root of module directory
+}
+
+ALLOWED_EXTENSIONS = set(_EXTENSION_SUBDIR.keys())
+
+
+async def _save_uploaded_files(module_id: UUID, files: List[UploadFile]) -> Dict[str, str]:
+    """
+    Saves uploaded files to appropriate subdirectories based on extension.
+    Returns dict of saved brep files {filename: relative_path} for BoundingContour.
+    """
+    repo_path = get_module_resource_path(module_id)
+    brep_saved: Dict[str, str] = {}
+
+    for upload in files:
+        filename = upload.filename or ""
+        ext = Path(filename).suffix.lower()
+
+        if ext not in ALLOWED_EXTENSIONS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported file type: {ext}. Allowed: {', '.join(ALLOWED_EXTENSIONS)}"
+            )
+
+        subdir = _EXTENSION_SUBDIR[ext]
+        target_dir = repo_path / subdir if subdir else repo_path
+        target_dir.mkdir(parents=True, exist_ok=True)
+
+        content = await upload.read()
+        (target_dir / filename).write_bytes(content)
+
+        if ext == ".brep":
+            brep_saved[filename] = build_brep_relative_path(module_id, filename)
+
+    return brep_saved
+
+
 class BasicObjectCreate(BaseModel):
     name: str
     author: Optional[str] = None
@@ -43,62 +86,88 @@ class BasicObjectCreate(BaseModel):
     status: Optional[ModuleStatus] = None
 
 
+async def _create_module_in_db(
+    name: str,
+    author: Optional[str],
+    description: Optional[str],
+    is_assembly: bool,
+    is_shell: bool,
+    status: Optional[ModuleStatus],
+    parent_id: Optional[str],
+    coordinates: Optional[Dict],
+    role: Optional[str],
+    role_description: Optional[str],
+    basic_repo: ModuleRepository,
+    role_repo: RoleRepository,
+) -> UUID:
+    basic_object_data = {
+        "name": name,
+        "author": author or "unknown",
+        "description": description,
+        "status": status or ModuleStatus.SKETCH,
+    }
+    contour_data = {"is_assembly": is_assembly, "is_shell": is_shell, "brep_files": {}}
+
+    with basic_repo.db_session.session() as db:
+        basic_object = Module.create(**basic_object_data)
+        db.add(basic_object)
+        db.flush()
+        logger.info(f"parent_id: {parent_id}, coordinates: {coordinates}")
+
+        if parent_id and coordinates:
+            parent_module = db.query(Module).filter(Module.id == parent_id).first()
+            if not parent_module:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Родительский модуль с ID {parent_id} не найден"
+                )
+
+            role_id = None
+            if role:
+                role_obj = role_repo.get_or_create_role(db, role, role_description)
+                role_id = role_obj.id
+
+            db.execute(
+                parent_child_module.insert().values(
+                    parent_id=parent_id,
+                    child_id=basic_object.id,
+                    coordinates=coordinates,
+                    role_id=role_id,
+                )
+            )
+
+        contour_data["module_id"] = basic_object.id
+        contour = BoundingContour.create(**contour_data)
+        contour.module_id = basic_object.id
+        db.add(contour)
+
+        db.commit()
+        db.refresh(basic_object)
+        return basic_object.id
+
+
 @router.post("/api/basic_object/")
 async def create_basic_object(
         item: BasicObjectCreate,
         basic_repo: ModuleRepository = Depends(),
         role_repo: RoleRepository = Depends()
 ):
+    """JSON endpoint — used by FreeCAD client."""
     try:
-        basic_object_data = {
-            "name": item.name,
-            "author": item.author or "unknown",
-            "description": item.description,
-            "status": item.status if item.status else ModuleStatus.SKETCH
-        }
-
-        contour_data = {
-            "is_assembly": item.is_assembly,
-            "is_shell": item.is_shell,
-            "brep_files": {},
-        }
-
-        with basic_repo.db_session.session() as db:
-            basic_object = Module.create(**basic_object_data)
-            db.add(basic_object)
-            db.flush()
-            logger.info(f"parent_id: {item.parent_id}, coordinates: {item.coordinates}")
-
-            if item.parent_id and item.coordinates:
-                parent_module = db.query(Module).filter(Module.id == item.parent_id).first()
-                if not parent_module:
-                    raise HTTPException(
-                        status_code=404,
-                        detail=f"Родительский модуль с ID {item.parent_id} не найден"
-                    )
-
-                role_id = None
-                if item.role:
-                    role = role_repo.get_or_create_role(db, item.role, item.role_description)
-                    role_id = role.id
-
-                parent_child = parent_child_module.insert().values(
-                    parent_id=item.parent_id,
-                    child_id=basic_object.id,
-                    coordinates=item.coordinates,
-                    role_id=role_id
-                )
-                db.execute(parent_child)
-
-            contour_data["module_id"] = basic_object.id
-            contour = BoundingContour.create(**contour_data)
-            contour.module_id = basic_object.id
-            db.add(contour)
-
-            db.commit()
-            db.refresh(basic_object)
-
-            module_id = basic_object.id
+        module_id = await _create_module_in_db(
+            name=item.name,
+            author=item.author,
+            description=item.description,
+            is_assembly=item.is_assembly,
+            is_shell=item.is_shell,
+            status=item.status,
+            parent_id=item.parent_id,
+            coordinates=item.coordinates,
+            role=item.role,
+            role_description=item.role_description,
+            basic_repo=basic_repo,
+            role_repo=role_repo,
+        )
 
         if not is_module_git_repo_initialized(module_id):
             init_module_git_repo(module_id)
@@ -117,10 +186,59 @@ async def create_basic_object(
         logger.error(f"Ошибка при создании объекта: {str(e)}", exc_info=True)
         if isinstance(e, HTTPException):
             raise e
-        raise HTTPException(
-            status_code=500,
-            detail=f"Ошибка при создании объекта: {str(e)}"
+        raise HTTPException(status_code=500, detail=f"Ошибка при создании объекта: {str(e)}")
+
+
+@router.post("/api/basic_object/form")
+async def create_basic_object_form(
+        name: str = Form(...),
+        author: Optional[str] = Form(None),
+        description: Optional[str] = Form(None),
+        is_assembly: bool = Form(False),
+        is_shell: bool = Form(False),
+        parent_id: Optional[str] = Form(None),
+        status: Optional[str] = Form(None),
+        files: Optional[List[UploadFile]] = File(None),
+        basic_repo: ModuleRepository = Depends(),
+        role_repo: RoleRepository = Depends()
+):
+    """Multipart/form-data endpoint — used by the web UI."""
+    try:
+        parsed_status = ModuleStatus(status) if status else ModuleStatus.SKETCH
+
+        module_id = await _create_module_in_db(
+            name=name,
+            author=author,
+            description=description,
+            is_assembly=is_assembly,
+            is_shell=is_shell,
+            status=parsed_status,
+            parent_id=parent_id,
+            coordinates=None,
+            role=None,
+            role_description=None,
+            basic_repo=basic_repo,
+            role_repo=role_repo,
         )
+
+        if not is_module_git_repo_initialized(module_id):
+            init_module_git_repo(module_id)
+
+        non_empty_files = [f for f in (files or []) if f.filename]
+        if non_empty_files:
+            brep_saved = await _save_uploaded_files(module_id, non_empty_files)
+            commit_module_changes(module_id, f"Add initial files for {name}")
+
+            if brep_saved:
+                BoundingContourRepository().update_brep_files(module_id, brep_saved)
+
+        return {"ok": True, "id": str(module_id)}
+
+    except Exception as e:
+        logger.error(f"Ошибка при создании объекта (form): {str(e)}", exc_info=True)
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=f"Ошибка при создании объекта: {str(e)}")
 
 
 class ChildRelation(BaseModel):
