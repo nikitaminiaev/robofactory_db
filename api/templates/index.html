@@ -61,39 +61,56 @@
     }
 
     .modal {
+        display: flex;
+        flex-direction: column;
         background: white;
         border-radius: 10px;
         box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
-        padding: 32px;
         width: 100%;
         max-width: 480px;
-        position: relative;
+        overflow: hidden;
+    }
+
+    .modal-header {
+        display: flex;
+        flex-shrink: 0;
+        align-items: center;
+        justify-content: space-between;
+        padding: 16px 20px;
+        background: #2c3e50;
     }
 
     .modal-title {
-        font-size: 1.2em;
+        font-size: 15px;
         font-weight: 600;
-        color: #2c3e50;
-        margin: 0 0 24px 0;
-        padding-bottom: 12px;
-        border-bottom: 1px solid #eee;
+        color: white;
+        margin: 0;
+        letter-spacing: 0.01em;
     }
 
     .modal-close {
-        position: absolute;
-        top: 16px;
-        right: 18px;
         background: none;
         border: none;
         font-size: 20px;
-        color: #999;
+        color: rgba(255, 255, 255, 0.7);
         cursor: pointer;
         line-height: 1;
-        padding: 4px;
+        padding: 2px 4px;
+        border-radius: 4px;
+        transition: color 0.15s, background 0.15s;
     }
 
     .modal-close:hover {
-        color: #555;
+        color: white;
+        background: rgba(255, 255, 255, 0.12);
+    }
+
+    .modal-body {
+        padding: 28px 28px 0;
+    }
+
+    .modal-footer {
+        padding: 0 28px 24px;
     }
 
     .form-group {
@@ -171,7 +188,7 @@
         display: flex;
         justify-content: flex-end;
         gap: 10px;
-        margin-top: 28px;
+        margin-top: 24px;
         padding-top: 16px;
         border-top: 1px solid #eee;
     }
@@ -196,53 +213,57 @@
 <h1>Welcome to the Module API</h1>
 
 <div class="page-actions">
-    <button class="btn-primary" id="openCreateModal">+ Создать модуль</button>
-    <a href="/basic_object" class="btn-secondary">Поиск модулей</a>
+    <button class="btn-primary" id="openCreateModal">+ New Module</button>
+    <a href="/basic_object" class="btn-secondary">Search Modules</a>
 </div>
 
 <!-- Modal -->
 <div class="modal-overlay" id="createModuleOverlay">
     <div class="modal">
-        <button class="modal-close" id="closeModal" title="Закрыть">&times;</button>
-        <h2 class="modal-title">Новый модуль</h2>
+        <div class="modal-header">
+            <h2 class="modal-title">New Module</h2>
+            <button class="modal-close" id="closeModal" title="Close">&times;</button>
+        </div>
 
         <form id="createModuleForm" novalidate>
-            <div class="form-group">
-                <label for="moduleName">Название <span class="required">*</span></label>
-                <input type="text" id="moduleName" name="name" placeholder="Введите название модуля" autocomplete="off">
-            </div>
-
-            <div class="form-group">
-                <label for="moduleAuthor">Автор</label>
-                <input type="text" id="moduleAuthor" name="author" placeholder="Имя автора (необязательно)" autocomplete="off">
-            </div>
-
-            <div class="form-group">
-                <label for="moduleDescription">Описание</label>
-                <textarea id="moduleDescription" name="description" placeholder="Краткое описание модуля (необязательно)"></textarea>
-            </div>
-
-            <div class="form-group">
-                <label>Тип контура</label>
-                <div class="checkbox-group">
-                    <label class="checkbox-label">
-                        <input type="checkbox" id="isAssembly" name="is_assembly">
-                        Сборка
-                    </label>
-                    <label class="checkbox-label">
-                        <input type="checkbox" id="isShell" name="is_shell">
-                        Оболочка
-                    </label>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="moduleName">Name <span class="required">*</span></label>
+                    <input type="text" id="moduleName" name="name" placeholder="Enter module name" autocomplete="off">
                 </div>
-                <div class="hint">Отметьте, если модуль является сборкой или оболочкой</div>
-            </div>
 
-            <div class="error-message" id="formError"></div>
-            <div class="success-message" id="formSuccess"></div>
+                <div class="form-group">
+                    <label for="moduleAuthor">Author</label>
+                    <input type="text" id="moduleAuthor" name="author" placeholder="Author name (optional)" autocomplete="off">
+                </div>
+
+                <div class="form-group">
+                    <label for="moduleDescription">Description</label>
+                    <textarea id="moduleDescription" name="description" placeholder="Brief module description (optional)"></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label>Contour type</label>
+                    <div class="checkbox-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="isAssembly" name="is_assembly">
+                            Assembly
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="isShell" name="is_shell">
+                            Shell
+                        </label>
+                    </div>
+                    <div class="hint">Check if the module is an assembly or shell</div>
+                </div>
+
+                <div class="error-message" id="formError"></div>
+                <div class="success-message" id="formSuccess"></div>
+            </div>
 
             <div class="modal-footer">
-                <button type="button" class="btn-secondary" id="cancelCreate">Отмена</button>
-                <button type="submit" class="btn-primary" id="submitCreate">Создать</button>
+                <button type="button" class="btn-secondary" id="cancelCreate">Cancel</button>
+                <button type="submit" class="btn-primary" id="submitCreate">Create</button>
             </div>
         </form>
     </div>
@@ -266,7 +287,7 @@
         errorEl.style.display = 'none';
         successEl.style.display = 'none';
         submitBtn.disabled = false;
-        submitBtn.textContent = 'Создать';
+        submitBtn.textContent = 'Create';
     }
 
     document.getElementById('openCreateModal').addEventListener('click', openModal);
@@ -288,7 +309,7 @@
 
         const name = document.getElementById('moduleName').value.trim();
         if (!name) {
-            errorEl.textContent = 'Название модуля обязательно для заполнения.';
+            errorEl.textContent = 'Module name is required.';
             errorEl.style.display = 'block';
             document.getElementById('moduleName').focus();
             return;
@@ -300,7 +321,7 @@
         const isShell = document.getElementById('isShell').checked;
 
         submitBtn.disabled = true;
-        submitBtn.textContent = 'Создание...';
+        submitBtn.textContent = 'Creating...';
 
         try {
             const response = await fetch('/api/basic_object/', {
@@ -318,16 +339,16 @@
             const data = await response.json();
 
             if (!response.ok) {
-                errorEl.textContent = data.detail || 'Ошибка при создании модуля.';
+                errorEl.textContent = data.detail || 'Failed to create module.';
                 errorEl.style.display = 'block';
                 submitBtn.disabled = false;
-                submitBtn.textContent = 'Создать';
+                submitBtn.textContent = 'Create';
                 return;
             }
 
-            successEl.textContent = `Модуль создан успешно. ID: ${data.id}`;
+            successEl.textContent = `Module created. ID: ${data.id}`;
             successEl.style.display = 'block';
-            submitBtn.textContent = 'Создать ещё';
+            submitBtn.textContent = 'Create another';
             submitBtn.disabled = false;
 
             setTimeout(() => {
@@ -335,10 +356,10 @@
             }, 1200);
 
         } catch (err) {
-            errorEl.textContent = 'Сетевая ошибка. Проверьте соединение.';
+            errorEl.textContent = 'Network error. Please check your connection.';
             errorEl.style.display = 'block';
             submitBtn.disabled = false;
-            submitBtn.textContent = 'Создать';
+            submitBtn.textContent = 'Create';
         }
     });
 </script>
