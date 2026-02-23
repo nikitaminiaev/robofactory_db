@@ -645,3 +645,33 @@ button:hover {
 .modal-actions button {
     padding: 10px 20px;
 }
+
+.breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    color: #666;
+    margin-bottom: 20px;
+    padding: 8px 0;
+}
+
+.breadcrumb a {
+    color: #3498db;
+    text-decoration: none;
+}
+
+.breadcrumb a:hover {
+    color: #2980b9;
+    text-decoration: underline;
+}
+
+.breadcrumb-separator {
+    color: #aaa;
+    user-select: none;
+}
+
+.breadcrumb-current {
+    color: #333;
+    font-weight: 500;
+}
