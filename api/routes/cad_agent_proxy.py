@@ -27,6 +27,18 @@ def _cad_agent_base_url() -> str:
     return os.getenv("CAD_AGENT_URL", "http://cad-agent:8010").rstrip("/")
 
 
+@router.get("/cad-agent/health")
+async def cad_agent_health():
+    upstream_url = f"{_cad_agent_base_url()}/health"
+    upstream_request = urllib.request.Request(upstream_url, method="GET")
+    try:
+        with urllib.request.urlopen(upstream_request, timeout=3) as response:
+            body = response.read().decode("utf-8")
+            return json.loads(body)
+    except (urllib.error.URLError, urllib.error.HTTPError):
+        raise HTTPException(status_code=503, detail="CAD agent недоступен")
+
+
 @router.get("/modules/{module_id}/cad-agent/has-scad")
 async def has_scad_file(module_id: str):
     try:
