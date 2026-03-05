@@ -194,42 +194,52 @@ const GitHistory = (function() {
 
     /**
      * Выполнение checkout на указанный коммит
+     * @param {string} commitHash
+     * @param {boolean} force - сбросить незакоммиченные изменения перед checkout
      */
-    function performCheckout(commitHash) {
+    function performCheckout(commitHash, force) {
         const statusDiv = $('#checkout-status');
         statusDiv.removeClass('success error').text('Выполняется checkout...');
 
-        // Блокируем все кнопки checkout
         $('.checkout-button, .checkout-btn-small').prop('disabled', true);
 
         $.ajax({
             url: `/api/modules/${moduleId}/checkout`,
             method: 'POST',
             contentType: 'application/json',
-            data: JSON.stringify({ commit_hash: commitHash }),
+            data: JSON.stringify({ commit_hash: commitHash, force: !!force }),
             success: function(response) {
                 statusDiv
                     .removeClass('error')
                     .addClass('success')
                     .text('✓ ' + response.message);
 
-                // Обновляем текущий коммит
                 currentCommitHash = commitHash;
                 updateCurrentCommitDisplay();
                 renderCommitsTable();
-
-                // Обновляем граф
                 renderGraph();
             },
             error: function(xhr) {
-                const errorMsg = xhr.responseJSON ? xhr.responseJSON.detail : 'Неизвестная ошибка';
-                statusDiv
-                    .removeClass('success')
-                    .addClass('error')
-                    .text('✗ Ошибка: ' + errorMsg);
+                if (xhr.status === 409) {
+                    const confirmed = window.confirm(
+                        'В рабочей директории есть незакоммиченные изменения.\n\n' +
+                        'Они будут сброшены (git checkout -- .). Продолжить?'
+                    );
+                    if (confirmed) {
+                        statusDiv.removeClass('success error').text('');
+                        performCheckout(commitHash, true);
+                        return;
+                    }
+                    statusDiv.removeClass('success error').text('');
+                } else {
+                    const errorMsg = xhr.responseJSON ? xhr.responseJSON.detail : 'Неизвестная ошибка';
+                    statusDiv
+                        .removeClass('success')
+                        .addClass('error')
+                        .text('✗ Ошибка: ' + errorMsg);
+                }
             },
             complete: function() {
-                // Разблокируем кнопки
                 $('.checkout-button, .checkout-btn-small').prop('disabled', false);
             }
         });

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from uuid import UUID
 from repository.module_version_repository import ModuleVersionRepository
 from schemas.module_version_dto import ModuleVersionDTO
-from service.git_manager import get_module_commit_history, checkout_module_commit
+from service.git_manager import get_module_commit_history, checkout_module_commit, DirtyWorkingTreeError
 from pydantic import BaseModel
 
 router = APIRouter()
@@ -64,6 +64,7 @@ async def get_module_commits(
 
 class CheckoutRequest(BaseModel):
     commit_hash: str
+    force: bool = False
 
 
 @router.post("/modules/{module_id}/checkout")
@@ -71,23 +72,15 @@ async def checkout_module(
     module_id: str,
     request: CheckoutRequest
 ):
-    """
-    Выполняет git checkout на указанный коммит для модуля.
-    
-    Args:
-        module_id: UUID модуля
-        request: Объект с commit_hash для checkout
-        
-    Returns:
-        Сообщение об успешном checkout
-    """
     try:
         module_uuid = UUID(module_id)
-        checkout_module_commit(module_uuid, request.commit_hash)
+        checkout_module_commit(module_uuid, request.commit_hash, force=request.force)
         return {
             "message": f"Успешно переключено на коммит {request.commit_hash}",
             "commit_hash": request.commit_hash
         }
+    except DirtyWorkingTreeError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:

@@ -246,6 +246,15 @@ def get_module_git_diff(module_id: UUID) -> str:
         return ""
 
 
+class DirtyWorkingTreeError(Exception):
+    """Рабочее дерево содержит незакоммиченные изменения."""
+
+
+def _has_uncommitted_changes(repo_path: Path) -> bool:
+    result = run(["git", "status", "--porcelain"], cwd=repo_path, capture_output=True, text=True)
+    return bool(result.stdout.strip())
+
+
 def _ensure_on_branch(repo_path: Path) -> None:
     """
     Если репозиторий в detached HEAD, переключается обратно на основную ветку.
@@ -260,7 +269,7 @@ def _ensure_on_branch(repo_path: Path) -> None:
             return
 
 
-def checkout_module_commit(module_id: UUID, commit_hash: str) -> None:
+def checkout_module_commit(module_id: UUID, commit_hash: str, force: bool = False) -> None:
     """
     Переключает HEAD на указанный коммит (detached HEAD).
 
@@ -271,8 +280,10 @@ def checkout_module_commit(module_id: UUID, commit_hash: str) -> None:
     Args:
         module_id: UUID модуля
         commit_hash: Хеш коммита
+        force: Если True — сбрасывает незакоммиченные изменения перед checkout
 
     Raises:
+        DirtyWorkingTreeError: Если есть незакоммиченные изменения и force=False
         CalledProcessError: Если git команды не удались
         ValueError: Если commit_hash пустой или невалидный
     """
@@ -283,6 +294,14 @@ def checkout_module_commit(module_id: UUID, commit_hash: str) -> None:
 
     try:
         _ensure_on_branch(repo_path)
+
+        if _has_uncommitted_changes(repo_path):
+            if not force:
+                raise DirtyWorkingTreeError("Есть незакоммиченные изменения")
+            run(["git", "checkout", "--", "."], cwd=repo_path, check=True, capture_output=True, text=True)
+
         run(["git", "checkout", commit_hash], cwd=repo_path, check=True, capture_output=True, text=True)
+    except DirtyWorkingTreeError:
+        raise
     except CalledProcessError as e:
         raise CalledProcessError(e.returncode, e.cmd, e.output, e.stderr) from e
