@@ -34,16 +34,73 @@
     font-family: inherit;
   }
   #agent-output {
-    background: #f7f7f7;
     border: 1px solid #ddd;
     border-radius: 4px;
-    padding: 12px;
     min-height: 80px;
-    max-height: 300px;
-    overflow: auto;
-    white-space: pre-wrap;
+    max-height: 420px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px;
+    background: #fafafa;
+  }
+  .chat-msg {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-width: 88%;
+  }
+  .chat-msg.user { align-self: flex-end; align-items: flex-end; }
+  .chat-msg.agent { align-self: flex-start; align-items: flex-start; }
+  .chat-bubble {
+    padding: 8px 12px;
+    border-radius: 12px;
     font-size: 13px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .chat-msg.user .chat-bubble {
+    background: #3a7bd5;
+    color: #fff;
+    border-bottom-right-radius: 3px;
+  }
+  .chat-msg.agent .chat-bubble {
+    background: #fff;
+    border: 1px solid #ddd;
+    color: #222;
+    border-bottom-left-radius: 3px;
+  }
+  .chat-msg.error .chat-bubble {
+    background: #fdf0f0;
+    border: 1px solid #f5c6c6;
+    color: #c0392b;
+    border-bottom-left-radius: 3px;
+  }
+  .chat-meta {
+    font-size: 11px;
+    color: #aaa;
+    padding: 0 4px;
+  }
+  .chat-code {
+    background: #f4f4f4;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    padding: 8px 10px;
     font-family: monospace;
+    font-size: 12px;
+    white-space: pre-wrap;
+    word-break: break-all;
+    margin-top: 4px;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+  .chat-empty {
+    color: #bbb;
+    font-size: 13px;
+    text-align: center;
+    padding: 16px 0;
   }
 
   /* SCAD + viewer row */
@@ -161,8 +218,8 @@
   <div id="cad-agent-section" class="section-card" style="display:none;">
     <h2>CAD Agent</h2>
     <div style="display:grid; gap:8px;">
-      <textarea id="agent-prompt" rows="8"
-        placeholder="Опишите что нужно изменить или создать в .scad файле..."></textarea>
+      <textarea id="agent-prompt" rows="3"
+        placeholder="Опишите что нужно изменить или создать... (Ctrl+Enter для отправки)"></textarea>
       <div class="row-btns">
         <button id="agent-send-btn" class="btn" type="button">Отправить агенту</button>
         <span id="agent-status" style="font-size:12px; color:#555;"></span>
@@ -249,21 +306,110 @@ async function loadModuleInfo() {
 }
 
 // ────────────────────────────────────────────────────────────────
-//  CAD Agent
+//  CAD Agent — chat thread
 // ────────────────────────────────────────────────────────────────
 const agentSendBtn = document.getElementById('agent-send-btn');
 const agentOutput  = document.getElementById('agent-output');
 const agentStatus  = document.getElementById('agent-status');
 const agentPrompt  = document.getElementById('agent-prompt');
 
+const chatThread = [];  // [{role, text, code, time}]
+
+function formatTime(d) {
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function extractAgentText(data) {
+  const parts = [];
+
+  if (data.opencode) {
+    const { stdout, stderr, exit_code } = data.opencode;
+    const out = (stdout || '').trim();
+    if (out) parts.push({ text: out });
+    if (stderr && stderr.trim() && exit_code !== 0) {
+      parts.push({ text: `Ошибка OpenCode:\n${stderr.trim()}`, isError: true });
+    }
+  }
+
+  if (data.git) {
+    const { stdout, stderr, exit_code, command } = data.git;
+    const cmd = Array.isArray(command) ? command.join(' ') : 'git';
+    const out = (stdout || '').trim();
+    const err = (stderr || '').trim();
+    const label = exit_code === 0 ? `✓ ${cmd}` : `✗ ${cmd}`;
+    parts.push({ text: label, code: out || err || '' });
+  }
+
+  if (data.render) {
+    const { exit_code, stderr } = data.render;
+    const stlName = (data.stl_path || '').split('/').pop();
+    if (exit_code === 0) {
+      parts.push({ text: `✓ Рендер успешен${stlName ? ': ' + stlName : ''}` });
+    } else {
+      parts.push({ text: `✗ Ошибка рендера`, code: (stderr || '').trim(), isError: true });
+    }
+  }
+
+  return parts.length ? parts : [{ text: 'Готово' }];
+}
+
+function renderThread() {
+  if (chatThread.length === 0) {
+    agentOutput.innerHTML = '<div class="chat-empty">История пуста — введите запрос агенту</div>';
+    return;
+  }
+  agentOutput.innerHTML = chatThread.map(msg => {
+    const metaHtml = `<span class="chat-meta">${escapeHtml(msg.time)}</span>`;
+    if (msg.role === 'user') {
+      return `<div class="chat-msg user">
+        <div class="chat-bubble">${escapeHtml(msg.text)}</div>
+        ${metaHtml}
+      </div>`;
+    }
+    const bubbleClass = msg.isError ? 'error' : 'agent';
+    const codeHtml = msg.code
+      ? `<div class="chat-code">${escapeHtml(msg.code)}</div>`
+      : '';
+    return `<div class="chat-msg ${bubbleClass}">
+      <div class="chat-bubble">${escapeHtml(msg.text)}</div>
+      ${codeHtml}
+      ${metaHtml}
+    </div>`;
+  }).join('');
+  agentOutput.scrollTop = agentOutput.scrollHeight;
+}
+
+function addThinkingIndicator() {
+  const el = document.createElement('div');
+  el.className = 'chat-msg agent';
+  el.id = 'chat-thinking';
+  el.innerHTML = '<div class="chat-bubble" style="color:#aaa;">Агент думает...</div>';
+  agentOutput.appendChild(el);
+  agentOutput.scrollTop = agentOutput.scrollHeight;
+}
+
+function removeThinkingIndicator() {
+  const el = document.getElementById('chat-thinking');
+  if (el) el.remove();
+}
+
 agentSendBtn.addEventListener('click', async () => {
   const moduleId = getModuleId();
   const prompt = agentPrompt.value.trim();
-  if (!prompt) { agentOutput.textContent = 'Введите промпт.'; return; }
+  if (!prompt) return;
+
+  const now = new Date();
+  chatThread.push({ role: 'user', text: prompt, time: formatTime(now) });
+  agentPrompt.value = '';
+  renderThread();
+  addThinkingIndicator();
 
   agentSendBtn.disabled = true;
-  agentStatus.textContent = 'Выполняю...';
-  agentOutput.textContent = '';
+  agentStatus.textContent = '';
 
   try {
     const res = await fetch(`/api/modules/${moduleId}/cad-agent/execute`, {
@@ -272,21 +418,48 @@ agentSendBtn.addEventListener('click', async () => {
       body: JSON.stringify({ message: `agent ${prompt}` }),
     });
     const data = await res.json();
+    removeThinkingIndicator();
+
     if (!res.ok) {
-      agentOutput.textContent = `Ошибка: ${data.detail || 'Неизвестная ошибка'}`;
-      agentStatus.textContent = '';
+      chatThread.push({
+        role: 'agent',
+        text: `Ошибка: ${data.detail || 'Неизвестная ошибка'}`,
+        isError: true,
+        time: formatTime(new Date()),
+      });
     } else {
-      agentOutput.textContent = JSON.stringify(data, null, 2);
-      agentStatus.textContent = 'Готово';
-      // Перезагружаем SCAD редактор, т.к. агент мог изменить файлы
+      const parts = extractAgentText(data);
+      for (const p of parts) {
+        chatThread.push({
+          role: 'agent',
+          text: p.text,
+          code: p.code || '',
+          isError: p.isError || false,
+          time: formatTime(new Date()),
+        });
+      }
       await loadScadFiles();
       await refreshStlList();
     }
   } catch (e) {
-    agentOutput.textContent = `Ошибка сети: ${e.message}`;
-    agentStatus.textContent = '';
+    removeThinkingIndicator();
+    chatThread.push({
+      role: 'agent',
+      text: `Ошибка сети: ${e.message}`,
+      isError: true,
+      time: formatTime(new Date()),
+    });
   } finally {
     agentSendBtn.disabled = false;
+    renderThread();
+  }
+});
+
+// Отправка по Ctrl+Enter
+agentPrompt.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && e.ctrlKey) {
+    e.preventDefault();
+    agentSendBtn.click();
   }
 });
 
@@ -567,7 +740,7 @@ async function checkCadAgentAvailability() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-  // Module info runs unconditionally — must not depend on Three.js
+  renderThread();
   await loadModuleInfo();
   checkCadAgentAvailability();
   await loadScadFiles();
