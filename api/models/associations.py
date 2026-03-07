@@ -1,4 +1,4 @@
-from sqlalchemy import Column, ForeignKey, Table, UUID, JSON, String, Text, DateTime
+from sqlalchemy import Column, ForeignKey, Integer, Table, UUID, JSON, String, Text, DateTime
 from sqlalchemy.sql import func
 from .base import Base
 from .module_role import ModuleRole
@@ -10,6 +10,7 @@ parent_child_module = Table(
     Column('child_id', UUID(as_uuid=True), ForeignKey('modules.id'), primary_key=True),
     Column('coordinates', JSON, nullable=True),  # Координаты XYZ и три угла
     Column('role_id', UUID(as_uuid=True), ForeignKey('module_roles.id'), nullable=True),
+    Column('count', Integer, nullable=False, server_default='1'),
 )
 
 # Связь модулей и потоков

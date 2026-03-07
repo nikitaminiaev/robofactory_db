@@ -16,19 +16,25 @@ class BasicObjectDTO(BaseModel):
     bounding_contour: Optional[BoundingContourDTO] = None
     children: List[str] = []
     parents: List[str] = []
+    children_counts: Dict[str, int] = {}
     created_ts: Optional[str] = None
     updated_ts: Optional[str] = None
 
     @classmethod
-    def from_module(cls, module):
+    def from_module(cls, module, children_counts: Optional[Dict[str, int]] = None):
         """
-        Фабричный метод для создания DTO из модели Module
+        Фабричный метод для создания DTO из модели Module.
+
+        Args:
+            module: объект Module
+            children_counts: словарь {child_id: count} с количеством вхождений каждого ребёнка
         """
         module_dict = module.to_dict()
-        
+
         module_dict["children"] = [str(child["id"]) for child in module_dict.get("children", [])]
         module_dict["parents"] = [str(parent["id"]) for parent in module_dict.get("parents", [])]
-        
+        module_dict["children_counts"] = children_counts or {}
+
         # Если есть bounding_contour, создаем для него DTO и выносим флаги на верхний уровень
         if module.bounding_contour:
             contour_dict = module.bounding_contour.to_dict()
@@ -40,4 +46,4 @@ class BasicObjectDTO(BaseModel):
         return cls(**module_dict)
 
     class Config:
-        orm_mode = True 
+        orm_mode = True

@@ -3,6 +3,7 @@ from uuid import UUID
 
 from sqlalchemy.orm import selectinload
 from sqlalchemy import func
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from . import BaseRepository
 from .bounding_contour_repository import BoundingContourRepository
@@ -114,6 +115,21 @@ class ModuleRepository(BaseRepository):
                 if module.bounding_contour:
                     print(f"DEBUG get_module_with_relations_by_id: contour.brep_files = {module.bounding_contour.brep_files}")
         return module
+
+    def get_child_counts(self, parent_id: UUID) -> dict:
+        """
+        Возвращает словарь {child_id_str: count} для всех дочерних модулей родителя.
+        """
+        with self.db_session.session() as db:
+            rows = db.execute(
+                parent_child_module.select().where(
+                    parent_child_module.c.parent_id == parent_id
+                ).with_only_columns(
+                    parent_child_module.c.child_id,
+                    parent_child_module.c.count,
+                )
+            ).fetchall()
+            return {str(row.child_id): row.count for row in rows}
 
     def get_child_coordinates(self, parent_id: UUID, child_id: UUID):
         return self._get_coordinates(parent_id, child_id, is_parent=True)
@@ -229,31 +245,39 @@ class ModuleRepository(BaseRepository):
 
     def add_child_relation(self, parent_id: UUID, child_id: UUID, coordinates: Optional[dict] = None, role_id: Optional[UUID] = None, db_session = None):
         """
-        Добавляет связь с дочерним модулем
+        Добавляет связь с дочерним модулем.
+        Если связь уже существует — инкрементирует счётчик count.
         """
         target_db = db_session if db_session else self.db_session.session()
-        target_db.execute(
-            parent_child_module.insert().values(
-                parent_id=parent_id,
-                child_id=child_id,
-                coordinates=coordinates,
-                role_id=role_id
-            )
+        stmt = pg_insert(parent_child_module).values(
+            parent_id=parent_id,
+            child_id=child_id,
+            coordinates=coordinates,
+            role_id=role_id,
+            count=1,
+        ).on_conflict_do_update(
+            index_elements=['parent_id', 'child_id'],
+            set_={'count': parent_child_module.c.count + 1},
         )
+        target_db.execute(stmt)
 
     def add_parent_relation(self, child_id: UUID, parent_id: UUID, coordinates: Optional[dict] = None, role_id: Optional[UUID] = None, db_session = None):
         """
-        Добавляет связь с родительским модулем
+        Добавляет связь с родительским модулем.
+        Если связь уже существует — инкрементирует счётчик count.
         """
         target_db = db_session if db_session else self.db_session.session()
-        target_db.execute(
-            parent_child_module.insert().values(
-                parent_id=parent_id,
-                child_id=child_id,
-                coordinates=coordinates,
-                role_id=role_id
-            )
+        stmt = pg_insert(parent_child_module).values(
+            parent_id=parent_id,
+            child_id=child_id,
+            coordinates=coordinates,
+            role_id=role_id,
+            count=1,
+        ).on_conflict_do_update(
+            index_elements=['parent_id', 'child_id'],
+            set_={'count': parent_child_module.c.count + 1},
         )
+        target_db.execute(stmt)
 
     def copy_module_with_roles(self, module_id: UUID, new_author: str, version_number: str, description: str) -> Module:
         """

@@ -286,14 +286,17 @@ function getModuleId() {
 // ────────────────────────────────────────────────────────────────
 async function loadModuleInfo() {
   const id = getModuleId();
-  // Устанавливаем ссылку Git History как только знаем id
   const gitLink = document.getElementById('git-history-link');
   if (gitLink) gitLink.href = `/git_history/${id}`;
 
   try {
-    const res = await fetch(`/api/basic_object/${id}`);
-    if (!res.ok) throw new Error(res.status);
-    const data = await res.json();
+    const [moduleRes, versionsRes] = await Promise.all([
+      fetch(`/api/basic_object/${id}`),
+      fetch(`/api/modules/${id}/versions`),
+    ]);
+    if (!moduleRes.ok) throw new Error(moduleRes.status);
+    const data = await moduleRes.json();
+    window.currentModuleVersions = versionsRes.ok ? await versionsRes.json() : [];
     document.getElementById('objectDetails').innerHTML = renderObjectDetails(data);
     const breadcrumbName = document.getElementById('breadcrumb-module-name');
     if (breadcrumbName && data.name) breadcrumbName.textContent = data.name;

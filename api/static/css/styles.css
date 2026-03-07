@@ -459,6 +459,20 @@ button:hover {
     border-bottom: none;
 }
 
+.child-count-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 8px;
+    padding: 1px 7px;
+    border-radius: 10px;
+    background-color: #e8f0fe;
+    color: #1a73e8;
+    font-size: 0.78em;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
 /* Стили для режима редактирования */
 .edit-mode .detail-table td input,
 .edit-mode .detail-table td textarea {

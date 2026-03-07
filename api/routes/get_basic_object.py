@@ -32,7 +32,8 @@ async def get_basic_object_by_id(request: Request, id: UUID, repo: ModuleReposit
     if not basic_object:
         raise HTTPException(status_code=404, detail=f"Объект с ID '{id}' не найден")
 
-    result = BasicObjectDTO.from_module(basic_object)
+    children_counts = repo.get_child_counts(id)
+    result = BasicObjectDTO.from_module(basic_object, children_counts=children_counts)
 
     if result.bounding_contour:
         if hasattr(result.bounding_contour.brep_files, 'get'):

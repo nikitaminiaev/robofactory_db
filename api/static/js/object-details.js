@@ -275,6 +275,38 @@ function renderObjectFullDetails(data) {
             <tr><th>Updated</th><td>${data.updated_ts ? new Date(data.updated_ts).toLocaleString() : '-'}</td></tr>
         </table>`;
 
+    const versions = window.currentModuleVersions || [];
+    if (versions.length > 0) {
+        const versionRows = versions.map(v => {
+            const date = v.created_ts ? new Date(v.created_ts).toLocaleString() : '-';
+            const statusBadge = v.is_released
+                ? '<span style="color:#27ae60;font-weight:600;">Released</span>'
+                : '<span style="color:#888;">In progress</span>';
+            const commit = v.commit_hash ? `<code style="font-size:11px;">${v.commit_hash.slice(0, 8)}</code>` : '-';
+            return `<tr>
+                <td><strong>${v.version_number}</strong></td>
+                <td>${v.description || '-'}</td>
+                <td>${commit}</td>
+                <td>${statusBadge}</td>
+                <td style="white-space:nowrap;">${date}</td>
+            </tr>`;
+        }).join('');
+        detailsHtml += `
+            <h2>Версии</h2>
+            <table class="detail-table">
+                <thead>
+                    <tr>
+                        <th>Версия</th>
+                        <th>Описание</th>
+                        <th>Коммит</th>
+                        <th>Статус</th>
+                        <th>Дата</th>
+                    </tr>
+                </thead>
+                <tbody>${versionRows}</tbody>
+            </table>`;
+    }
+
     if (data.bounding_contour) {
         detailsHtml += `
             <h2>Bounding Contour</h2>
@@ -319,12 +351,14 @@ function renderObjectFullDetails(data) {
         }
     };
 
-    const renderRelatedObjectsList = (title, ids, listId) => {
+    const renderRelatedObjectsList = (title, ids, listId, counts) => {
         if (!ids || ids.length === 0) return '';
         let listHtml = `<h2>${title}</h2><ul id="${listId}" class="related-list">`;
         ids.forEach(id => {
+            const count = counts && counts[id] > 1 ? counts[id] : null;
+            const countBadge = count ? ` <span class="child-count-badge" title="Количество вхождений">&times;${count}</span>` : '';
             listHtml += `<li>
-                <a href="/basic_object/${id}" id="related-${listId}-${id}">${window.objectNamesCache[id] || id}</a>
+                <a href="/basic_object/${id}" id="related-${listId}-${id}">${window.objectNamesCache[id] || id}</a>${countBadge}
                 <button class="load-freecad-btn" data-id="${id}" style="display: none;">Load FreeCad</button>
             </li>`;
         });
@@ -341,7 +375,7 @@ function renderObjectFullDetails(data) {
     };
 
     detailsHtml += renderRelatedObjectsList('Parents', data.parents, 'parentsList');
-    detailsHtml += renderRelatedObjectsList('Children', data.children, 'childrenList');
+    detailsHtml += renderRelatedObjectsList('Children', data.children, 'childrenList', data.children_counts);
     detailsHtml += `
         <div id="copy-modal" class="modal" style="display: none;">
             <div class="modal-content">
@@ -589,7 +623,8 @@ function addNewRelationToList(type) {
     }
     
     const name = document.getElementById(`search-${type}-input`).value;
-    const list = document.getElementById(`${type}sList`);
+    const listIdMap = { child: 'childrenList', parent: 'parentsList' };
+    const list = document.getElementById(listIdMap[type]);
     
     const li = document.createElement('li');
     li.dataset.newRelation = 'true';
