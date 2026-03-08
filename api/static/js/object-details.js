@@ -204,7 +204,9 @@ function createModuleRow(module, level, type = 'main', countInParent = 1) {
 }
 
 async function toggleChildren(moduleId, level, btn) {
-    const row = document.getElementById(`row-${moduleId}`);
+    // Используем btn.closest('tr') вместо getElementById, чтобы корректно работать
+    // когда один и тот же модуль встречается в DOM несколько раз (под разными родителями).
+    const row = btn.closest('tr');
     const isExpanded = btn.classList.contains('expanded');
     
     if (isExpanded) {
@@ -234,7 +236,9 @@ async function toggleChildren(moduleId, level, btn) {
             const countInParent = childrenCounts[child.id] || 1;
             const childRowHtml = createModuleRow(child, level + 1, 'child', countInParent);
             lastRow.insertAdjacentHTML('afterend', childRowHtml);
-            lastRow = document.getElementById(`row-${child.id}`);
+            // Берём nextElementSibling, а не getElementById — иначе при одинаковых id
+            // в DOM получим первое вхождение, а не только что вставленную строку.
+            lastRow = lastRow.nextElementSibling;
         });
         
         btn.classList.add('expanded');
