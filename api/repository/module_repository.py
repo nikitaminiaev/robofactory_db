@@ -170,10 +170,10 @@ class ModuleRepository(BaseRepository):
             query = query.join(
                 parent_child_module,
                 Module.id == parent_child_module.c.child_id
-            ).filter(parent_child_module.c.parent_id == parent_id)
-            
+            ).filter(parent_child_module.c.parent_id == parent_id).distinct()
+
             query = query.order_by(Module.id)
-            
+
             modules = query.all()
         return modules
 

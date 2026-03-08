@@ -156,7 +156,7 @@ function initResizableColumns() {
     });
 }
 
-function createModuleRow(module, level, type = 'main') {
+function createModuleRow(module, level, type = 'main', countInParent = 1) {
     const hasChildren = module.children && module.children.length > 0;
     const indent = level * 30;
     
@@ -167,6 +167,10 @@ function createModuleRow(module, level, type = 'main') {
     const isAssembly = module.bounding_contour ? (module.bounding_contour.is_assembly ? 'Yes' : 'No') : '-';
     const hasBrep = module.bounding_contour && module.bounding_contour.brep_files && Object.keys(module.bounding_contour.brep_files).length > 0;
     const brepStatus = hasBrep ? 'Available' : 'None';
+
+    const countBadge = countInParent > 1
+        ? `<span class="child-count-badge" title="Количество вхождений">&times;${countInParent}</span>`
+        : '';
 
     const rowClass = `module-row ${type}-row`;
     const rowId = `row-${module.id}`;
@@ -184,6 +188,7 @@ function createModuleRow(module, level, type = 'main') {
                             <span class="module-name-text">${module.name}</span>
                         </div>
                     </a>
+                    ${countBadge}
                 </div>
             </td>
             <td>${module.author}</td>
@@ -222,10 +227,12 @@ async function toggleChildren(moduleId, level, btn) {
         
         const data = await response.json();
         const children = data.basic_objects;
+        const childrenCounts = data.children_counts || {};
         
         let lastRow = row;
         children.forEach(child => {
-            const childRowHtml = createModuleRow(child, level + 1, 'child');
+            const countInParent = childrenCounts[child.id] || 1;
+            const childRowHtml = createModuleRow(child, level + 1, 'child', countInParent);
             lastRow.insertAdjacentHTML('afterend', childRowHtml);
             lastRow = document.getElementById(`row-${child.id}`);
         });

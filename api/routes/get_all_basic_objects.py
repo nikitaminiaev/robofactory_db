@@ -39,16 +39,21 @@ async def get_top_level_basic_objects(limit: int = 10, offset: int = 0, depth: i
 @router.get("/api/basic_objects/{id}/children")
 async def get_children_of_basic_object(id: UUID, repo: ModuleRepository = Depends()):
     children = repo.get_children_modules_with_relations(id)
-    
+
     if not children:
         raise HTTPException(status_code=404, detail="Дети не найдены")
-    
+
+    children_counts = repo.get_child_counts(id)
+
     basic_objects_dicts = [
         BasicObjectDTO.from_module(obj).model_dump()
         for obj in children
     ]
-    
-    return JSONResponse(content={"basic_objects": basic_objects_dicts})
+
+    return JSONResponse(content={
+        "basic_objects": basic_objects_dicts,
+        "children_counts": children_counts,
+    })
 
 @router.get("/api/basic_objects/{id}/parents")
 async def get_parents_of_basic_object(id: UUID, repo: ModuleRepository = Depends()):
