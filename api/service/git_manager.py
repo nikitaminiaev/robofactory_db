@@ -126,6 +126,7 @@ def commit_module_changes(module_id: UUID, message: str) -> str:
     repo_path = get_module_resource_path(module_id)
 
     try:
+        _ensure_on_branch(repo_path)
         run(["git", "add", "--all"], cwd=repo_path, check=True, capture_output=True, text=True)
         status_result = run(["git", "status", "--porcelain"], cwd=repo_path, capture_output=True, text=True)
         if not status_result.stdout.strip():
@@ -184,8 +185,8 @@ def get_module_commit_history(module_id: UUID) -> list[dict[str, str]]:
     """
     Получает историю коммитов для модуля.
 
-    Всегда читает историю с основной ветки (master/main), а не с HEAD,
-    чтобы полная история была видна даже в состоянии detached HEAD.
+    Использует --all чтобы отображать все коммиты, включая созданные
+    в detached HEAD состоянии (не привязанные ни к одной ветке).
 
     Args:
         module_id: UUID модуля
@@ -198,11 +199,9 @@ def get_module_commit_history(module_id: UUID) -> list[dict[str, str]]:
     """
     repo_path = get_module_resource_path(module_id)
 
-    branch = _get_main_branch(repo_path)
-
     try:
         result = run(
-            ["git", "log", branch, "--pretty=format:%H|%s|%ai"],
+            ["git", "log", "--all", "--topo-order", "--pretty=format:%H|%s|%ai"],
             cwd=repo_path,
             check=True,
             capture_output=True,
@@ -258,15 +257,34 @@ def _has_uncommitted_changes(repo_path: Path) -> bool:
 def _ensure_on_branch(repo_path: Path) -> None:
     """
     Если репозиторий в detached HEAD, переключается обратно на основную ветку.
+
+    Если HEAD опережает ветку (есть коммиты, сделанные в detached HEAD состоянии),
+    делает fast-forward ветки до HEAD перед переключением, чтобы эти коммиты
+    не потерялись и были доступны через историю.
     """
     result = run(["git", "branch", "--show-current"], cwd=repo_path, capture_output=True, text=True)
     if result.stdout.strip():
         return
 
+    branches_result = run(["git", "branch"], cwd=repo_path, capture_output=True, text=True)
     for branch in ("master", "main"):
-        r = run(["git", "checkout", branch], cwd=repo_path, capture_output=True, text=True)
-        if r.returncode == 0:
-            return
+        if branch not in branches_result.stdout:
+            continue
+
+        # Если ветка является предком HEAD — HEAD впереди, делаем fast-forward
+        is_ancestor = run(
+            ["git", "merge-base", "--is-ancestor", branch, "HEAD"],
+            cwd=repo_path, capture_output=True, text=True
+        )
+        if is_ancestor.returncode == 0:
+            head_hash = run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=repo_path, capture_output=True, text=True
+            ).stdout.strip()
+            run(["git", "branch", "-f", branch, head_hash], cwd=repo_path, capture_output=True, text=True)
+
+        run(["git", "checkout", branch], cwd=repo_path, capture_output=True, text=True)
+        return
 
 
 def checkout_module_commit(module_id: UUID, commit_hash: str, force: bool = False) -> None:
