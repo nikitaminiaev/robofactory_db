@@ -19,8 +19,7 @@ class CadAgentExecuteRequest(BaseModel):
     stl_filename: Optional[str] = None
     render_stl: bool = True
     git_args: Optional[list[str]] = None
-    use_opencode: bool = False
-    opencode_prompt: Optional[str] = None
+    prompt: Optional[str] = None
 
 
 def _cad_agent_base_url() -> str:
