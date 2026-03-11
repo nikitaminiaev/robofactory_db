@@ -30,41 +30,56 @@ class BoundingContourRepository(BaseRepository):
 
             return dict(contour.brep_files or {})
 
-    def copy_bounding_contour(self, original_module_id: UUID, new_module_id: UUID) -> Optional[BoundingContour]:
+    def copy_bounding_contour(
+        self,
+        original_module_id: UUID,
+        new_module_id: UUID,
+        db_session=None,
+    ) -> Optional[BoundingContour]:
         """
         Копирует bounding_contour для нового модуля, включая копирование BREP файлов.
 
         Args:
             original_module_id: UUID оригинального модуля
             new_module_id: UUID нового модуля
+            db_session: существующая сессия БД; если передана — используется она
+                        (позволяет работать в одной транзакции с родительским INSERT модуля)
 
         Returns:
             Новый BoundingContour или None если оригинал не найден
         """
+        if db_session is not None:
+            return self._do_copy(db_session, original_module_id, new_module_id, commit=False)
+
         with self.db_session.session() as db:
-            original = db.query(BoundingContour).filter_by(module_id=original_module_id).first()
-            if not original:
-                return None
+            result = self._do_copy(db, original_module_id, new_module_id, commit=True)
+        return result
 
-            brep_files = original.brep_files or {}
-            new_brep_files: Dict[str, str] = {}
-            for filename, relative_path in brep_files.items():
-                if not relative_path:
-                    continue
-                source_path = resolve_brep_absolute_path(relative_path)
-                if not source_path.exists():
-                    continue
-                file_content = source_path.read_bytes()
-                new_relative_path = save_brep_file(new_module_id, filename, file_content)
-                new_brep_files[filename] = new_relative_path
+    def _do_copy(self, db, original_module_id: UUID, new_module_id: UUID, commit: bool) -> Optional[BoundingContour]:
+        original = db.query(BoundingContour).filter_by(module_id=original_module_id).first()
+        if not original:
+            return None
 
-            new_contour = BoundingContour(
-                module_id=new_module_id,
-                is_assembly=original.is_assembly,
-                is_shell=original.is_shell,
-                brep_files=new_brep_files,
-                parent_id=None  # Для копии не копируем hierarchy
-            )
-            db.add(new_contour)
+        brep_files = original.brep_files or {}
+        new_brep_files: Dict[str, str] = {}
+        for filename, relative_path in brep_files.items():
+            if not relative_path:
+                continue
+            source_path = resolve_brep_absolute_path(relative_path)
+            if not source_path.exists():
+                continue
+            file_content = source_path.read_bytes()
+            new_relative_path = save_brep_file(new_module_id, filename, file_content)
+            new_brep_files[filename] = new_relative_path
+
+        new_contour = BoundingContour(
+            module_id=new_module_id,
+            is_assembly=original.is_assembly,
+            is_shell=original.is_shell,
+            brep_files=new_brep_files,
+            parent_id=None,
+        )
+        db.add(new_contour)
+        if commit:
             db.commit()
-            return new_contour
+        return new_contour

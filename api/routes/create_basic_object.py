@@ -1,3 +1,4 @@
+import uuid as uuid_mod
 from pathlib import Path
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel
@@ -8,7 +9,6 @@ from models import BoundingContour, Module
 from uuid import UUID
 import logging
 from models.associations import parent_child_module
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 from models.module import ModuleStatus
 from service.brep_file_service import BrepFileService
 from service.constants import get_module_resource_path, get_module_stl_directory, build_brep_relative_path, build_stl_relative_path
@@ -129,15 +129,12 @@ async def _create_module_in_db(
                 role_id = role_obj.id
 
             db.execute(
-                pg_insert(parent_child_module).values(
+                parent_child_module.insert().values(
+                    id=uuid_mod.uuid4(),
                     parent_id=parent_id,
                     child_id=basic_object.id,
                     coordinates=coordinates,
                     role_id=role_id,
-                    count=1,
-                ).on_conflict_do_update(
-                    index_elements=['parent_id', 'child_id'],
-                    set_={'count': parent_child_module.c.count + 1},
                 )
             )
 
@@ -377,15 +374,12 @@ async def update_basic_object(
                         )
                 elif new_parent_uuid and new_coordinates:
                     db.execute(
-                        pg_insert(parent_child_module).values(
+                        parent_child_module.insert().values(
+                            id=uuid_mod.uuid4(),
                             parent_id=new_parent_uuid,
                             child_id=obj_id_uuid,
                             coordinates=new_coordinates,
                             role_id=role_id,
-                            count=1,
-                        ).on_conflict_do_update(
-                            index_elements=['parent_id', 'child_id'],
-                            set_={'count': parent_child_module.c.count + 1},
                         )
                     )
 
