@@ -17,7 +17,8 @@ def save_position(module_id: str) -> str:
     })
 
 
-def create_part_from_brep(brep_string: str, label: str, coordinates: dict = None, id: str = ''):
+def create_part_from_brep(brep_string: str, label: str, coordinates: dict = None, id: str = '', parent_child_module_id: str = None):
+    pcm_id = f"'{parent_child_module_id}'" if parent_child_module_id else "''"
     return f"""
 import FreeCAD
 import Part
@@ -37,6 +38,11 @@ part_obj.Group = [body_obj]
 
 if '{id}' != '':
     part_obj.Id = '{id}'
+
+# Сохраняем ID записи parent_child_module для корректного сохранения координат
+if {pcm_id} != '':
+    part_obj.ParentChildModuleId = {pcm_id}
+
 # Устанавливаем координаты если они есть
 if {coordinates}:
     part_obj.Placement.Base.x = {coordinates.get('x', 0.0)}

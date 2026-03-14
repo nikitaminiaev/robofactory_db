@@ -420,3 +420,43 @@ async def update_basic_object(
             status_code=500,
             detail=f"Ошибка при обновлении объекта: {str(e)}"
         )
+
+
+class ParentChildModuleUpdate(BaseModel):
+    coordinates: Optional[Dict] = None
+
+
+@router.patch("/api/parent_child_module/{record_id}", status_code=200)
+async def update_parent_child_module_record(
+        record_id: str,
+        item: ParentChildModuleUpdate,
+        basic_repo: ModuleRepository = Depends()
+):
+    """
+    Обновляет конкретную запись в parent_child_module по её ID.
+    Используется для сохранения координат конкретного экземпляра дочернего объекта в сборке.
+    """
+    try:
+        record_uuid = UUID(record_id)
+        with basic_repo.db_session.session() as db:
+            stmt = (
+                parent_child_module.update()
+                .where(parent_child_module.c.id == record_uuid)
+                .values(coordinates=item.coordinates)
+            )
+            result = db.execute(stmt)
+            if result.rowcount == 0:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Запись в parent_child_module с ID '{record_id}' не найдена"
+                )
+            db.commit()
+            return {"ok": True, "id": str(record_uuid)}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Ошибка при обновлении записи: {str(e)}"
+        )

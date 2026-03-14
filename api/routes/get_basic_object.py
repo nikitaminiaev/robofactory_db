@@ -41,8 +41,13 @@ async def get_basic_object_by_id(request: Request, id: UUID, repo: ModuleReposit
 
     # Добавляем координаты дочерних объектов из parent_child_module.
     # Плагин FreeCAD использует их при загрузке сборки для расстановки Placement.
+    # children_coordinates - словарь (уникальные children)
+    children_with_coords = repo.get_children_coordinates(id)
     if result.children:
-        result.children_coordinates = repo.get_children_coordinates(id)
+        result.children_coordinates = {item["child_id"]: item["coordinates"] for item in children_with_coords}
+
+    # Добавляем полный список записей children с координатами (включая дубликаты)
+    result.children_with_coordinates = children_with_coords
 
     return result
 

@@ -133,22 +133,26 @@ class ModuleRepository(BaseRepository):
             rows = db.execute(stmt).fetchall()
             return {str(row.child_id): row.cnt for row in rows}
 
-    def get_children_coordinates(self, parent_id: UUID) -> dict:
+    def get_children_coordinates(self, parent_id: UUID) -> List[dict]:
         """
-        Возвращает словарь {str(child_id): coordinates_dict} для всех детей данного родителя.
-        Используется при загрузке сборки, чтобы вернуть координаты каждого child
-        из parent_child_module в составе ответа родителя.
+        Возвращает список всех записей children для данного родителя, включая дубликаты.
+        Каждая запись содержит parent_child_module_id, child_id и coordinates.
+        Используется при загрузке сборки для создания нескольких копий одного объекта.
+        
+        Returns:
+            List[dict]: [{"parent_child_module_id": "uuid", "child_id": "uuid", "coordinates": {...}}, ...]
         """
         with self.db_session.session() as db:
             stmt = (
                 select(
+                    parent_child_module.c.id,
                     parent_child_module.c.child_id,
                     parent_child_module.c.coordinates,
                 )
                 .where(parent_child_module.c.parent_id == parent_id)
             )
             rows = db.execute(stmt).fetchall()
-            return {str(row.child_id): row.coordinates for row in rows}
+            return [{"parent_child_module_id": str(row.id), "child_id": str(row.child_id), "coordinates": row.coordinates} for row in rows]
 
     def get_child_coordinates(self, parent_id: UUID, child_id: UUID):
         return self._get_coordinates(parent_id, child_id, is_parent=True)
