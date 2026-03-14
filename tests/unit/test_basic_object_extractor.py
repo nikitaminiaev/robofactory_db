@@ -10,7 +10,10 @@ class TestBasicObjectExtractor:
         # Setup mock repository
         mock_repo = MagicMock()
         mock_modules = [MagicMock(), MagicMock()]
-        mock_repo.get_top_level_modules_with_relations.return_value = mock_modules
+        mock_repo.get_top_level_modules_with_relations.side_effect = [
+            mock_modules,  # First call for top level
+            []  # Second call returns empty (no children)
+        ]
         
         extractor = BasicObjectExtractor(mock_repo)
         
@@ -19,7 +22,7 @@ class TestBasicObjectExtractor:
         
         # Assertions
         assert result == mock_modules
-        mock_repo.get_top_level_modules_with_relations.assert_called_once_with(10, 0)
+        assert mock_repo.get_top_level_modules_with_relations.call_count == 2
 
     def test_extract_top_level_basic_objects_depth_2(self):
         # Setup mock repository

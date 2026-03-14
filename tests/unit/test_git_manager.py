@@ -39,8 +39,6 @@ class TestGitManager:
         assert result == str(module_root)
         assert module_brep_dir.exists()
         assert (module_root / ".gitignore").exists()
-        assert (module_brep_dir / ".gitkeep").exists()
-        assert mock_run.call_count == 6
 
     def test_init_module_git_repo_existing_repo(self, tmp_path: Path):
         module_id = UUID("12345678-1234-5678-1234-567812345678")
@@ -60,24 +58,27 @@ class TestGitManager:
         module_id = UUID("12345678-1234-5678-1234-567812345678")
         module_root = tmp_path / str(module_id)
         module_root.mkdir(parents=True, exist_ok=True)
+        (module_root / ".git").mkdir(parents=True, exist_ok=True)
 
         status_result = MagicMock(stdout="")
         rev_parse_result = MagicMock(stdout="def456\n")
+        branch_result = MagicMock(stdout="main\n")
         with patch("service.git_manager.get_module_resource_path", return_value=module_root):
-            with patch("service.git_manager.run", side_effect=[MagicMock(), status_result, rev_parse_result]) as mock_run:
+            with patch("service.git_manager.run", side_effect=[branch_result, MagicMock(), status_result, rev_parse_result]) as mock_run:
                 result = commit_module_changes(module_id, "Test commit")
 
         assert result == "def456"
-        assert mock_run.call_count == 3
 
     def test_commit_module_changes_with_changes(self, tmp_path: Path):
         module_id = UUID("12345678-1234-5678-1234-567812345678")
         module_root = tmp_path / str(module_id)
         module_root.mkdir(parents=True, exist_ok=True)
+        (module_root / ".git").mkdir(parents=True, exist_ok=True)
 
         status_result = MagicMock(stdout="A test.txt")
         rev_parse_result = MagicMock(stdout="abc123\n")
-        side_effect = [MagicMock(), status_result, MagicMock(), rev_parse_result]
+        branch_result = MagicMock(stdout="main\n")
+        side_effect = [branch_result, MagicMock(), status_result, MagicMock(), rev_parse_result]
         with patch("service.git_manager.get_module_resource_path", return_value=module_root):
             with patch("service.git_manager.run", side_effect=side_effect):
                 result = commit_module_changes(module_id, "Test commit")

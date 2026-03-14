@@ -55,8 +55,8 @@ class TestModuleVersionsRoutes:
             json={"commit_hash": "abc123"}
         )
         
-        # Assertions
-        assert response.status_code == 500
+        # Assertions - invalid UUID returns 400 before reaching checkout
+        assert response.status_code == 400
         mock_checkout.assert_not_called()
 
     @patch('routes.module_versions.checkout_module_commit')
