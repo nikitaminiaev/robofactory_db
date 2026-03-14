@@ -88,11 +88,11 @@ roll back migration:
 run tests manually in api container:
 
     # run all tests
-    docker exec -e PYTHONPATH=/usr/src api python -m pytest tests/ -v
+    docker exec api python -m pytest /usr/src/tests/ -v
 
     # run specific test
-    docker exec -e PYTHONPATH=/usr/src api python -m pytest tests/integration/test_versioning_workflow.py -v
+    docker exec api python -m pytest /usr/src/tests/integration/test_versioning_workflow.py -v
 
     # run with code coverage
     docker exec api pip install pytest-cov
-    docker exec -e PYTHONPATH=/usr/src api python -m pytest tests/ --cov=api --cov-report=html
+    docker exec api python -m pytest /usr/src/tests/ --cov=api --cov-report=html

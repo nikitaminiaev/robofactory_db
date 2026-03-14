@@ -14,6 +14,18 @@
 
 - Run type checking on a file: `docker exec api pyright /usr/src/api/<relative_path_to_file>`
 
+run tests manually in api container:
+
+    # run all tests
+    docker exec api python -m pytest tests/ -v
+
+    # run specific test
+    docker exec api python -m pytest tests/integration/test_versioning_workflow.py -v
+
+    # run with code coverage
+    docker exec api pip install pytest-cov
+    docker exec api python -m pytest tests/ --cov=api --cov-report=html
+
 ## Database Commands
 
 - Create migration: `alembic revision --autogenerate -m "message"`
