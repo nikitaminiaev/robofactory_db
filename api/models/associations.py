@@ -1,7 +1,5 @@
-from sqlalchemy import Column, ForeignKey, Table, UUID, JSON, String, Text, DateTime, text
-from sqlalchemy.sql import func
+from sqlalchemy import Column, ForeignKey, Table, UUID, JSON, text
 from .base import Base
-from .module_role import ModuleRole
 
 # Связь родитель-потомок для модулей с координатами.
 # Суррогатный PK id позволяет иметь несколько записей с одной парой

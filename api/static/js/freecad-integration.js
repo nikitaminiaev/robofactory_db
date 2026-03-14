@@ -67,30 +67,148 @@ async function checkServerAndClientsStatus() {
 
 // Функция для обновления видимости кнопок FreeCad
 function updateFreeCadButtonsVisibility() {
-    // Находим все кнопки для загрузки во FreeCad на странице
+    const connected = serverRunning && connectedClientsCount > 0;
+
+    // Load FreeCad кнопки — в таблицах поиска и списках
     document.querySelectorAll('.load-freecad-btn').forEach(button => {
-        if (serverRunning && connectedClientsCount > 0) {
-            // Показываем кнопку и применяем стили
+        if (connected) {
             button.style.display = 'inline-block';
             applyFreeCadButtonStyle(button);
-            
-            // Добавляем обработчик события клика, если его еще нет
+
             if (!button.hasAttribute('data-initialized')) {
                 button.setAttribute('data-initialized', 'true');
                 button.addEventListener('click', function(e) {
                     e.preventDefault();
-                    const objectId = this.getAttribute('data-id');
-                    loadObjectToFreeCad(objectId);
+                    loadObjectToFreeCad(this.getAttribute('data-id'));
                 });
             }
         } else {
-            // Скрываем кнопку
             button.style.display = 'none';
         }
     });
-    
+
+    // Кнопки действий FreeCAD на странице деталей (Save, To Supersystem, To Subsystem)
+    document.querySelectorAll('.freecad-action-btn').forEach(el => {
+        el.style.display = connected ? 'inline-block' : 'none';
+    });
+
+    // Разделитель между обычными кнопками и кнопками FreeCAD
+    const sep = document.getElementById('freecad-btn-separator');
+    if (sep) sep.style.display = connected ? 'inline-block' : 'none';
+
+    // Wire-up кнопок действий (однократно)
+    _initFreeCadActionButtons();
+
     // Добавляем информационное сообщение о статусе сервера и клиентах
     updateStatusMessage();
+}
+
+function _initFreeCadActionButtons() {
+    const saveBrepBtn = document.getElementById('btn-fc-save-brep');
+    if (saveBrepBtn && !saveBrepBtn.hasAttribute('data-initialized')) {
+        saveBrepBtn.setAttribute('data-initialized', 'true');
+        saveBrepBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            saveBrepToFreeCad(this.getAttribute('data-id'));
+        });
+    }
+
+    const savePosBtn = document.getElementById('btn-fc-save-position');
+    if (savePosBtn && !savePosBtn.hasAttribute('data-initialized')) {
+        savePosBtn.setAttribute('data-initialized', 'true');
+        savePosBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            savePositionToFreeCad(this.getAttribute('data-id'));
+        });
+    }
+}
+
+// ── localStorage history tracking ──────────────────────────────────────────
+
+function trackVisitedModule(moduleId) {
+    if (!moduleId) return;
+    const key = 'plm_visited_modules';
+    const history = JSON.parse(localStorage.getItem(key) || '[]');
+    const filtered = history.filter(id => id !== moduleId);
+    filtered.unshift(moduleId);
+    localStorage.setItem(key, JSON.stringify(filtered.slice(0, 100)));
+}
+
+function getLastVisitedFrom(ids) {
+    const key = 'plm_visited_modules';
+    const history = JSON.parse(localStorage.getItem(key) || '[]');
+    for (const id of history) {
+        if (ids.includes(id)) return id;
+    }
+    return null;
+}
+
+// ── Last Supersystem / Last Subsystem ──────────────────────────────────────
+
+function initLastNavButtons() {
+    const superBtn = document.getElementById('btn-last-supersystem');
+    if (superBtn && !superBtn.hasAttribute('data-initialized')) {
+        superBtn.setAttribute('data-initialized', 'true');
+        superBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            goToLastSupersystem();
+        });
+    }
+
+    const subBtn = document.getElementById('btn-last-subsystem');
+    if (subBtn && !subBtn.hasAttribute('data-initialized')) {
+        subBtn.setAttribute('data-initialized', 'true');
+        subBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            goToLastSubsystem();
+        });
+    }
+}
+
+function goToLastSupersystem() {
+    const data    = window.currentObjectData || {};
+    const parents = data.parents || [];
+
+    if (!parents.length) {
+        showNotification('У данного модуля нет родителей', 'info');
+        return;
+    }
+
+    const target = parents.length === 1
+        ? parents[0]
+        : getLastVisitedFrom(parents);
+
+    if (target) {
+        window.location.href = `/basic_object/${target}`;
+        return;
+    }
+
+    showNotification('Несколько родителей — выберите нужный в списке Parents ниже', 'info');
+    const el = document.getElementById('parentsList');
+    if (el) el.scrollIntoView({ behavior: 'smooth' });
+}
+
+function goToLastSubsystem() {
+    const data     = window.currentObjectData || {};
+    const children = data.children || [];
+
+    if (!children.length) {
+        showNotification('У данного модуля нет дочерних объектов', 'info');
+        return;
+    }
+
+    const target = children.length === 1
+        ? children[0]
+        : getLastVisitedFrom(children);
+
+    if (target) {
+        window.location.href = `/basic_object/${target}`;
+        return;
+    }
+
+    showNotification('Несколько дочерних объектов — выберите нужный в списке Children ниже', 'info');
+    const el = document.getElementById('childrenList');
+    if (el) el.scrollIntoView({ behavior: 'smooth' });
 }
 
 // Функция для добавления информационного сообщения о статусе сервера и клиентах
@@ -257,6 +375,46 @@ function showNotification(message, type = 'info') {
     }, 1000);
 }
 
+function saveBrepToFreeCad(moduleId) {
+    if (!serverRunning || connectedClientsCount === 0) {
+        showNotification('FreeCAD не подключён', 'error');
+        return;
+    }
+
+    showNotification('Отправка команды Save BREP во FreeCAD...', 'info');
+
+    fetch(`/api/basic_object/${moduleId}/freecad/save_brep`, { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                showNotification('BREP сохранён', 'success');
+            } else {
+                showNotification(data.detail || 'Ошибка при сохранении BREP', 'error');
+            }
+        })
+        .catch(err => showNotification(`Ошибка сети: ${err.message}`, 'error'));
+}
+
+function savePositionToFreeCad(moduleId) {
+    if (!serverRunning || connectedClientsCount === 0) {
+        showNotification('FreeCAD не подключён', 'error');
+        return;
+    }
+
+    showNotification('Отправка команды Save Position во FreeCAD...', 'info');
+
+    fetch(`/api/basic_object/${moduleId}/freecad/save_position`, { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                showNotification('Позиция сохранена', 'success');
+            } else {
+                showNotification(data.detail || 'Ошибка при сохранении позиции', 'error');
+            }
+        })
+        .catch(err => showNotification(`Ошибка сети: ${err.message}`, 'error'));
+}
+
 // Инициализация при загрузке страницы
 document.addEventListener('DOMContentLoaded', function() {
     if (window._freecadIntegrationInitialized) {
@@ -283,6 +441,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         if (hasRelevantChanges) {
             updateFreeCadButtonsVisibility();
+            initLastNavButtons();
         }
     });
     
@@ -291,4 +450,7 @@ document.addEventListener('DOMContentLoaded', function() {
         childList: true,
         subtree: true
     });
+
+    // Wire-up навигационных кнопок если они уже в DOM
+    initLastNavButtons();
 }); 

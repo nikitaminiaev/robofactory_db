@@ -286,6 +286,7 @@ function getModuleId() {
 // ────────────────────────────────────────────────────────────────
 async function loadModuleInfo() {
   const id = getModuleId();
+  if (typeof trackVisitedModule === 'function') trackVisitedModule(id);
   const gitLink = document.getElementById('git-history-link');
   if (gitLink) gitLink.href = `/git_history/${id}`;
 

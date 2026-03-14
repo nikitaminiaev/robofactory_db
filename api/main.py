@@ -1,4 +1,4 @@
-from routes.freecad import load_freecad
+from routes.freecad import load_freecad, freecad_actions
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -16,6 +16,7 @@ app.include_router(get_all_basic_objects.router)
 app.include_router(get_basic_object.router)
 app.include_router(create_basic_object.router)
 app.include_router(load_freecad.router)
+app.include_router(freecad_actions.router)
 app.include_router(websocket_routes.router)
 app.include_router(copy_module.router, prefix="/api")
 app.include_router(module_versions.router, prefix="/api")

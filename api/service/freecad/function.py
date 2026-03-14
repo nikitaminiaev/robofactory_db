@@ -1,3 +1,22 @@
+import json
+
+
+def save_brep(module_id: str) -> str:
+    """Команда FreeCAD: экспортировать BREP первого тела и сохранить в модуль."""
+    return json.dumps({
+        "function_call": "save_brep",
+        "arguments": {"module_id": module_id},
+    })
+
+
+def save_position(module_id: str) -> str:
+    """Команда FreeCAD: обновить координаты всех дочерних объектов текущей сборки."""
+    return json.dumps({
+        "function_call": "save_position",
+        "arguments": {"module_id": module_id},
+    })
+
+
 def create_part_from_brep(brep_string: str, label: str, coordinates: dict = None, id: str = ''):
     return f"""
 import FreeCAD

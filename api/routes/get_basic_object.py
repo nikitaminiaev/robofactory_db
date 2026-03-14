@@ -39,6 +39,11 @@ async def get_basic_object_by_id(request: Request, id: UUID, repo: ModuleReposit
         if hasattr(result.bounding_contour.brep_files, 'get'):
             result.bounding_contour.brep_files.get('brep_string', 'NOT_FOUND')
 
+    # Добавляем координаты дочерних объектов из parent_child_module.
+    # Плагин FreeCAD использует их при загрузке сборки для расстановки Placement.
+    if result.children:
+        result.children_coordinates = repo.get_children_coordinates(id)
+
     return result
 
 

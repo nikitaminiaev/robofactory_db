@@ -271,8 +271,13 @@ function renderObjectFullDetails(data) {
             <button id="edit-btn" onclick="toggleEditMode()">Edit</button>
             <button id="copy-btn" onclick="showCopyModal()">Copy Module</button>
             <button id="delete-btn" class="danger-btn" onclick="showDeleteModal()">Delete Module</button>
+            <button id="btn-last-supersystem" data-id="${data.id}">Last Supersystem</button>
+            <button id="btn-last-subsystem"   data-id="${data.id}">Last Subsystem</button>
             <button id="save-btn" class="save-btn" style="display: none;" onclick="saveObjectChanges()">Save</button>
             <button id="cancel-btn" class="cancel-btn" style="display: none;" onclick="toggleEditMode(false)">Cancel</button>
+            <span id="freecad-btn-separator" class="freecad-action-btn" style="display:none; margin: 0 4px; color:#ccc;">|</span>
+            <button id="btn-fc-save-brep"     class="freecad-action-btn" data-id="${data.id}" style="display:none;">Save BREP</button>
+            <button id="btn-fc-save-position" class="freecad-action-btn" data-id="${data.id}" style="display:none;">Save Position</button>
         </div>
         <table class="detail-table">
             <tr><th>ID</th><td>${data.id} <button class="load-freecad-btn" data-id="${data.id}" style="display: none;">Load FreeCad</button></td></tr>
