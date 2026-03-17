@@ -62,12 +62,17 @@ async def get_parents_of_basic_object(id: UUID, repo: ModuleRepository = Depends
     if not parents:
         raise HTTPException(status_code=404, detail="Родители не найдены")
     
+    parent_counts = repo.get_parent_counts(id)
+    
     basic_objects_dicts = [
         BasicObjectDTO.from_module(obj).model_dump()
         for obj in parents
     ]
     
-    return JSONResponse(content={"basic_objects": basic_objects_dicts})
+    return JSONResponse(content={
+        "basic_objects": basic_objects_dicts,
+        "parent_counts": parent_counts,
+    })
     
 
 @router.get("/api/basic_objects/count")

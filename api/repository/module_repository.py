@@ -133,6 +133,23 @@ class ModuleRepository(BaseRepository):
             rows = db.execute(stmt).fetchall()
             return {str(row.child_id): row.cnt for row in rows}
 
+    def get_parent_counts(self, child_id: UUID) -> dict:
+        """
+        Возвращает словарь {parent_id_str: количество_вхождений} для ребёнка.
+        Считает строки в parent_child_module через GROUP BY.
+        """
+        with self.db_session.session() as db:
+            stmt = (
+                select(
+                    parent_child_module.c.parent_id,
+                    func.count().label('cnt'),
+                )
+                .where(parent_child_module.c.child_id == child_id)
+                .group_by(parent_child_module.c.parent_id)
+            )
+            rows = db.execute(stmt).fetchall()
+            return {str(row.parent_id): row.cnt for row in rows}
+
     def get_children_coordinates(self, parent_id: UUID) -> List[dict]:
         """
         Возвращает список всех записей children для данного родителя, включая дубликаты.

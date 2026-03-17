@@ -390,7 +390,7 @@ function renderObjectFullDetails(data) {
         return listHtml;
     };
 
-    detailsHtml += renderRelatedObjectsList('Parents', data.parents, 'parentsList');
+    detailsHtml += renderRelatedObjectsList('Parents', data.parents, 'parentsList', data.parent_counts);
     detailsHtml += renderRelatedObjectsList('Children', data.children, 'childrenList', data.children_counts);
     detailsHtml += `
         <div id="copy-modal" class="modal" style="display: none;">
