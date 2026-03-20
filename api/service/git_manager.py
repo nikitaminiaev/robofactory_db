@@ -2,6 +2,7 @@ from subprocess import run, CalledProcessError
 from pathlib import Path
 from uuid import UUID
 import os
+import shutil
 import logging
 import hashlib
 from service.constants import get_module_brep_directory, get_module_resource_path
@@ -218,6 +219,53 @@ def get_module_commit_history(module_id: UUID) -> list[dict[str, str]]:
         raise CalledProcessError(e.returncode, e.cmd, e.output, e.stderr) from e
 
 
+def get_module_git_tags(module_id: UUID) -> dict[str, list[str]]:
+    """
+    Возвращает словарь {commit_hash: [tag_name, ...]} для всех тегов репозитория.
+
+    Args:
+        module_id: UUID модуля
+
+    Returns:
+        Словарь commit_hash -> список тегов, указывающих на этот коммит.
+        Пустой словарь, если репозиторий не инициализирован.
+    """
+    repo_path = get_module_resource_path(module_id)
+
+    if not (repo_path / ".git").exists():
+        return {}
+
+    try:
+        result = run(
+            ["git", "tag", "-l", "--format=%(refname:short) %(objectname:short)"],
+            cwd=repo_path,
+            capture_output=True,
+            text=True,
+        )
+        tags: dict[str, list[str]] = {}
+        for line in result.stdout.strip().split("\n"):
+            if not line.strip():
+                continue
+            parts = line.split()
+            if len(parts) < 2:
+                continue
+            tag_name, short_hash = parts[0], parts[1]
+            # Resolve annotated tags to the tagged commit
+            deref = run(
+                ["git", "rev-list", "-n", "1", tag_name],
+                cwd=repo_path,
+                capture_output=True,
+                text=True,
+            )
+            full_hash = deref.stdout.strip() if deref.returncode == 0 else ""
+            if not full_hash:
+                continue
+            tags.setdefault(full_hash, []).append(tag_name)
+        return tags
+    except CalledProcessError:
+        return {}
+
+
 def get_module_git_diff(module_id: UUID) -> str:
     """
     Возвращает git diff HEAD — все незакоммиченные изменения относительно последнего коммита.
@@ -285,6 +333,79 @@ def _ensure_on_branch(repo_path: Path) -> None:
 
         run(["git", "checkout", branch], cwd=repo_path, capture_output=True, text=True)
         return
+
+
+def _ensure_release_unignored(repo_path: Path) -> None:
+    """
+    Добавляет исключения для release/ в .gitignore репозитория модуля,
+    если их там ещё нет.
+    """
+    gitignore_path = repo_path / ".gitignore"
+    if not gitignore_path.exists():
+        return
+
+    content = gitignore_path.read_text(encoding="utf-8")
+    if "!release/" in content:
+        return
+
+    lines_to_add = "\n!release/\n!release/**\n"
+    gitignore_path.write_text(content.rstrip() + lines_to_add, encoding="utf-8")
+
+
+def release_commit_module(module_id: UUID, version_number: str, description: str) -> str:
+    """
+    Выполняет релизный коммит: копирует brep_files в release/brep_files,
+    обновляет .gitignore, делает коммит и создаёт git-тег.
+
+    Args:
+        module_id: UUID модуля
+        version_number: Номер версии (используется для тега)
+        description: Описание (используется в сообщении коммита)
+
+    Returns:
+        Хеш коммита
+
+    Raises:
+        CalledProcessError: Если git-команды не удались
+    """
+    repo_path = get_module_resource_path(module_id)
+    brep_src = get_module_brep_directory(module_id)
+    release_brep_dst = repo_path / "release" / "brep_files"
+
+    if not is_module_git_repo_initialized(module_id):
+        init_module_git_repo(module_id)
+
+    _ensure_on_branch(repo_path)
+    _ensure_release_unignored(repo_path)
+
+    release_brep_dst.mkdir(parents=True, exist_ok=True)
+    if brep_src.exists():
+        for src_file in brep_src.rglob("*"):
+            if not src_file.is_file():
+                continue
+            rel = src_file.relative_to(brep_src)
+            dst_file = release_brep_dst / rel
+            dst_file.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src_file, dst_file)
+
+    try:
+        run(["git", "add", ".gitignore", "release/"], cwd=repo_path, check=True, capture_output=True, text=True)
+
+        status_result = run(["git", "status", "--porcelain"], cwd=repo_path, capture_output=True, text=True)
+        commit_message = f"Release v{version_number}: {description}"
+
+        if status_result.stdout.strip():
+            run(["git", "commit", "-m", commit_message], cwd=repo_path, check=True, capture_output=True, text=True)
+
+        tag_name = f"v{version_number}"
+        existing_tags = run(["git", "tag", "-l", tag_name], cwd=repo_path, capture_output=True, text=True)
+        if not existing_tags.stdout.strip():
+            run(["git", "tag", "-a", tag_name, "-m", commit_message], cwd=repo_path, check=True, capture_output=True, text=True)
+
+        hash_result = run(["git", "rev-parse", "HEAD"], cwd=repo_path, check=True, capture_output=True, text=True)
+        return hash_result.stdout.strip()
+    except CalledProcessError as e:
+        raise CalledProcessError(e.returncode, e.cmd, e.output, e.stderr) from e
 
 
 def checkout_module_commit(module_id: UUID, commit_hash: str, force: bool = False) -> None:

@@ -9,6 +9,7 @@ const GitHistory = (function() {
     let currentCommitHash = null;
     let gitgraph = null;
     let commits = [];
+    let commitTags = {};
 
     /**
      * Инициализация модуля
@@ -28,11 +29,13 @@ const GitHistory = (function() {
 
         const commitsReq = $.ajax({ url: `/api/modules/${moduleId}/commits`, method: 'GET' });
         const headReq    = $.ajax({ url: `/api/modules/${moduleId}/git-head`, method: 'GET' });
+        const tagsReq    = $.ajax({ url: `/api/modules/${moduleId}/git-tags`, method: 'GET' });
 
-        $.when(commitsReq, headReq)
-            .done(function(commitsResp, headResp) {
-                commits            = commitsResp[0];
-                currentCommitHash  = (headResp[0] && headResp[0].head) || null;
+        $.when(commitsReq, headReq, tagsReq)
+            .done(function(commitsResp, headResp, tagsResp) {
+                commits           = commitsResp[0];
+                currentCommitHash = (headResp[0] && headResp[0].head) || null;
+                commitTags        = tagsResp[0] || {};
                 // Если HEAD не определён, считаем первый коммит текущим
                 if (!currentCommitHash && commits.length > 0) {
                     currentCommitHash = commits[0].hash;
@@ -174,8 +177,16 @@ const GitHistory = (function() {
             row.append($('<td>').text(commit.message));
             row.append($('<td class="commit-date-cell">').text(formatDate(commit.date)));
 
-            const actionsCell = $('<td>');
+            const tagsCell = $('<td class="commit-tags-cell">');
+            const tags = commitTags[commit.hash] || [];
+            tags.forEach(function(tag) {
+                tagsCell.append(
+                    $('<span class="commit-tag-badge">').text(tag)
+                );
+            });
+            row.append(tagsCell);
 
+            const actionsCell = $('<td>');
             if (isCurrent) {
                 actionsCell.append($('<span class="current-badge">Текущая</span>'));
             } else {

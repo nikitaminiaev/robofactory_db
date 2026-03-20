@@ -292,7 +292,7 @@ function renderObjectFullDetails(data) {
         </table>`;
 
     const versions = window.currentModuleVersions || [];
-    if (versions.length > 0) {
+    {
         const versionRows = versions.map(v => {
             const date = v.created_ts ? new Date(v.created_ts).toLocaleString() : '-';
             const statusBadge = v.is_released
@@ -305,10 +305,17 @@ function renderObjectFullDetails(data) {
                 <td>${commit}</td>
                 <td>${statusBadge}</td>
                 <td style="white-space:nowrap;">${date}</td>
+                <td><button class="edit-version-btn" onclick="openEditVersionModal('${v.id}', '${v.version_number}', ${JSON.stringify(v.description || '')}, ${v.is_released})" title="Редактировать версию">✎</button></td>
             </tr>`;
         }).join('');
+        const emptyRow = versions.length === 0
+            ? `<tr><td colspan="6" style="color:#aaa;text-align:center;">Нет версий</td></tr>`
+            : '';
         detailsHtml += `
-            <h2>Версии</h2>
+            <div style="display:flex;align-items:center;gap:10px;">
+                <h2 style="margin:0;">Версии</h2>
+                <button onclick="openAddVersionModal()" title="Добавить версию" style="padding:2px 10px;font-size:18px;line-height:1;cursor:pointer;">+</button>
+            </div>
             <table class="detail-table">
                 <thead>
                     <tr>
@@ -317,9 +324,10 @@ function renderObjectFullDetails(data) {
                         <th>Коммит</th>
                         <th>Статус</th>
                         <th>Дата</th>
+                        <th></th>
                     </tr>
                 </thead>
-                <tbody>${versionRows}</tbody>
+                <tbody>${versionRows}${emptyRow}</tbody>
             </table>`;
     }
 
@@ -425,6 +433,57 @@ function renderObjectFullDetails(data) {
                     <button type="button" class="danger-btn" onclick="confirmDeleteModule()">Delete</button>
                     <button type="button" onclick="hideDeleteModal()">Cancel</button>
                 </div>
+            </div>
+        </div>
+        <div id="add-version-modal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <h3>Новая версия</h3>
+                <form id="add-version-form">
+                    <div class="form-group">
+                        <label for="add-version-number">Номер версии:</label>
+                        <input type="text" id="add-version-number" placeholder="1.0" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="add-version-description">Описание:</label>
+                        <textarea id="add-version-description" required></textarea>
+                    </div>
+                    <div class="form-group" style="display:flex;align-items:center;gap:8px;">
+                        <input type="checkbox" id="add-version-git-commit">
+                        <label for="add-version-git-commit" style="margin:0;">Сделать git commit</label>
+                    </div>
+                    <div class="form-group" style="display:flex;align-items:center;gap:8px;">
+                        <input type="checkbox" id="add-version-released" disabled>
+                        <label for="add-version-released" style="margin:0;color:#888;" id="add-version-released-label">Релизная версия (требует git commit)</label>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" onclick="submitAddVersion()">Создать</button>
+                        <button type="button" onclick="hideAddVersionModal()">Отмена</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <div id="edit-version-modal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <h3>Редактировать версию</h3>
+                <input type="hidden" id="edit-version-id">
+                <form id="edit-version-form">
+                    <div class="form-group">
+                        <label for="edit-version-number">Номер версии:</label>
+                        <input type="text" id="edit-version-number" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-version-description">Описание:</label>
+                        <textarea id="edit-version-description" required></textarea>
+                    </div>
+                    <div class="form-group" style="display:flex;align-items:center;gap:8px;">
+                        <input type="checkbox" id="edit-version-released">
+                        <label for="edit-version-released" style="margin:0;">Релизная версия</label>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" onclick="submitEditVersion()">Сохранить</button>
+                        <button type="button" onclick="hideEditVersionModal()">Отмена</button>
+                    </div>
+                </form>
             </div>
         </div>
     `;
@@ -926,5 +985,154 @@ async function commitScadChanges() {
         showToast('Ошибка коммита: ' + error.message, 'error');
     } finally {
         btn.disabled = false;
+    }
+}
+
+async function openAddVersionModal() {
+    const moduleId = window.currentObjectData && window.currentObjectData.id;
+    if (!moduleId) return;
+
+    const gitCheckbox = document.getElementById('add-version-git-commit');
+    const releasedCheckbox = document.getElementById('add-version-released');
+    const releasedLabel = document.getElementById('add-version-released-label');
+
+    gitCheckbox.checked = false;
+    releasedCheckbox.checked = false;
+    releasedCheckbox.disabled = true;
+    releasedLabel.style.color = '#888';
+
+    gitCheckbox.onchange = () => {
+        releasedCheckbox.disabled = !gitCheckbox.checked;
+        releasedLabel.style.color = gitCheckbox.checked ? '' : '#888';
+        if (!gitCheckbox.checked) releasedCheckbox.checked = false;
+    };
+
+    document.getElementById('add-version-description').value = '';
+
+    try {
+        const response = await fetch(`/api/modules/${moduleId}/versions/latest`);
+        if (response.ok) {
+            const data = await response.json();
+            document.getElementById('add-version-number').value = incrementVersion(data.version_number || '0.0');
+        } else {
+            document.getElementById('add-version-number').value = '1.0';
+        }
+    } catch {
+        document.getElementById('add-version-number').value = '1.0';
+    }
+
+    document.getElementById('add-version-modal').style.display = 'flex';
+}
+
+function hideAddVersionModal() {
+    document.getElementById('add-version-modal').style.display = 'none';
+}
+
+async function submitAddVersion() {
+    const moduleId = window.currentObjectData && window.currentObjectData.id;
+    if (!moduleId) return;
+
+    const versionNumber = document.getElementById('add-version-number').value.trim();
+    const description = document.getElementById('add-version-description').value.trim();
+    const makeGitCommit = document.getElementById('add-version-git-commit').checked;
+    const isReleased = document.getElementById('add-version-released').checked;
+
+    if (!versionNumber || !description) {
+        showToast('Заполните все обязательные поля', 'error');
+        return;
+    }
+    if (!isValidVersion(versionNumber)) {
+        showToast('Номер версии должен быть в формате X.Y (например, 1.0)', 'error');
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/modules/${moduleId}/versions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ version_number: versionNumber, description, make_git_commit: makeGitCommit, is_released: isReleased }),
+        });
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.detail || 'Ошибка создания версии');
+        }
+        const newVersion = await response.json();
+        window.currentModuleVersions = [...(window.currentModuleVersions || []), newVersion];
+        hideAddVersionModal();
+        showToast('Версия создана', 'success');
+        await refreshObjectDetails();
+    } catch (error) {
+        showToast('Ошибка: ' + error.message, 'error');
+    }
+}
+
+function openEditVersionModal(versionId, versionNumber, description, isReleased) {
+    document.getElementById('edit-version-id').value = versionId;
+    document.getElementById('edit-version-number').value = versionNumber;
+    document.getElementById('edit-version-description').value = description;
+    document.getElementById('edit-version-released').checked = isReleased;
+    document.getElementById('edit-version-modal').style.display = 'flex';
+}
+
+function hideEditVersionModal() {
+    document.getElementById('edit-version-modal').style.display = 'none';
+}
+
+async function submitEditVersion() {
+    const moduleId = window.currentObjectData && window.currentObjectData.id;
+    if (!moduleId) return;
+
+    const versionId = document.getElementById('edit-version-id').value;
+    const versionNumber = document.getElementById('edit-version-number').value.trim();
+    const description = document.getElementById('edit-version-description').value.trim();
+    const isReleased = document.getElementById('edit-version-released').checked;
+
+    if (!versionNumber || !description) {
+        showToast('Заполните все обязательные поля', 'error');
+        return;
+    }
+    if (!isValidVersion(versionNumber)) {
+        showToast('Номер версии должен быть в формате X.Y (например, 1.0)', 'error');
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/modules/${moduleId}/versions/${versionId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ version_number: versionNumber, description, is_released: isReleased }),
+        });
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.detail || 'Ошибка обновления версии');
+        }
+        const updated = await response.json();
+        window.currentModuleVersions = (window.currentModuleVersions || []).map(v =>
+            v.id === updated.id ? updated : v
+        );
+        hideEditVersionModal();
+        showToast('Версия обновлена', 'success');
+        await refreshObjectDetails();
+    } catch (error) {
+        showToast('Ошибка: ' + error.message, 'error');
+    }
+}
+
+async function refreshObjectDetails() {
+    const moduleId = window.currentObjectData && window.currentObjectData.id;
+    if (!moduleId) return;
+    try {
+        const [moduleRes, versionsRes] = await Promise.all([
+            fetch(`/api/basic_object/${moduleId}`),
+            fetch(`/api/modules/${moduleId}/versions`),
+        ]);
+        if (!moduleRes.ok) return;
+        const data = await moduleRes.json();
+        window.currentObjectData = data;
+        window.currentModuleVersions = versionsRes.ok ? await versionsRes.json() : [];
+        const container = document.getElementById('object-detail-container');
+        if (container) container.innerHTML = renderObjectDetails(data);
+    } catch (error) {
+        console.error('Ошибка обновления данных:', error);
     }
 }
