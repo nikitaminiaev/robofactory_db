@@ -90,8 +90,8 @@ run tests manually in api container:
     # run all tests
     docker exec api python -m pytest /usr/src/tests/ -v
 
-    # run specific test
-    docker exec api python -m pytest /usr/src/tests/integration/test_versioning_workflow.py -v
+    # run specific file
+    docker exec api python -m pytest /usr/src/tests/unit/test_git_manager.py -v
 
     # run with code coverage
     docker exec api pip install pytest-cov

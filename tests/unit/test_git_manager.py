@@ -10,8 +10,10 @@ from service.git_manager import (
     checkout_module_commit,
     commit_module_changes,
     get_module_commit_history,
+    get_module_git_tags,
     init_module_git_repo,
     is_module_git_repo_initialized,
+    release_commit_module,
 )
 
 
@@ -130,3 +132,81 @@ class TestGitManager:
 
         assert first_hash
         assert first_hash == second_hash
+
+    def test_get_module_git_tags_no_repo(self, tmp_path: Path):
+        module_id = UUID("12345678-1234-5678-1234-567812345678")
+        module_root = tmp_path / str(module_id)
+        module_root.mkdir(parents=True, exist_ok=True)
+
+        with patch("service.git_manager.get_module_resource_path", return_value=module_root):
+            result = get_module_git_tags(module_id)
+
+        assert result == {}
+
+    def test_get_module_git_tags_with_tags(self, tmp_path: Path):
+        module_id = UUID("12345678-1234-5678-1234-567812345678")
+        module_root = tmp_path / str(module_id)
+        module_root.mkdir(parents=True, exist_ok=True)
+        (module_root / ".git").mkdir(parents=True, exist_ok=True)
+
+        tag_to_hash = {"v1.0": "abc123", "v2.0": "def456"}
+
+        def run_side_effect(*args, **kwargs):
+            cmd = args[0] if args else kwargs.get("args", [])
+            if "tag" in cmd:
+                lines = "\n".join(f"{tag} {hash_}" for tag, hash_ in tag_to_hash.items())
+                return MagicMock(stdout=lines + "\n")
+            if "rev-list" in cmd:
+                tag_name = cmd[-1]
+                commit_hash = tag_to_hash.get(tag_name, "")
+                return MagicMock(stdout=commit_hash + "\n", returncode=0)
+            return MagicMock(stdout="", returncode=0)
+
+        with patch("service.git_manager.get_module_resource_path", return_value=module_root):
+            with patch("service.git_manager.run", side_effect=run_side_effect):
+                result = get_module_git_tags(module_id)
+
+        assert "abc123" in result
+        assert "v1.0" in result["abc123"]
+        assert "v2.0" in result["def456"]
+
+    def test_release_commit_module_creates_release_dir(self, tmp_path: Path, monkeypatch):
+        module_id = UUID("12345678-1234-5678-1234-567812345678")
+        module_root = tmp_path / str(module_id)
+        brep_dir = module_root / "brep_files"
+        brep_dir.mkdir(parents=True, exist_ok=True)
+        (brep_dir / "test.brep").write_text("brep content", encoding="utf-8")
+
+        def mock_run_side_effect(*args, **kwargs):
+            cmd = args[0] if args else kwargs.get("args", [])
+            if "rev-parse" in cmd:
+                return MagicMock(stdout="abc123\n", returncode=0)
+            if "status" in cmd:
+                return MagicMock(stdout="M .gitignore\n", returncode=0)
+            if "tag" in cmd and "-l" in cmd:
+                return MagicMock(stdout="", returncode=0)
+            return MagicMock(stdout="", returncode=0)
+
+        def mock_is_initialized(mid):
+            return True
+
+        def mock_ensure_on_branch(path):
+            pass
+
+        def mock_init(mid):
+            return str(module_root)
+
+        monkeypatch.setattr("service.git_manager.is_module_git_repo_initialized", mock_is_initialized)
+        monkeypatch.setattr("service.git_manager._ensure_on_branch", mock_ensure_on_branch)
+        monkeypatch.setattr("service.git_manager.init_module_git_repo", mock_init)
+        monkeypatch.setattr("service.git_manager.get_module_resource_path", lambda mid: module_root)
+        monkeypatch.setattr("service.git_manager.get_module_brep_directory", lambda mid: brep_dir)
+
+        with patch("service.git_manager.run", side_effect=mock_run_side_effect):
+            with patch("service.git_manager.get_module_resource_path", return_value=module_root):
+                result = release_commit_module(module_id, "1.0", "Test release")
+
+        assert result == "abc123"
+        release_dir = module_root / "release" / "brep_files"
+        assert release_dir.exists()
+        assert (release_dir / "test.brep").exists()
