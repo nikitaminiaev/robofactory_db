@@ -448,12 +448,8 @@ function renderObjectFullDetails(data) {
                         <textarea id="add-version-description" required></textarea>
                     </div>
                     <div class="form-group" style="display:flex;align-items:center;gap:8px;">
-                        <input type="checkbox" id="add-version-git-commit">
-                        <label for="add-version-git-commit" style="margin:0;">Сделать git commit</label>
-                    </div>
-                    <div class="form-group" style="display:flex;align-items:center;gap:8px;">
-                        <input type="checkbox" id="add-version-released" disabled>
-                        <label for="add-version-released" style="margin:0;color:#888;" id="add-version-released-label">Релизная версия (требует git commit)</label>
+                        <input type="checkbox" id="add-version-released">
+                        <label for="add-version-released" style="margin:0;">Релизная версия</label>
                     </div>
                     <div class="modal-actions">
                         <button type="button" onclick="submitAddVersion()">Создать</button>
@@ -992,21 +988,7 @@ async function openAddVersionModal() {
     const moduleId = window.currentObjectData && window.currentObjectData.id;
     if (!moduleId) return;
 
-    const gitCheckbox = document.getElementById('add-version-git-commit');
-    const releasedCheckbox = document.getElementById('add-version-released');
-    const releasedLabel = document.getElementById('add-version-released-label');
-
-    gitCheckbox.checked = false;
-    releasedCheckbox.checked = false;
-    releasedCheckbox.disabled = true;
-    releasedLabel.style.color = '#888';
-
-    gitCheckbox.onchange = () => {
-        releasedCheckbox.disabled = !gitCheckbox.checked;
-        releasedLabel.style.color = gitCheckbox.checked ? '' : '#888';
-        if (!gitCheckbox.checked) releasedCheckbox.checked = false;
-    };
-
+    document.getElementById('add-version-released').checked = false;
     document.getElementById('add-version-description').value = '';
 
     try {
@@ -1034,7 +1016,6 @@ async function submitAddVersion() {
 
     const versionNumber = document.getElementById('add-version-number').value.trim();
     const description = document.getElementById('add-version-description').value.trim();
-    const makeGitCommit = document.getElementById('add-version-git-commit').checked;
     const isReleased = document.getElementById('add-version-released').checked;
 
     if (!versionNumber || !description) {
@@ -1050,7 +1031,7 @@ async function submitAddVersion() {
         const response = await fetch(`/api/modules/${moduleId}/versions`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ version_number: versionNumber, description, make_git_commit: makeGitCommit, is_released: isReleased }),
+            body: JSON.stringify({ version_number: versionNumber, description, make_git_commit: isReleased, is_released: isReleased }),
         });
         if (!response.ok) {
             const err = await response.json();
