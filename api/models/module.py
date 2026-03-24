@@ -10,7 +10,7 @@ from sqlalchemy import Enum as SQLAlchemyEnum
 
 from .base import Base
 from .bounding_contour import BoundingContour
-from .associations import parent_child_module, module_stream, module_platform, module_boundary
+from .associations import parent_child_module, module_stream, module_platform, module_boundary, module_role_assignment
 
 
 class ModuleStatus(str, Enum):
@@ -72,6 +72,8 @@ class Module(Base):
     )
 
     versions = relationship("ModuleVersion", back_populates="module", cascade="all, delete-orphan")
+
+    roles = relationship("ModuleRole", secondary=module_role_assignment, back_populates="modules")
 
     created_ts = Column(DateTime(timezone=True), server_default=func.now())
     updated_ts = Column(DateTime(timezone=True), onupdate=func.now())
@@ -149,4 +151,8 @@ class Module(Base):
                     "is_released": self.versions[0].is_released,
                     "created_ts": self.versions[0].created_ts.isoformat() if self.versions[0].created_ts else None
                 } if self.versions else None,
+            "roles": [
+                {"id": str(role.id), "name": role.name, "description": role.description}
+                for role in self.roles
+            ],
         }

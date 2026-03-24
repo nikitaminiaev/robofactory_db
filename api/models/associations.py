@@ -1,6 +1,12 @@
 from sqlalchemy import Column, ForeignKey, Table, UUID, JSON, text
 from .base import Base
 
+module_role_assignment = Table(
+    'module_role_assignment', Base.metadata,
+    Column('module_id', UUID(as_uuid=True), ForeignKey('modules.id'), primary_key=True),
+    Column('role_id', UUID(as_uuid=True), ForeignKey('module_roles.id'), primary_key=True),
+)
+
 # Связь родитель-потомок для модулей с координатами.
 # Суррогатный PK id позволяет иметь несколько записей с одной парой
 # (parent_id, child_id) — для случаев, когда один дочерний модуль

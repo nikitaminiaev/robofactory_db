@@ -22,7 +22,8 @@ class ModuleRepository(BaseRepository):
                 selectinload(Module.boundaries),
                 selectinload(Module.streams),
                 selectinload(Module.platforms),
-                selectinload(Module.versions)
+                selectinload(Module.versions),
+                selectinload(Module.roles),
             ).order_by(
                 Module.id
             )
@@ -42,7 +43,8 @@ class ModuleRepository(BaseRepository):
                 selectinload(Module.boundaries),
                 selectinload(Module.streams),
                 selectinload(Module.platforms),
-                selectinload(Module.versions)
+                selectinload(Module.versions),
+                selectinload(Module.roles),
             )
             
             if top_level_ids is None:
@@ -76,7 +78,8 @@ class ModuleRepository(BaseRepository):
                 selectinload(Module.boundaries),
                 selectinload(Module.streams),
                 selectinload(Module.platforms),
-                selectinload(Module.versions)
+                selectinload(Module.versions),
+                selectinload(Module.roles),
             )
             
             if name:
@@ -106,7 +109,8 @@ class ModuleRepository(BaseRepository):
                 selectinload(Module.boundaries),
                 selectinload(Module.streams),
                 selectinload(Module.platforms),
-                selectinload(Module.versions)
+                selectinload(Module.versions),
+                selectinload(Module.roles),
             ).filter_by(id=id).first()
             print(f"DEBUG get_module_with_relations_by_id: module found = {module is not None}")
             if module:
@@ -149,6 +153,35 @@ class ModuleRepository(BaseRepository):
             )
             rows = db.execute(stmt).fetchall()
             return {str(row.parent_id): row.cnt for row in rows}
+
+    def get_children_roles(self, parent_id: UUID) -> dict:
+        """
+        Возвращает словарь {child_id_str: [role_id_str, ...]} — роли, назначенные
+        каждому дочернему модулю (для отображения состояния чекбоксов в матрице).
+        """
+        from models.associations import module_role_assignment
+        with self.db_session.session() as db:
+            children_ids = db.execute(
+                select(parent_child_module.c.child_id).where(
+                    parent_child_module.c.parent_id == parent_id
+                ).distinct()
+            ).scalars().all()
+
+            if not children_ids:
+                return {}
+
+            rows = db.execute(
+                select(
+                    module_role_assignment.c.module_id,
+                    module_role_assignment.c.role_id,
+                ).where(module_role_assignment.c.module_id.in_(children_ids))
+            ).fetchall()
+
+        result: dict = {}
+        for row in rows:
+            key = str(row.module_id)
+            result.setdefault(key, []).append(str(row.role_id))
+        return result
 
     def get_children_coordinates(self, parent_id: UUID) -> List[dict]:
         """
@@ -204,7 +237,8 @@ class ModuleRepository(BaseRepository):
                 selectinload(Module.boundaries),
                 selectinload(Module.streams),
                 selectinload(Module.platforms),
-                selectinload(Module.versions)
+                selectinload(Module.versions),
+                selectinload(Module.roles),
             )
             
             query = query.join(
@@ -226,7 +260,8 @@ class ModuleRepository(BaseRepository):
                 selectinload(Module.boundaries),
                 selectinload(Module.streams),
                 selectinload(Module.platforms),
-                selectinload(Module.versions)
+                selectinload(Module.versions),
+                selectinload(Module.roles),
             )
             
             query = query.join(
@@ -402,6 +437,7 @@ class ModuleRepository(BaseRepository):
                 selectinload(Module.platforms),
                 selectinload(Module.boundaries),
                 selectinload(Module.versions),
+                selectinload(Module.roles),
             ).filter_by(id=new_module.id).first()
 
             return new_module

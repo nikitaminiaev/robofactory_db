@@ -20,6 +20,8 @@ class BasicObjectDTO(BaseModel):
     parent_counts: Dict[str, int] = {}
     children_coordinates: Dict[str, Optional[dict]] = {}
     children_with_coordinates: List[dict] = []
+    roles: List[Dict] = []
+    children_roles: Dict[str, List[str]] = {}
     created_ts: Optional[str] = None
     updated_ts: Optional[str] = None
 

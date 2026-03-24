@@ -34,7 +34,9 @@ async def get_basic_object_by_id(request: Request, id: UUID, repo: ModuleReposit
 
     children_counts = repo.get_child_counts(id)
     parent_counts = repo.get_parent_counts(id)
+    children_roles = repo.get_children_roles(id)
     result = BasicObjectDTO.from_module(basic_object, children_counts=children_counts, parent_counts=parent_counts)
+    result.children_roles = children_roles
 
     if result.bounding_contour:
         if hasattr(result.bounding_contour.brep_files, 'get'):

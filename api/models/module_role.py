@@ -1,8 +1,10 @@
 import uuid
 from sqlalchemy import Column, UUID, String, Text, DateTime
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
 from .base import Base
+from .associations import module_role_assignment
 
 
 class ModuleRole(Base):
@@ -11,4 +13,6 @@ class ModuleRole(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(String, nullable=False, unique=True)
     description = Column(Text, nullable=True)
-    created_ts = Column(DateTime(timezone=True), server_default=func.now()) 
+    created_ts = Column(DateTime(timezone=True), server_default=func.now())
+
+    modules = relationship("Module", secondary=module_role_assignment, back_populates="roles")
