@@ -1126,79 +1126,15 @@ async function refreshObjectDetails() {
 function renderRolesMatrix(data) {
     if (!data.children || data.children.length === 0) return '';
 
-    const roles = data.roles || [];
-    const childrenRoles = data.children_roles || {};
+    window.rolesMatrixCollapsed = window.rolesMatrixCollapsed || new Set();
     const parentId = data.id;
-
-    const buildChildRows = (editMode) => {
-        return data.children.map(childId => {
-            const cells = roles.map(role => {
-                const checked = (childrenRoles[childId] || []).includes(role.id) ? 'checked' : '';
-                if (editMode) {
-                    return `<td class="roles-matrix__cell">
-                        <input type="checkbox" class="roles-matrix__checkbox"
-                            data-child-id="${childId}" data-role-id="${role.id}"
-                            ${checked}
-                            onchange="rolesMatrixToggleAssignment(this, '${childId}', '${role.id}')">
-                    </td>`;
-                }
-                return `<td class="roles-matrix__cell">
-                    <input type="checkbox" class="roles-matrix__checkbox" ${checked} disabled>
-                </td>`;
-            }).join('');
-
-            return `<tr data-child-id="${childId}">
-                <td class="roles-matrix__child-name" id="roles-child-name-${childId}">
-                    <a href="/basic_object/${childId}">${window.objectNamesCache && window.objectNamesCache[childId] ? window.objectNamesCache[childId] : childId}</a>
-                </td>
-                ${cells}
-            </tr>`;
-        }).join('');
-    };
-
-    const buildHeaderCells = (editMode) => {
-        if (roles.length === 0) return '';
-        return roles.map(role => {
-            const deleteBtn = editMode
-                ? `<button class="roles-matrix__delete-role-btn" onclick="rolesMatrixDeleteColumn('${parentId}', '${role.id}', '${escapeHtml(role.name)}')" title="Удалить роль из модуля">×</button>`
-                : '';
-            return `<th class="roles-matrix__th" title="${escapeHtml(role.description || '')}">
-                ${escapeHtml(role.name)}${deleteBtn}
-            </th>`;
-        }).join('');
-    };
-
-    const tableHtml = (editMode) => `
-        <table class="roles-matrix">
-            <thead>
-                <tr>
-                    <th class="roles-matrix__th roles-matrix__th--child">Модуль</th>
-                    ${buildHeaderCells(editMode)}
-                    ${editMode ? '<th class="roles-matrix__th roles-matrix__th--add"></th>' : ''}
-                </tr>
-            </thead>
-            <tbody>
-                ${buildChildRows(editMode)}
-            </tbody>
-        </table>`;
 
     const addRoleFormHtml = `
         <div id="roles-matrix-add-form" class="roles-matrix__add-form" style="display:none;">
             <input type="text" id="roles-matrix-new-name" placeholder="Название роли" class="roles-matrix__input">
             <input type="text" id="roles-matrix-new-desc" placeholder="Описание (необязательно)" class="roles-matrix__input">
             <button class="roles-matrix__btn roles-matrix__btn--confirm" onclick="rolesMatrixAddColumn('${parentId}')">Добавить</button>
-            <button class="roles-matrix__btn roles-matrix__btn--cancel" onclick="rolesMatrixHideAddForm()">Отмена</button>
         </div>`;
-
-    setTimeout(() => {
-        const childIds = data.children;
-        loadObjectNames(childIds).then(names => {
-            childIds.forEach(id => {
-                const el = document.getElementById(`roles-child-name-${id}`);
-                if (el && names[id]) el.innerHTML = `<a href="/basic_object/${id}">${escapeHtml(names[id])}</a>`;
-            });
-        });
-    }, 0);
 
     return `
         <div class="roles-matrix__section" id="roles-matrix-section">
@@ -1208,7 +1144,7 @@ function renderRolesMatrix(data) {
                 <button class="roles-matrix__edit-btn roles-matrix__edit-btn--done" id="roles-matrix-done-btn" onclick="rolesMatrixDisableEdit('${parentId}')" style="display:none;">Done</button>
             </div>
             <div id="roles-matrix-table-wrapper">
-                ${tableHtml(false)}
+                ${buildRolesMatrixTable(data, false, parentId)}
             </div>
             ${addRoleFormHtml}
         </div>`;
@@ -1244,28 +1180,42 @@ function rolesMatrixDisableEdit(parentId) {
 function buildRolesMatrixTable(data, editMode, parentId) {
     const roles = data.roles || [];
     const childrenRoles = data.children_roles || {};
+    const collapsed = window.rolesMatrixCollapsed || new Set();
 
     const headerCells = roles.map(role => {
+        const isCollapsed = collapsed.has(role.id);
+        const collapseIcon = isCollapsed ? '›' : '‹';
+        const collapseTitle = isCollapsed ? 'Развернуть' : 'Свернуть';
+        const collapseBtn = `<button class="roles-matrix__collapse-btn" onclick="rolesMatrixToggleColumn('${role.id}')" title="${collapseTitle}">${collapseIcon}</button>`;
         const deleteBtn = editMode
-            ? `<button class="roles-matrix__delete-role-btn" onclick="rolesMatrixDeleteColumn('${parentId}', '${role.id}', '${escapeHtml(role.name)}')" title="Удалить роль из модуля">×</button>`
+            ? `<button class="roles-matrix__delete-role-btn roles-matrix__col-label" onclick="rolesMatrixDeleteColumn('${parentId}', '${role.id}', '${escapeHtml(role.name)}')" title="Удалить роль из модуля">×</button>`
             : '';
-        return `<th class="roles-matrix__th" title="${escapeHtml(role.description || '')}">${escapeHtml(role.name)}${deleteBtn}</th>`;
+        const collapsedClass = isCollapsed ? ' roles-matrix__col--collapsed' : '';
+        return `<th class="roles-matrix__th${collapsedClass}" data-role-col="${role.id}" title="${escapeHtml(role.description || '')}">
+            <div class="roles-matrix__th-inner">
+                ${collapseBtn}
+                <span class="roles-matrix__col-label">${escapeHtml(role.name)}</span>
+                ${deleteBtn}
+            </div>
+        </th>`;
     }).join('');
 
     const bodyRows = (data.children || []).map(childId => {
         const cells = roles.map(role => {
+            const isCollapsed = collapsed.has(role.id);
             const checked = (childrenRoles[childId] || []).includes(role.id) ? 'checked' : '';
+            const collapsedClass = isCollapsed ? ' roles-matrix__col--collapsed' : '';
             if (editMode) {
-                return `<td class="roles-matrix__cell"><input type="checkbox" class="roles-matrix__checkbox" data-child-id="${childId}" data-role-id="${role.id}" ${checked} onchange="rolesMatrixToggleAssignment(this, '${childId}', '${role.id}')"></td>`;
+                return `<td class="roles-matrix__cell${collapsedClass}" data-role-col="${role.id}"><input type="checkbox" class="roles-matrix__checkbox" data-child-id="${childId}" data-role-id="${role.id}" ${checked} onchange="rolesMatrixToggleAssignment(this, '${childId}', '${role.id}')"></td>`;
             }
-            return `<td class="roles-matrix__cell"><input type="checkbox" class="roles-matrix__checkbox" ${checked} disabled></td>`;
+            return `<td class="roles-matrix__cell${collapsedClass}" data-role-col="${role.id}"><input type="checkbox" class="roles-matrix__checkbox" ${checked} disabled></td>`;
         }).join('');
 
         const name = window.objectNamesCache && window.objectNamesCache[childId] ? escapeHtml(window.objectNamesCache[childId]) : childId;
         return `<tr data-child-id="${childId}">
             <td class="roles-matrix__child-name"><a href="/basic_object/${childId}">${name}</a></td>
             ${cells}
-            ${editMode ? '<td></td>' : ''}
+            ${editMode ? '<td class="roles-matrix__th roles-matrix__th--add"></td>' : ''}
         </tr>`;
     }).join('');
 
@@ -1277,6 +1227,23 @@ function buildRolesMatrixTable(data, editMode, parentId) {
         </tr></thead>
         <tbody>${bodyRows}</tbody>
     </table>`;
+}
+
+function rolesMatrixToggleColumn(roleId) {
+    if (!window.rolesMatrixCollapsed) window.rolesMatrixCollapsed = new Set();
+
+    if (window.rolesMatrixCollapsed.has(roleId)) {
+        window.rolesMatrixCollapsed.delete(roleId);
+    } else {
+        window.rolesMatrixCollapsed.add(roleId);
+    }
+
+    const isEditMode = document.getElementById('roles-matrix-done-btn')?.style.display !== 'none';
+    const parentId = window.currentObjectData?.id;
+    const wrapper = document.getElementById('roles-matrix-table-wrapper');
+    if (wrapper && parentId) {
+        wrapper.innerHTML = buildRolesMatrixTable(window.currentObjectData, isEditMode, parentId);
+    }
 }
 
 async function rolesMatrixToggleAssignment(checkbox, childId, roleId) {
