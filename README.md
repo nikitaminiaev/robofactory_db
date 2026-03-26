@@ -1,98 +1,53 @@
-## Clone repo
+## Быстрый старт
 
-    git clone https://github.com/nikitaminiaev/robofactory_db.git
-    cd robofactory_db
+```bash
+./install.sh   # первый запуск: создаёт .env, собирает и запускает контейнеры
+./start.sh     # последующие запуски
+```
 
-## Install
+После запуска:
+- API: http://localhost:8000
+- DB:  localhost:5433
 
-	docker compose build
+Остановить:
 
+    docker compose down
 
-## Usage
-Before up container:
+---
 
-	docker compose up -d
+## Разработка
 
-check that the containers are running:
-
-    docker ps
-
-restore a test db dump:
-
-    docker exec -ti db bash
-    psql -U admin -h db -p 5433 < /home/db/dump/schema.sql
-(pass: root)
-
-    exit
-
-execute the code in the api container:
-
-    docker exec api python main.py
-
-or:
-
-    docker exec -ti api bash
-    python main.py
-
-### other useful commands:
-
-enter the db container and to postgres terminal:
-
-    docker exec -ti db bash
-    psql postgres://admin:root@localhost:5433
-    \connect robofactory;
-
-enter the container with the python:
+### Войти в контейнер API
 
     docker exec -ti api bash
 
-make a db dump:
+### Создать миграцию
 
-    docker exec -e PGPASSWORD=root db pg_dump --create -U admin -h db -p 5432 -d robofactory > ./db/dump/schema.sql
+```bash
+cd database
+alembic revision --autogenerate -m "migration name"
+```
 
-exit the container:
-    
-    exit
+### Применить миграции
 
-stop container:
+```bash
+alembic upgrade head
+```
 
-    docker stop api
+### Откатить миграцию
 
-generating a db diagram:
-    eralchemy2 -i postgresql://admin:root@db:5432/robofactory -o diagram.png --exclude-tables alembic_version
+```bash
+alembic downgrade -1
+```
 
-### migrations
-all commands execute from the api/database directory   
+### Запустить тесты
 
-    docker exec -ti api bash
-    
-create migration
+```bash
+docker exec api python -m pytest /usr/src/tests/ -v
+```
 
-    cd database
-    alembic revision --autogenerate -m "Create parts_cad table"
+### Диаграмма БД
 
-execute all new migrations:
-
-    alembic upgrade head
-
-roll back migration:
-
-    alembic downgrade -1
-
-### scheme db
-
-    eralchemy2 -i postgresql://myuser:mypassword@localhost:5433/mydatabase -o db_diagram.png
-
-### testing
-
-run tests manually in api container:
-
-    # run all tests
-    docker exec api python -m pytest /usr/src/tests/ -v
-
-    # run specific file
-    docker exec api python -m pytest /usr/src/tests/unit/test_git_manager.py -v
-
-    # run with code coverage
-    docker exec api pip install pytest-cov
-    docker exec api python -m pytest /usr/src/tests/ --cov=api --cov-report=html
+```bash
+docker exec -ti api eralchemy2 -i postgresql://admin:root@db:5432/robofactory -o diagram.png --exclude-tables alembic_version
+```
