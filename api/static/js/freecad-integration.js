@@ -75,15 +75,45 @@ function updateFreeCadButtonsVisibility() {
             button.style.display = 'inline-block';
             applyFreeCadButtonStyle(button);
 
+            // Показываем или создаем поле ввода depth
+            let depthInput = button.nextElementSibling;
+            if (!depthInput || !depthInput.classList.contains('freecad-depth-input')) {
+                // Создаем поле ввода depth рядом с кнопкой
+                depthInput = document.createElement('input');
+                depthInput.type = 'number';
+                depthInput.min = '1';
+                depthInput.max = '10';
+                depthInput.value = '1';
+                depthInput.className = 'freecad-depth-input';
+                depthInput.style.width = '40px';
+                depthInput.style.marginLeft = '4px';
+                depthInput.style.padding = '2px 4px';
+                depthInput.style.borderRadius = '4px';
+                depthInput.style.border = '1px solid #ccc';
+                depthInput.style.fontSize = '12px';
+                depthInput.title = 'Глубина загрузки';
+                
+                // Вставляем поле ввода после кнопки
+                button.parentNode.insertBefore(depthInput, button.nextSibling);
+            }
+            depthInput.style.display = 'inline-block';
+
             if (!button.hasAttribute('data-initialized')) {
                 button.setAttribute('data-initialized', 'true');
+                
                 button.addEventListener('click', function(e) {
                     e.preventDefault();
-                    loadObjectToFreeCad(this.getAttribute('data-id'));
+                    const depth = parseInt(depthInput.value) || 1;
+                    loadObjectToFreeCad(this.getAttribute('data-id'), depth);
                 });
             }
         } else {
             button.style.display = 'none';
+            // Скрываем поле ввода depth
+            const depthInput = button.nextElementSibling;
+            if (depthInput && depthInput.classList.contains('freecad-depth-input')) {
+                depthInput.style.display = 'none';
+            }
         }
     });
 
@@ -271,7 +301,7 @@ function applyFreeCadButtonStyle(button) {
 }
 
 // Функция для загрузки объекта во FreeCad
-function loadObjectToFreeCad(objectId) {
+function loadObjectToFreeCad(objectId, depth = 1) {
     // Проверяем статус сервера и клиентов перед отправкой запроса
     if (!serverRunning || connectedClientsCount === 0) {
         showNotification('Невозможно загрузить объект во FreeCad: WebSocket-сервер не запущен или нет подключенных клиентов.', 'error');
@@ -281,10 +311,10 @@ function loadObjectToFreeCad(objectId) {
     // Показываем индикатор загрузки
     showNotification('Отправка запроса на загрузку во FreeCad...', 'info');
 
-    console.log(`Отправка запроса на загрузку объекта ${objectId} во FreeCad`);
+    console.log(`Отправка запроса на загрузку объекта ${objectId} во FreeCad с depth=${depth}`);
     
     // Делаем запрос к API
-    fetch(`/api/basic_object/${objectId}/load_freecad`, {
+    fetch(`/api/basic_object/${objectId}/load_freecad?depth=${depth}`, {
         method: 'POST'
     })
     .then(response => {
@@ -296,20 +326,6 @@ function loadObjectToFreeCad(objectId) {
     })
     .then(data => {
         console.log('Данные ответа:', data);
-        
-        // if (data.success && data.socket_server_running && data.message_sent) {
-        //     // Успешный результат - кратковременное уведомление
-        //     showNotification('Объект успешно отправлен во FreeCad', 'success');
-        // } else {
-        //     // Ошибка - подробное уведомление
-        //     let message = 'Ошибка при отправке объекта во FreeCad';
-        //     if (!data.socket_server_running) {
-        //         message += ': WebSocket-сервер не запущен';
-        //     } else if (!data.message_sent) {
-        //         message += ': Не удалось отправить команду во FreeCad';
-        //     }
-        //     showNotification(message, 'error');
-        // }
     })
     .catch(error => {
         console.error('Ошибка при загрузке объекта:', error);

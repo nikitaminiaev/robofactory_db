@@ -10,13 +10,16 @@ router = APIRouter()
 part_loader = PartLoader()
 
 @router.post("/api/basic_object/{id}/load_freecad")
-async def load_object_to_freecad(request: Request, id: UUID, repo: ModuleRepository = Depends()):
+async def load_object_to_freecad(request: Request, id: UUID, depth: int = 1, repo: ModuleRepository = Depends()):
     """
     Маршрут для загрузки объекта во FreeCad.
     Получает объект по ID и отправляет его данные для загрузки во FreeCad.
+    
+    Args:
+        depth: Глубина загрузки иерархии модулей (по умолчанию 1)
     """
     try:
-        message_sent = part_loader.load_part_to_freecad(id=str(id))
+        message_sent = part_loader.load_part_to_freecad(id=str(id), depth=depth)
         
         return JSONResponse({
             "success": True,

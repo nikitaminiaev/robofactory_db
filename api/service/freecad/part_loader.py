@@ -8,9 +8,9 @@ class PartLoader:
     def __init__(self):
         self.server = get_server_instance()
 
-    def load_part_to_freecad(self, id: Optional[str] = None) -> bool:
+    def load_part_to_freecad(self, id: Optional[str] = None, depth: int = 1) -> bool:
         try:
-            return self.server.send_message(load_object_in_new_doc(id))
+            return self.server.send_message(load_object_in_new_doc(id, depth))
         except Exception as e:
             raise Exception(f"Ошибка при загрузке объекта во FreeCAD: {str(e)}")
 

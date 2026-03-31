@@ -59,12 +59,13 @@ Gui.SendMsgToActiveView("ViewFit")
 result = {{'object_created': part_obj.Name, 'document_name': doc.Name}}
 """
 
-def load_object_in_new_doc(obj_id: str):
+def load_object_in_new_doc(obj_id: str, depth: int = 1):
     return f'''
             {{
                 "function_call": "load_object_in_new_doc",
                 "arguments": {{
-                    "obj_id": "{obj_id}"
+                    "obj_id": "{obj_id}",
+                    "depth": {depth}
                 }}
             }}
             '''
