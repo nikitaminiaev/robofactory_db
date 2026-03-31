@@ -1,4 +1,6 @@
 from uuid import UUID
+from typing import List, Optional
+from pydantic import BaseModel
 from fastapi import APIRouter, Depends, Request, HTTPException
 from fastapi.responses import JSONResponse
 from repository.module_repository import ModuleRepository
@@ -9,17 +11,32 @@ router = APIRouter()
 
 part_loader = PartLoader()
 
+
+class ChildDepth(BaseModel):
+    child_id: str
+    parent_child_module_id: Optional[str] = None
+    depth: int = 1
+
+
+class LoadFreeCadRequest(BaseModel):
+    child_depths: List[ChildDepth] = []
+
+
 @router.post("/api/basic_object/{id}/load_freecad")
-async def load_object_to_freecad(request: Request, id: UUID, depth: int = 1, repo: ModuleRepository = Depends()):
+async def load_object_to_freecad(request: Request, id: UUID, repo: ModuleRepository = Depends()):
     """
     Маршрут для загрузки объекта во FreeCad.
     Получает объект по ID и отправляет его данные для загрузки во FreeCad.
     
-    Args:
-        depth: Глубина загрузки иерархии модулей (по умолчанию 1)
+    Тело запроса может содержать:
+    - child_depths: массив объектов {child_id, parent_child_module_id, depth} для настройки глубины загрузки каждого ребенка
     """
     try:
-        message_sent = part_loader.load_part_to_freecad(id=str(id), depth=depth)
+        # Получаем тело запроса
+        body = await request.json()
+        child_depths = body.get('child_depths', []) if body else []
+        
+        message_sent = part_loader.load_part_to_freecad(id=str(id), child_depths=child_depths)
         
         return JSONResponse({
             "success": True,

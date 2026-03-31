@@ -1,4 +1,5 @@
 import json
+from typing import List, Dict, Any, Optional
 
 
 def save_brep(module_id: str) -> str:
@@ -59,13 +60,15 @@ Gui.SendMsgToActiveView("ViewFit")
 result = {{'object_created': part_obj.Name, 'document_name': doc.Name}}
 """
 
-def load_object_in_new_doc(obj_id: str, depth: int = 1):
+def load_object_in_new_doc(obj_id: str, child_depths: List[Dict[str, Any]] = None):
+    if child_depths is None:
+        child_depths = []
     return f'''
             {{
                 "function_call": "load_object_in_new_doc",
                 "arguments": {{
                     "obj_id": "{obj_id}",
-                    "depth": {depth}
+                    "child_depths": {json.dumps(child_depths)}
                 }}
             }}
             '''

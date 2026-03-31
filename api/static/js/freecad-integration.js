@@ -75,45 +75,31 @@ function updateFreeCadButtonsVisibility() {
             button.style.display = 'inline-block';
             applyFreeCadButtonStyle(button);
 
-            // Показываем или создаем поле ввода depth
+            // Убираем поле depth если оно есть (старый код)
             let depthInput = button.nextElementSibling;
-            if (!depthInput || !depthInput.classList.contains('freecad-depth-input')) {
-                // Создаем поле ввода depth рядом с кнопкой
-                depthInput = document.createElement('input');
-                depthInput.type = 'number';
-                depthInput.min = '1';
-                depthInput.max = '10';
-                depthInput.value = '1';
-                depthInput.className = 'freecad-depth-input';
-                depthInput.style.width = '40px';
-                depthInput.style.marginLeft = '4px';
-                depthInput.style.padding = '2px 4px';
-                depthInput.style.borderRadius = '4px';
-                depthInput.style.border = '1px solid #ccc';
-                depthInput.style.fontSize = '12px';
-                depthInput.title = 'Глубина загрузки';
-                
-                // Вставляем поле ввода после кнопки
-                button.parentNode.insertBefore(depthInput, button.nextSibling);
+            if (depthInput && depthInput.classList.contains('freecad-depth-input')) {
+                depthInput.remove();
             }
-            depthInput.style.display = 'inline-block';
 
             if (!button.hasAttribute('data-initialized')) {
                 button.setAttribute('data-initialized', 'true');
                 
                 button.addEventListener('click', function(e) {
                     e.preventDefault();
-                    const depth = parseInt(depthInput.value) || 1;
-                    loadObjectToFreeCad(this.getAttribute('data-id'), depth);
+                    const objectId = this.getAttribute('data-id');
+                    // Проверяем, есть ли функция getChildDepthsForApi и таблица children
+                    let childDepths = [];
+                    if (typeof getChildDepthsForApi === 'function') {
+                        const childrenTable = document.querySelector('.children-table');
+                        if (childrenTable) {
+                            childDepths = getChildDepthsForApi();
+                        }
+                    }
+                    loadObjectToFreeCad(objectId, childDepths);
                 });
             }
         } else {
             button.style.display = 'none';
-            // Скрываем поле ввода depth
-            const depthInput = button.nextElementSibling;
-            if (depthInput && depthInput.classList.contains('freecad-depth-input')) {
-                depthInput.style.display = 'none';
-            }
         }
     });
 
@@ -301,7 +287,7 @@ function applyFreeCadButtonStyle(button) {
 }
 
 // Функция для загрузки объекта во FreeCad
-function loadObjectToFreeCad(objectId, depth = 1) {
+function loadObjectToFreeCad(objectId, childDepths = []) {
     // Проверяем статус сервера и клиентов перед отправкой запроса
     if (!serverRunning || connectedClientsCount === 0) {
         showNotification('Невозможно загрузить объект во FreeCad: WebSocket-сервер не запущен или нет подключенных клиентов.', 'error');
@@ -311,11 +297,20 @@ function loadObjectToFreeCad(objectId, depth = 1) {
     // Показываем индикатор загрузки
     showNotification('Отправка запроса на загрузку во FreeCad...', 'info');
 
-    console.log(`Отправка запроса на загрузку объекта ${objectId} во FreeCad с depth=${depth}`);
+    console.log(`Отправка запроса на загрузку объекта ${objectId} во FreeCad с childDepths:`, childDepths);
+    
+    // Формируем тело запроса
+    const requestBody = {
+        child_depths: childDepths
+    };
     
     // Делаем запрос к API
-    fetch(`/api/basic_object/${objectId}/load_freecad?depth=${depth}`, {
-        method: 'POST'
+    fetch(`/api/basic_object/${objectId}/load_freecad`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestBody)
     })
     .then(response => {
         console.log('Получен ответ:', response.status, response.statusText);

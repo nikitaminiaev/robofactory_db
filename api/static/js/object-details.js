@@ -375,8 +375,144 @@ function renderObjectFullDetails(data) {
         }
     };
 
-    const renderRelatedObjectsList = (title, ids, listId, counts) => {
+    const renderRelatedObjectsList = (title, ids, listId, counts, childDataList = []) => {
         if (!ids || ids.length === 0) return '';
+        
+        // Для Children используем таблицу с колонкой Depth
+        if (title === 'Children' && childDataList && childDataList.length > 0) {
+            console.log('Rendering Children table with', childDataList.length, 'items', childDataList);
+            
+            // Группируем children по child_id
+            const groupedChildren = {};
+            childDataList.forEach((childData, index) => {
+                const childId = childData.child_id;
+                if (!groupedChildren[childId]) {
+                    groupedChildren[childId] = [];
+                }
+                groupedChildren[childId].push({...childData, originalIndex: index});
+            });
+            
+            let tableHtml = `<h2>${title}</h2>
+                <table class="children-table" id="${listId}" style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+                    <thead>
+                        <tr>
+                            <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">Name</th>
+                            <th style="padding: 8px; text-align: center; border-bottom: 1px solid #ddd; width: 80px;">Depth</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+            
+            // Рендерим свернутые строки с ×2, ×3 и т.д.
+            // Храним данные всех children в глобальном массиве
+            window.childrenDepthData = [];
+            
+            Object.keys(groupedChildren).forEach((childId, groupIndex) => {
+                const group = groupedChildren[childId];
+                const count = group.length;
+                const childName = window.objectNamesCache[childId] || childId;
+                const countBadge = count > 1 ? ` <span class="child-count-badge expand-badge" data-group="${groupIndex}" style="cursor:pointer;" title="Нажмите для раскрытия">&times;${count}</span>` : '';
+                
+                tableHtml += `<tr class="child-group-row" data-group-index="${groupIndex}" data-child-id="${childId}">
+                    <td style="padding: 8px; border-bottom: 1px solid #eee;">
+                        <a href="/basic_object/${childId}" class="child-link" data-group="${groupIndex}">${childName}</a>${countBadge}
+                    </td>
+                    <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: center;">
+                        ${count === 1 ? `<input type="number" class="child-depth-input single-depth" 
+                            data-child-id="${childId}" 
+                            data-pcm-id="${group[0].parent_child_module_id || ''}"
+                            data-group-index="${groupIndex}"
+                            min="0" max="10" value="0" 
+                            style="width: 50px; padding: 4px; text-align: center;">` : '<span style="color:#999;">-</span>'}
+                    </td>
+                </tr>`;
+                
+                // Сохраняем данные в глобальный массив
+                group.forEach((childData) => {
+                    window.childrenDepthData.push({
+                        child_id: childData.child_id,
+                        parent_child_module_id: childData.parent_child_module_id || null,
+                        depth: 0
+                    });
+                });
+                
+                // Если > 1, добавляем развернутые строки для настройки
+                if (count > 1) {
+                    group.forEach((childData, subIndex) => {
+                        const pcmId = childData.parent_child_module_id;
+                        tableHtml += `<tr class="child-expanded-row" data-parent-group="${groupIndex}" data-child-id="${childId}" data-pcm-id="${pcmId || ''}" style="display: none;">
+                            <td style="padding: 8px; border-bottom: 1px solid #eee; padding-left: 20px; color: #666;">
+                                <span class="child-link-expanded" data-group="${groupIndex}" data-sub="${subIndex}">${childName}</span>
+                            </td>
+                            <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: center;">
+                                <input type="number" class="child-depth-input expanded-depth" 
+                                    data-child-id="${childId}" 
+                                    data-pcm-id="${pcmId || ''}"
+                                    data-group-index="${groupIndex}"
+                                    data-sub-index="${subIndex}"
+                                    min="0" max="10" value="0" 
+                                    style="width: 50px; padding: 4px; text-align: center;">
+                            </td>
+                        </tr>`;
+                    });
+                }
+            });
+            
+            tableHtml += '</tbody></table>';
+            
+            // Загружаем имена
+            const childIds = Object.keys(groupedChildren);
+            setTimeout(async () => {
+                const names = await loadObjectNames(childIds);
+                childIds.forEach((childId, idx) => {
+                    document.querySelectorAll(`.child-link[data-group="${idx}"]`).forEach(el => {
+                        if (el && names[childId]) el.textContent = names[childId];
+                    });
+                    document.querySelectorAll(`.child-link-expanded[data-group="${idx}"]`).forEach(el => {
+                        if (el && names[childId]) el.textContent = names[childId];
+                    });
+                });
+                // Инициализируем кнопки FreeCAD
+                updateFreeCadButtonsVisibility();
+                // Загружаем сохраненные depth из localStorage
+                loadChildDepthsFromLocalStorage();
+                
+                // Обработчики для раскрытия по клику на ×N
+                document.querySelectorAll('.expand-badge').forEach(badge => {
+                    badge.addEventListener('click', function() {
+                        const groupIndex = this.dataset.group;
+                        const expandedRows = document.querySelectorAll(`.child-expanded-row[data-parent-group="${groupIndex}"]`);
+                        const isVisible = expandedRows[0] && expandedRows[0].style.display !== 'none';
+                        
+                        expandedRows.forEach(row => {
+                            row.style.display = isVisible ? 'none' : 'table-row';
+                        });
+                        
+                        this.textContent = isVisible ? `×${groupedChildren[childIds[groupIndex]].length}` : `▼×${groupedChildren[childIds[groupIndex]].length}`;
+                    });
+                });
+                
+                // Обработчики изменения depth - обновляем глобальный массив
+                document.querySelectorAll('.child-depth-input').forEach(input => {
+                    input.addEventListener('input', function() {
+                        const childId = this.dataset.childId;
+                        const pcmId = this.dataset.pcmId || '';
+                        const depth = parseInt(this.value) || 0;
+                        // Находим и обновляем запись в глобальном массиве
+                        if (window.childrenDepthData) {
+                            window.childrenDepthData.forEach(item => {
+                                if (item.child_id === childId && (item.parent_child_module_id || '') === pcmId) {
+                                    item.depth = depth;
+                                }
+                            });
+                        }
+                    });
+                });
+            }, 0);
+            
+            return tableHtml;
+        }
+        
+        // Для Parents или если нет childDataList - старый формат списка
         let listHtml = `<h2>${title}</h2><ul id="${listId}" class="related-list">`;
         ids.forEach(id => {
             const count = counts && counts[id] > 1 ? counts[id] : null;
@@ -397,9 +533,71 @@ function renderObjectFullDetails(data) {
         }, 0);
         return listHtml;
     };
+    
+    // Функция для сохранения depth в localStorage
+    function saveChildDepthsToLocalStorage() {
+        const currentId = window.currentObjectData?.id;
+        if (!currentId) return;
+        
+        const depthSettings = {};
+        document.querySelectorAll('.child-depth-input').forEach(input => {
+            const childId = input.dataset.childId;
+            const pcmId = input.dataset.pcmId || '';
+            const depth = parseInt(input.value) || 1;
+            
+            const key = pcmId ? `${childId}:${pcmId}` : childId;
+            depthSettings[key] = depth;
+        });
+        
+        const storageKey = `child_depths_${currentId}`;
+        localStorage.setItem(storageKey, JSON.stringify(depthSettings));
+    }
+    
+    // Функция для загрузки depth из localStorage
+    function loadChildDepthsFromLocalStorage() {
+        const currentId = window.currentObjectData?.id;
+        if (!currentId) return;
+        
+        const storageKey = `child_depths_${currentId}`;
+        const stored = localStorage.getItem(storageKey);
+        if (!stored) return;
+        
+        try {
+            const depthSettings = JSON.parse(stored);
+            document.querySelectorAll('.child-depth-input').forEach(input => {
+                const childId = input.dataset.childId;
+                const pcmId = input.dataset.pcmId || '';
+                const key = pcmId ? `${childId}:${pcmId}` : childId;
+                if (depthSettings[key] !== undefined) {
+                    input.value = depthSettings[key];
+                }
+            });
+        } catch (e) {
+            console.error('Error loading child depths from localStorage:', e);
+        }
+    }
+    
+    // Функция для получения child_depths массива для API
+    window.getChildDepthsForApi = function() {
+        // Обновляем значения из видимых input'ов
+        document.querySelectorAll('.child-depth-input').forEach(input => {
+            const childId = input.dataset.childId;
+            const pcmId = input.dataset.pcmId || '';
+            const depth = parseInt(input.value) || 0;
+            if (window.childrenDepthData) {
+                window.childrenDepthData.forEach(item => {
+                    if (item.child_id === childId && (item.parent_child_module_id || '') === pcmId) {
+                        item.depth = depth;
+                    }
+                });
+            }
+        });
+        console.log('getChildDepthsForApi result:', window.childrenDepthData || []);
+        return window.childrenDepthData || [];
+    }
 
     detailsHtml += renderRelatedObjectsList('Parents', data.parents, 'parentsList', data.parent_counts);
-    detailsHtml += renderRelatedObjectsList('Children', data.children, 'childrenList', data.children_counts);
+    detailsHtml += renderRelatedObjectsList('Children', data.children, 'childrenList', data.children_counts, data.children_with_coordinates || []);
     detailsHtml += renderRolesMatrix(data);
     detailsHtml += `
         <div id="copy-modal" class="modal" style="display: none;">
