@@ -421,7 +421,7 @@ function renderObjectFullDetails(data) {
                             data-child-id="${childId}" 
                             data-pcm-id="${group[0].parent_child_module_id || ''}"
                             data-group-index="${groupIndex}"
-                            min="0" max="10" value="0" 
+                            min="0" max="10" value="1" 
                             style="width: 50px; padding: 4px; text-align: center;">` : '<span style="color:#999;">-</span>'}
                     </td>
                 </tr>`;
@@ -431,7 +431,7 @@ function renderObjectFullDetails(data) {
                     window.childrenDepthData.push({
                         child_id: childData.child_id,
                         parent_child_module_id: childData.parent_child_module_id || null,
-                        depth: 0
+                        depth: 1
                     });
                 });
                 
@@ -449,7 +449,7 @@ function renderObjectFullDetails(data) {
                                     data-pcm-id="${pcmId || ''}"
                                     data-group-index="${groupIndex}"
                                     data-sub-index="${subIndex}"
-                                    min="0" max="10" value="0" 
+                                    min="0" max="10" value="1" 
                                     style="width: 50px; padding: 4px; text-align: center;">
                             </td>
                         </tr>`;
@@ -939,7 +939,7 @@ function addNewRelationToList(type) {
                     <input type="number" class="child-depth-input single-depth" 
                         data-child-id="${selectedRelId}" 
                         data-pcm-id=""
-                        min="0" max="10" value="0" 
+                        min="0" max="10" value="1" 
                         style="width: 50px; padding: 4px; text-align: center;">
                 </td>
             `;
@@ -950,7 +950,7 @@ function addNewRelationToList(type) {
                 window.childrenDepthData.push({
                     child_id: selectedRelId,
                     parent_child_module_id: null,
-                    depth: 0
+                    depth: 1
                 });
             }
         }
