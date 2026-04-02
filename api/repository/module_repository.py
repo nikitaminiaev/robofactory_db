@@ -305,6 +305,19 @@ class ModuleRepository(BaseRepository):
             )
         )
 
+    def remove_child_relations(self, parent_id: UUID, relation_ids: List[UUID], db_session):
+        """
+        Удаляет конкретные связи по parent_child_module_id
+        """
+        if not relation_ids:
+            return
+        db_session.execute(
+            parent_child_module.delete().where(
+                (parent_child_module.c.parent_id == parent_id) &
+                (parent_child_module.c.id.in_(relation_ids))
+            )
+        )
+
     def remove_parents(self, child_id: UUID, parent_ids: List[UUID], db_session):
         """
         Удаляет связи с родительскими модулями

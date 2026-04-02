@@ -263,6 +263,7 @@ class BasicObjectUpdate(BaseModel):
     parent_id: Optional[str] = None
     added_children: Optional[List[ChildRelation]] = None
     removed_children: Optional[List[str]] = None
+    removed_child_relations: Optional[List[str]] = None
     added_parents: Optional[List[ChildRelation]] = None
     removed_parents: Optional[List[str]] = None
 
@@ -291,6 +292,12 @@ async def update_basic_object(
             if removed_children:
                 removed_uuids = [UUID(cid) for cid in removed_children]
                 basic_repo.remove_children(obj_id_uuid, removed_uuids, db)
+
+            # 1b. Обработка удаления конкретных связей (по parent_child_module_id)
+            removed_child_relations = update_data.pop("removed_child_relations", None)
+            if removed_child_relations:
+                removed_rel_uuids = [UUID(rid) for rid in removed_child_relations]
+                basic_repo.remove_child_relations(obj_id_uuid, removed_rel_uuids, db)
 
             # 2. Обработка добавления детей
             added_children = update_data.pop("added_children", None)

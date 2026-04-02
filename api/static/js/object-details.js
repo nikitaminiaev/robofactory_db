@@ -767,24 +767,50 @@ function toggleEditMode(enable = true) {
             container.appendChild(addParentSection);
         }
 
-        // Добавляем возможность удаления детей
-        const childrenList = document.getElementById('childrenList');
-        if (childrenList) {
-            const children = childrenList.querySelectorAll('li');
-            children.forEach(li => {
-                if (!li.querySelector('.remove-btn')) {
+        // Добавляем возможность удаления детей (теперь таблица вместо списка)
+        const childrenTable = document.querySelector('.children-table');
+        if (childrenTable) {
+            // Добавляем кнопки Remove к строкам таблицы
+            childrenTable.querySelectorAll('tr.child-group-row').forEach(row => {
+                if (!row.querySelector('.remove-btn')) {
                     const removeBtn = document.createElement('button');
                     removeBtn.className = 'remove-btn';
                     removeBtn.textContent = 'Remove';
+                    removeBtn.style.marginLeft = '8px';
+                    removeBtn.style.fontSize = '11px';
                     removeBtn.onclick = () => {
-                        li.style.display = 'none';
-                        li.dataset.removed = 'true';
+                        // Скрываем строку и все её развернутые строки
+                        const childId = row.dataset.childId;
+                        row.style.display = 'none';
+                        row.dataset.removed = 'true';
+                        childrenTable.querySelectorAll(`.child-expanded-row[data-child-id="${childId}"]`).forEach(expRow => {
+                            expRow.style.display = 'none';
+                            expRow.dataset.removed = 'true';
+                        });
                     };
-                    li.appendChild(removeBtn);
+                    const nameCell = row.querySelector('td:first-child');
+                    nameCell.appendChild(removeBtn);
                 }
             });
             
-            // Добавляем секцию добавления ребенка
+            // Добавляем кнопки Remove к развернутым строкам
+            childrenTable.querySelectorAll('tr.child-expanded-row').forEach(row => {
+                if (!row.querySelector('.remove-btn')) {
+                    const removeBtn = document.createElement('button');
+                    removeBtn.className = 'remove-btn';
+                    removeBtn.textContent = 'Remove';
+                    removeBtn.style.marginLeft = '8px';
+                    removeBtn.style.fontSize = '11px';
+                    removeBtn.onclick = () => {
+                        row.style.display = 'none';
+                        row.dataset.removed = 'true';
+                    };
+                    const nameCell = row.querySelector('td:first-child');
+                    nameCell.appendChild(removeBtn);
+                }
+            });
+            
+            // Добавляем секцию добавления ребенка после таблицы
             if (!document.getElementById('add-child-section')) {
                 const addChildSection = document.createElement('div');
                 addChildSection.id = 'add-child-section';
@@ -799,15 +825,12 @@ function toggleEditMode(enable = true) {
                         <button onclick="addNewRelationToList('child')">Add</button>
                     </div>
                 `;
-                childrenList.after(addChildSection);
+                childrenTable.after(addChildSection);
             }
         } else {
-            // Если списка детей нет, создаем его для добавления новых
+            // Если таблицы детей нет, создаем секцию для добавления
             const title = document.createElement('h2');
             title.textContent = 'Children';
-            const newList = document.createElement('ul');
-            newList.id = 'childrenList';
-            newList.className = 'related-list';
             
             const addChildSection = document.createElement('div');
             addChildSection.id = 'add-child-section';
@@ -823,7 +846,6 @@ function toggleEditMode(enable = true) {
                 </div>
             `;
             container.appendChild(title);
-            container.appendChild(newList);
             container.appendChild(addChildSection);
         }
     } else {
@@ -893,24 +915,61 @@ function addNewRelationToList(type) {
     }
     
     const name = document.getElementById(`search-${type}-input`).value;
-    const listIdMap = { child: 'childrenList', parent: 'parentsList' };
-    const list = document.getElementById(listIdMap[type]);
-    
-    const li = document.createElement('li');
-    li.dataset.newRelation = 'true';
-    li.dataset.id = selectedRelId;
     
     // Координаты по умолчанию (нулевые)
     const coords = { x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0 };
-    li.dataset.coordinates = JSON.stringify(coords);
     
-    li.innerHTML = `
-        <a href="/basic_object/${selectedRelId}">${name}</a>
-        <span style="font-size: 11px; color: #666; margin-left: 10px;">(New)</span>
-        <button class="remove-btn" onclick="this.parentElement.remove()">Remove</button>
-    `;
-    
-    list.appendChild(li);
+    if (type === 'child') {
+        // Для детей добавляем строку в таблицу
+        const table = document.querySelector('.children-table');
+        if (table) {
+            const tbody = table.querySelector('tbody');
+            const row = document.createElement('tr');
+            row.dataset.newRelation = 'true';
+            row.dataset.id = selectedRelId;
+            row.dataset.coordinates = JSON.stringify(coords);
+            row.className = 'child-group-row';
+            row.innerHTML = `
+                <td style="padding: 8px; border-bottom: 1px solid #eee;">
+                    <a href="/basic_object/${selectedRelId}">${name}</a>
+                    <span style="font-size: 11px; color: #666; margin-left: 10px;">(New)</span>
+                    <button class="remove-btn" onclick="this.parentElement.parentElement.remove()" style="margin-left: 8px; font-size: 11px;">Remove</button>
+                </td>
+                <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: center;">
+                    <input type="number" class="child-depth-input single-depth" 
+                        data-child-id="${selectedRelId}" 
+                        data-pcm-id=""
+                        min="0" max="10" value="0" 
+                        style="width: 50px; padding: 4px; text-align: center;">
+                </td>
+            `;
+            tbody.appendChild(row);
+            
+            // Добавляем в глобальный массив
+            if (window.childrenDepthData) {
+                window.childrenDepthData.push({
+                    child_id: selectedRelId,
+                    parent_child_module_id: null,
+                    depth: 0
+                });
+            }
+        }
+    } else {
+        // Для родителей - как раньше
+        const list = document.getElementById('parentsList');
+        if (list) {
+            const li = document.createElement('li');
+            li.dataset.newRelation = 'true';
+            li.dataset.id = selectedRelId;
+            li.dataset.coordinates = JSON.stringify(coords);
+            li.innerHTML = `
+                <a href="/basic_object/${selectedRelId}">${name}</a>
+                <span style="font-size: 11px; color: #666; margin-left: 10px;">(New)</span>
+                <button class="remove-btn" onclick="this.parentElement.remove()">Remove</button>
+            `;
+            list.appendChild(li);
+        }
+    }
     
     // Сброс полей
     selectedRelId = null;
@@ -928,6 +987,7 @@ async function saveObjectChanges() {
         is_shell: document.getElementById('input-is_shell') ? document.getElementById('input-is_shell').checked : undefined,
         added_children: [],
         removed_children: [],
+        removed_child_relations: [],
         added_parents: [],
         removed_parents: []
     };
@@ -949,21 +1009,32 @@ async function saveObjectChanges() {
         });
     }
 
-    // Собираем изменения по детям
-    const childrenList = document.getElementById('childrenList');
-    if (childrenList) {
-        const childItems = childrenList.querySelectorAll('li');
-        childItems.forEach(li => {
-            if (li.dataset.removed === 'true') {
-                const id = li.querySelector('a').href.split('/').pop();
-                updatePayload.removed_children.push(id);
-            } else if (li.dataset.newRelation === 'true') {
-                updatePayload.added_children.push({
-                    id: li.dataset.id,
-                    coordinates: JSON.parse(li.dataset.coordinates)
-                });
-            }
+    // Собираем изменения по детям (теперь таблица вместо списка)
+    const childrenTable = document.querySelector('.children-table');
+    const removedChildIds = new Set();
+    
+    if (childrenTable) {
+        // Новые дети (добавленные через Add Child)
+        childrenTable.querySelectorAll('tr[data-new-relation="true"]').forEach(row => {
+            updatePayload.added_children.push({
+                id: row.dataset.id,
+                coordinates: JSON.parse(row.dataset.coordinates || '{}')
+            });
         });
+        
+        // Удалённые конкретные вхождения (развернутые строки) - по parent_child_module_id
+        childrenTable.querySelectorAll('tr.child-expanded-row[data-removed="true"]').forEach(row => {
+            const pcmId = row.dataset.pcmId;
+            if (pcmId) updatePayload.removed_child_relations.push(pcmId);
+        });
+        
+        // Удалённые группы целиком (group rows) - по child_id
+        childrenTable.querySelectorAll('tr.child-group-row[data-removed="true"]').forEach(row => {
+            const childId = row.dataset.childId;
+            if (childId) removedChildIds.add(childId);
+        });
+        
+        updatePayload.removed_children = Array.from(removedChildIds);
     }
     
     try {
