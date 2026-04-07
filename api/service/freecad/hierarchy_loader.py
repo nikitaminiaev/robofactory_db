@@ -41,7 +41,6 @@ class HierarchyLoader:
             return []
         
         result = []
-        visited = set()  # Защита от зацикливания
         
         # Добавляем корневой объект с depth=0 (это относительно самого себя, т.е. нули)
         result.append({
@@ -57,10 +56,11 @@ class HierarchyLoader:
             result=result,
             parent_id=root_id,
             parent_absolute_coords=None,
+            parent_instance_pcm_id=None,
             children_with_coords=children_with_coords,
             child_depths_dict=child_depths_dict,
             current_depth=0,
-            visited=visited
+            ancestry={str(root_id)}
         )
         
         return result
@@ -70,26 +70,26 @@ class HierarchyLoader:
         result: List[Dict[str, Any]],
         parent_id: UUID,
         parent_absolute_coords: Optional[Dict[str, Any]],
+        parent_instance_pcm_id: Optional[str],
         children_with_coords: List[Dict[str, Any]],
         child_depths_dict: Dict[tuple, int],
         current_depth: int,
-        visited: set = None
+        ancestry: Optional[set] = None
     ):
         """Рекурсивно обрабатывает дочерние объекты."""
-        
-        if visited is None:
-            visited = set()
+        if ancestry is None:
+            ancestry = {str(parent_id)}
         
         for child_entry in children_with_coords:
             child_id = child_entry["child_id"]
             pcm_id = child_entry["parent_child_module_id"]
             relative_coords = child_entry.get("coordinates") or {}
             
-            # Защита от зацикливания
-            visit_key = (child_id, pcm_id)
-            if child_id == str(parent_id) or visit_key in visited:
+            # Защита от циклов в текущем пути.
+            # Важно: не используем глобальный visited, чтобы одинаковые
+            # подветки в разных ветках обрабатывались независимо.
+            if child_id in ancestry:
                 continue
-            visited.add(visit_key)
             
             key = (child_id, pcm_id)
             depth = child_depths_dict.get(key, 1)
@@ -105,20 +105,24 @@ class HierarchyLoader:
             result.append({
                 "object_id": child_id,
                 "parent_child_module_id": pcm_id,
+                "parent_instance_pcm_id": parent_instance_pcm_id,
                 "absolute_coordinates": absolute_coords,
                 "depth": current_depth + 1
             })
             
             if depth > 1:
                 next_children = self.repo.get_children_coordinates(UUID(child_id))
+                next_ancestry = set(ancestry)
+                next_ancestry.add(child_id)
                 self._process_children(
                     result=result,
                     parent_id=UUID(child_id),
                     parent_absolute_coords=absolute_coords,
+                    parent_instance_pcm_id=pcm_id,
                     children_with_coords=next_children,
                     child_depths_dict=child_depths_dict,
                     current_depth=current_depth + 1,
-                    visited=visited
+                    ancestry=next_ancestry
                 )
 
     def _compute_absolute_coords(

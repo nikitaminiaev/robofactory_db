@@ -38,11 +38,15 @@ async def load_object_to_freecad(request: Request, id: UUID, repo: ModuleReposit
         body = await request.json()
         child_depths = body.get('child_depths', []) if body else []
         
+        log(f"DEBUG load_freecad: id={id}, child_depths={child_depths}")
+        
         hierarchy_loader = HierarchyLoader(repo)
         absolute_coordinates = hierarchy_loader.get_hierarchy_with_absolute_coordinates(
             root_id=id,
             child_depths=child_depths
         )
+        
+        log(f"DEBUG load_freecad: absolute_coordinates={absolute_coordinates}")
         
         message_sent = part_loader.load_part_to_freecad(
             id=str(id),
