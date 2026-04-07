@@ -60,15 +60,22 @@ Gui.SendMsgToActiveView("ViewFit")
 result = {{'object_created': part_obj.Name, 'document_name': doc.Name}}
 """
 
-def load_object_in_new_doc(obj_id: str, child_depths: List[Dict[str, Any]] = None):
+def load_object_in_new_doc(
+    obj_id: str,
+    child_depths: List[Dict[str, Any]] = None,
+    absolute_coordinates: List[Dict[str, Any]] = None
+):
     if child_depths is None:
         child_depths = []
+    if absolute_coordinates is None:
+        absolute_coordinates = []
     return f'''
             {{
                 "function_call": "load_object_in_new_doc",
                 "arguments": {{
                     "obj_id": "{obj_id}",
-                    "child_depths": {json.dumps(child_depths)}
+                    "child_depths": {json.dumps(child_depths)},
+                    "absolute_coordinates": {json.dumps(absolute_coordinates)}
                 }}
             }}
             '''

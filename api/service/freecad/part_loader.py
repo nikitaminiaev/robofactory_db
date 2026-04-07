@@ -8,11 +8,20 @@ class PartLoader:
     def __init__(self):
         self.server = get_server_instance()
 
-    def load_part_to_freecad(self, id: Optional[str] = None, child_depths: List[Dict[str, Any]] = None) -> bool:
+    def load_part_to_freecad(
+        self,
+        id: Optional[str] = None,
+        child_depths: List[Dict[str, Any]] = None,
+        absolute_coordinates: List[Dict[str, Any]] = None
+    ) -> bool:
         try:
             if child_depths is None:
                 child_depths = []
-            return self.server.send_message(load_object_in_new_doc(id, child_depths))
+            if absolute_coordinates is None:
+                absolute_coordinates = []
+            return self.server.send_message(
+                load_object_in_new_doc(id, child_depths, absolute_coordinates)
+            )
         except Exception as e:
             raise Exception(f"Ошибка при загрузке объекта во FreeCAD: {str(e)}")
 

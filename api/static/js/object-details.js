@@ -921,7 +921,27 @@ function addNewRelationToList(type) {
     
     if (type === 'child') {
         // Для детей добавляем строку в таблицу
-        const table = document.querySelector('.children-table');
+        let table = document.querySelector('.children-table');
+        
+        // Если таблицы нет - создаём её
+        if (!table) {
+            const addChildSection = document.getElementById('add-child-section');
+            if (addChildSection) {
+                table = document.createElement('table');
+                table.className = 'children-table';
+                table.innerHTML = `
+                    <thead>
+                        <tr>
+                            <th style="padding: 8px; border-bottom: 2px solid #ccc; text-align: left;">Module</th>
+                            <th style="padding: 8px; border-bottom: 2px solid #ccc; text-align: center; width: 80px;">Count</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                `;
+                addChildSection.before(table);
+            }
+        }
+        
         if (table) {
             const tbody = table.querySelector('tbody');
             const row = document.createElement('tr');
@@ -945,14 +965,15 @@ function addNewRelationToList(type) {
             `;
             tbody.appendChild(row);
             
-            // Добавляем в глобальный массив
-            if (window.childrenDepthData) {
-                window.childrenDepthData.push({
-                    child_id: selectedRelId,
-                    parent_child_module_id: null,
-                    depth: 1
-                });
+            // Инициализируем массив если его нет
+            if (!window.childrenDepthData) {
+                window.childrenDepthData = [];
             }
+            window.childrenDepthData.push({
+                child_id: selectedRelId,
+                parent_child_module_id: null,
+                depth: 1
+            });
         }
     } else {
         // Для родителей - как раньше

@@ -63,22 +63,22 @@ class BoundingContour(Base):
                     full_path = resolve_brep_absolute_path(relative_path)
                     if full_path.exists():
                         content = full_path.read_text()
-                        # Для совместимости с клиентом FreeCAD возвращаем структуру с path и brep_string
+                        # Всегда возвращаем brep_string если файл существует
                         if filename == 'brep_string':
                             brep_files_content['path'] = str(full_path)
                             brep_files_content['brep_string'] = content
                         else:
                             brep_files_content[filename] = content
                     else:
+                        # Файл не существует - возвращаем только path
                         if filename == 'brep_string':
-                            brep_files_content['path'] = None
-                            brep_files_content['brep_string'] = ""
+                            brep_files_content['path'] = str(full_path)
+                            # brep_string не записываем - файл не существует
                         else:
                             brep_files_content[filename] = ""
-                except Exception:
+                except Exception as e:
                     if filename == 'brep_string':
                         brep_files_content['path'] = None
-                        brep_files_content['brep_string'] = ""
                     else:
                         brep_files_content[filename] = ""
 
