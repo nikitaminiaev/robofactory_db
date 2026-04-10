@@ -809,7 +809,7 @@ function toggleEditMode(enable = true) {
                 }
             });
             
-            // Добавляем кнопки Remove и Add к развернутым строкам
+            // Добавляем кнопку Remove к развернутым строкам (без + - он только в свернутом режиме)
             childrenTable.querySelectorAll('tr.child-expanded-row').forEach(row => {
                 if (!row.querySelector('.remove-btn')) {
                     const removeBtn = document.createElement('button');
@@ -823,20 +823,6 @@ function toggleEditMode(enable = true) {
                     };
                     const nameCell = row.querySelector('td:first-child');
                     nameCell.appendChild(removeBtn);
-                    
-                    const addBtn = document.createElement('button');
-                    addBtn.className = 'add-same-btn';
-                    addBtn.textContent = '+';
-                    addBtn.title = 'Add same';
-                    addBtn.style.marginLeft = '4px';
-                    addBtn.style.background = '#4CAF50';
-                    addBtn.style.color = 'white';
-                    addBtn.style.border = 'none';
-                    addBtn.style.borderRadius = '3px';
-                    addBtn.style.fontSize = '12px';
-                    addBtn.style.cursor = 'pointer';
-                    addBtn.onclick = () => quickAddSameChild(row.dataset.childId, row.querySelector('.child-link-expanded')?.textContent || '');
-                    nameCell.appendChild(addBtn);
                 }
             });
             
@@ -1078,6 +1064,7 @@ async function quickAddSameChild(childId, childName) {
         
         if (response.ok) {
             showToast(`Added "${childName}" as child`, 'success');
+            updateChildBadge(childId);
         } else {
             const error = await response.json();
             showToast(error.detail || 'Failed to add child', 'error');
@@ -1085,6 +1072,39 @@ async function quickAddSameChild(childId, childName) {
     } catch (e) {
         console.error('Error adding child:', e);
         showToast('Error adding child', 'error');
+    }
+}
+
+function updateChildBadge(childId) {
+    const childrenTable = document.querySelector('.children-table');
+    if (!childrenTable) return;
+    
+    const groupRow = childrenTable.querySelector(`tr.child-group-row[data-child-id="${childId}"]`);
+    if (!groupRow) return;
+    
+    const existingBadge = groupRow.querySelector('.child-count-badge');
+    const childLink = groupRow.querySelector('.child-link');
+    
+    if (existingBadge) {
+        const currentCount = parseInt(existingBadge.textContent.replace('×', '')) || 2;
+        existingBadge.textContent = `×${currentCount + 1}`;
+    } else {
+        const badge = document.createElement('span');
+        badge.className = 'child-count-badge expand-badge';
+        badge.style.cursor = 'pointer';
+        badge.title = 'Click to expand';
+        badge.textContent = '×2';
+        badge.dataset.group = groupRow.dataset.groupIndex;
+        badge.addEventListener('click', function() {
+            const groupIndex = this.dataset.group;
+            const expandedRows = document.querySelectorAll(`.child-expanded-row[data-parent-group="${groupIndex}"]`);
+            const isVisible = expandedRows[0] && expandedRows[0].style.display !== 'none';
+            expandedRows.forEach(row => row.style.display = isVisible ? 'none' : 'table-row');
+            this.textContent = isVisible ? `×${expandedRows.length}` : `▼×${expandedRows.length}`;
+        });
+        if (childLink) {
+            childLink.insertAdjacentElement('afterend', badge);
+        }
     }
 }
 
