@@ -737,6 +737,7 @@ function toggleEditMode(enable = true) {
                             <div id="parent-search-results" class="search-results-dropdown" style="display: none;"></div>
                         </div>
                         <button onclick="addNewRelationToList('parent')">Add</button>
+                        <button onclick="quickAddRelation('parent')" title="Add directly" style="background: #4CAF50;">+</button>
                     </div>
                 `;
                 parentsList.after(addParentSection);
@@ -760,6 +761,7 @@ function toggleEditMode(enable = true) {
                         <div id="parent-search-results" class="search-results-dropdown" style="display: none;"></div>
                     </div>
                     <button onclick="addNewRelationToList('parent')">Add</button>
+                    <button onclick="quickAddRelation('parent')" title="Add directly" style="background: #4CAF50;">+</button>
                 </div>
             `;
             container.appendChild(title);
@@ -770,7 +772,7 @@ function toggleEditMode(enable = true) {
         // Добавляем возможность удаления детей (теперь таблица вместо списка)
         const childrenTable = document.querySelector('.children-table');
         if (childrenTable) {
-            // Добавляем кнопки Remove к строкам таблицы
+            // Добавляем кнопки Remove и Add к строкам таблицы
             childrenTable.querySelectorAll('tr.child-group-row').forEach(row => {
                 if (!row.querySelector('.remove-btn')) {
                     const removeBtn = document.createElement('button');
@@ -790,10 +792,24 @@ function toggleEditMode(enable = true) {
                     };
                     const nameCell = row.querySelector('td:first-child');
                     nameCell.appendChild(removeBtn);
+                    
+                    const addBtn = document.createElement('button');
+                    addBtn.className = 'add-same-btn';
+                    addBtn.textContent = '+';
+                    addBtn.title = 'Add same';
+                    addBtn.style.marginLeft = '4px';
+                    addBtn.style.background = '#4CAF50';
+                    addBtn.style.color = 'white';
+                    addBtn.style.border = 'none';
+                    addBtn.style.borderRadius = '3px';
+                    addBtn.style.fontSize = '12px';
+                    addBtn.style.cursor = 'pointer';
+                    addBtn.onclick = () => quickAddSameChild(row.dataset.childId, row.querySelector('.child-link, .child-link-expanded')?.textContent || '');
+                    nameCell.appendChild(addBtn);
                 }
             });
             
-            // Добавляем кнопки Remove к развернутым строкам
+            // Добавляем кнопки Remove и Add к развернутым строкам
             childrenTable.querySelectorAll('tr.child-expanded-row').forEach(row => {
                 if (!row.querySelector('.remove-btn')) {
                     const removeBtn = document.createElement('button');
@@ -807,6 +823,20 @@ function toggleEditMode(enable = true) {
                     };
                     const nameCell = row.querySelector('td:first-child');
                     nameCell.appendChild(removeBtn);
+                    
+                    const addBtn = document.createElement('button');
+                    addBtn.className = 'add-same-btn';
+                    addBtn.textContent = '+';
+                    addBtn.title = 'Add same';
+                    addBtn.style.marginLeft = '4px';
+                    addBtn.style.background = '#4CAF50';
+                    addBtn.style.color = 'white';
+                    addBtn.style.border = 'none';
+                    addBtn.style.borderRadius = '3px';
+                    addBtn.style.fontSize = '12px';
+                    addBtn.style.cursor = 'pointer';
+                    addBtn.onclick = () => quickAddSameChild(row.dataset.childId, row.querySelector('.child-link-expanded')?.textContent || '');
+                    nameCell.appendChild(addBtn);
                 }
             });
             
@@ -843,6 +873,7 @@ function toggleEditMode(enable = true) {
                         <div id="child-search-results" class="search-results-dropdown" style="display: none;"></div>
                     </div>
                     <button onclick="addNewRelationToList('child')">Add</button>
+                    <button onclick="quickAddRelation('child')" title="Add directly" style="background: #4CAF50;">+</button>
                 </div>
             `;
             container.appendChild(title);
@@ -996,6 +1027,65 @@ function addNewRelationToList(type) {
     selectedRelId = null;
     selectedRelType = null;
     document.getElementById(`search-${type}-input`).value = '';
+}
+
+async function quickAddRelation(type) {
+    if (!selectedRelId || selectedRelType !== type) {
+        showToast('Please select a module from the search results', 'error');
+        return;
+    }
+    
+    const data = window.currentObjectData;
+    const payload = type === 'child' 
+        ? { added_children: [{ id: selectedRelId, coordinates: { x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0 } }] }
+        : { added_parents: [{ id: selectedRelId, coordinates: { x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0 } }] };
+    
+    try {
+        const response = await fetch(`/api/basic_object/${data.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        
+        if (response.ok) {
+            const name = document.getElementById(`search-${type}-input`).value;
+            showToast(`${type === 'child' ? 'Child' : 'Parent'} "${name}" added successfully`, 'success');
+            selectedRelId = null;
+            selectedRelType = null;
+            document.getElementById(`search-${type}-input`).value = '';
+        } else {
+            const error = await response.json();
+            showToast(error.detail || 'Failed to add relation', 'error');
+        }
+    } catch (e) {
+        console.error('Error adding relation:', e);
+        showToast('Error adding relation', 'error');
+    }
+}
+
+async function quickAddSameChild(childId, childName) {
+    const data = window.currentObjectData;
+    const payload = { 
+        added_children: [{ id: childId, coordinates: { x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0 } }] 
+    };
+    
+    try {
+        const response = await fetch(`/api/basic_object/${data.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        
+        if (response.ok) {
+            showToast(`Added "${childName}" as child`, 'success');
+        } else {
+            const error = await response.json();
+            showToast(error.detail || 'Failed to add child', 'error');
+        }
+    } catch (e) {
+        console.error('Error adding child:', e);
+        showToast('Error adding child', 'error');
+    }
 }
 
 async function saveObjectChanges() {
