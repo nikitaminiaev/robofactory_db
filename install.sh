@@ -13,6 +13,51 @@ log()  { echo -e "${GREEN}[INSTALL]${NC} $*"; }
 warn() { echo -e "${YELLOW}[WARN]${NC} $*"; }
 err()  { echo -e "${RED}[ERROR]${NC} $*" >&2; exit 1; }
 
+run_privileged() {
+    if [ "$(id -u)" -eq 0 ]; then
+        "$@"
+        return
+    fi
+
+    if command -v sudo >/dev/null 2>&1; then
+        sudo "$@"
+        return
+    fi
+
+    err "Нужны права root (sudo не найден)"
+}
+
+install_docker() {
+    if ! command -v curl >/dev/null 2>&1; then
+        err "Для установки Docker нужен curl"
+    fi
+
+    log "Устанавливаю Docker и Docker Compose..."
+    run_privileged sh -c "curl -fsSL https://get.docker.com | sh"
+
+    if ! command -v docker >/dev/null 2>&1; then
+        err "Не удалось установить docker"
+    fi
+}
+
+add_user_to_docker_group() {
+    local target_user="${SUDO_USER:-$USER}"
+    local group_name
+
+    [ -n "$target_user" ] || return
+
+    for group_name in $(id -nG "$target_user"); do
+        [ "$group_name" != "docker" ] && continue
+        log "Пользователь $target_user уже в группе docker"
+        return
+    done
+
+    log "Добавляю пользователя $target_user в группу docker..."
+    run_privileged groupadd -f docker
+    run_privileged usermod -aG docker "$target_user"
+    warn "Перелогиньтесь (или выполните 'newgrp docker'), чтобы применились права группы"
+}
+
 # --- .env ---
 if [ ! -f .env ]; then
     cp .env.example .env
@@ -22,8 +67,22 @@ else
 fi
 
 # --- Docker ---
-command -v docker >/dev/null 2>&1 || err "docker не найден"
-docker compose version >/dev/null 2>&1 || err "docker compose не найден"
+if ! command -v docker >/dev/null 2>&1 || ! docker compose version >/dev/null 2>&1; then
+    warn "Docker или Docker Compose не найдены"
+    read -r -p "Установить Docker и Docker Compose сейчас? [y/N]: " install_docker_choice
+
+    case "${install_docker_choice,,}" in
+        y|yes)
+            install_docker
+            ;;
+        *)
+            err "Без Docker продолжить установку нельзя"
+            ;;
+    esac
+fi
+
+docker compose version >/dev/null 2>&1 || err "docker compose не найден после установки"
+add_user_to_docker_group
 
 log "Сборка контейнеров..."
 docker compose build
