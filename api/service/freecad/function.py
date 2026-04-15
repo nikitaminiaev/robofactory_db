@@ -1,4 +1,25 @@
-def create_part_from_brep(brep_string: str, label: str, coordinates: dict = None, id: str = ''):
+import json
+from typing import List, Dict, Any, Optional
+
+
+def save_brep(module_id: str) -> str:
+    """Команда FreeCAD: экспортировать BREP первого тела и сохранить в модуль."""
+    return json.dumps({
+        "function_call": "save_brep",
+        "arguments": {"module_id": module_id},
+    })
+
+
+def save_position(module_id: str) -> str:
+    """Команда FreeCAD: обновить координаты всех дочерних объектов текущей сборки."""
+    return json.dumps({
+        "function_call": "save_position",
+        "arguments": {"module_id": module_id},
+    })
+
+
+def create_part_from_brep(brep_string: str, label: str, coordinates: dict = None, id: str = '', parent_child_module_id: str = None):
+    pcm_id = f"'{parent_child_module_id}'" if parent_child_module_id else "''"
     return f"""
 import FreeCAD
 import Part
@@ -18,6 +39,11 @@ part_obj.Group = [body_obj]
 
 if '{id}' != '':
     part_obj.Id = '{id}'
+
+# Сохраняем ID записи parent_child_module для корректного сохранения координат
+if {pcm_id} != '':
+    part_obj.ParentChildModuleId = {pcm_id}
+
 # Устанавливаем координаты если они есть
 if {coordinates}:
     part_obj.Placement.Base.x = {coordinates.get('x', 0.0)}
@@ -34,12 +60,22 @@ Gui.SendMsgToActiveView("ViewFit")
 result = {{'object_created': part_obj.Name, 'document_name': doc.Name}}
 """
 
-def load_object_in_new_doc(obj_id: str):
+def load_object_in_new_doc(
+    obj_id: str,
+    child_depths: List[Dict[str, Any]] = None,
+    absolute_coordinates: List[Dict[str, Any]] = None
+):
+    if child_depths is None:
+        child_depths = []
+    if absolute_coordinates is None:
+        absolute_coordinates = []
     return f'''
             {{
                 "function_call": "load_object_in_new_doc",
                 "arguments": {{
-                    "obj_id": "{obj_id}"
+                    "obj_id": "{obj_id}",
+                    "child_depths": {json.dumps(child_depths)},
+                    "absolute_coordinates": {json.dumps(absolute_coordinates)}
                 }}
             }}
             '''

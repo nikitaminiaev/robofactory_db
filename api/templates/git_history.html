@@ -1,10 +1,103 @@
 {% extends "base.html" %}
 
-{% block title %}Git History - {{ module_id }}{% endblock %}
+{% block title %}Git Info - {{ module_id }}{% endblock %}
 
 {% block extra_head %}
 <script src="https://unpkg.com/@gitgraph/js@1.4.0/lib/gitgraph.umd.min.js"></script>
 <link rel="stylesheet" href="/static/css/git-history.css">
+<style>
+  .uncommitted-section {
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 24px;
+    background: #fff;
+  }
+  .uncommitted-section { color: #333; }
+  .uncommitted-section h2 { margin: 0 0 12px; font-size: 1.05rem; color: #333; }
+
+  .diff-pre {
+    background: #1e1e1e;
+    color: #d4d4d4;
+    border-radius: 4px;
+    padding: 12px;
+    font-family: monospace;
+    font-size: 12px;
+    max-height: 400px;
+    overflow: auto;
+    white-space: pre;
+    margin: 0;
+  }
+  .diff-pre .diff-add  { color: #6aaf6a; }
+  .diff-pre .diff-del  { color: #e06c75; }
+  .diff-pre .diff-hunk { color: #56b6c2; }
+  .diff-pre .diff-meta { color: #888; }
+
+  .diff-empty { color: #888; font-size: 13px; font-style: italic; padding: 8px 0; }
+
+  .commit-form {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-top: 12px;
+  }
+  .commit-form input[type="text"] {
+    flex: 1;
+    min-width: 200px;
+    padding: 6px 10px;
+    font-size: 13px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    color: #333;
+    background: #fff;
+  }
+  .btn-commit {
+    padding: 6px 16px;
+    font-size: 13px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    background: #2a7a2a;
+    color: #fff;
+  }
+  .btn-commit:hover { background: #1f5e1f; }
+  .btn-commit:disabled { opacity: 0.5; cursor: default; }
+  .btn-refresh {
+    padding: 5px 12px;
+    font-size: 12px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    cursor: pointer;
+    background: #f5f5f5;
+    color: #333;
+  }
+  .btn-refresh:hover { background: #e8e8e8; color: #333; }
+
+  .commit-status { font-size: 12px; }
+  .commit-status.ok  { color: #2a7a2a; }
+  .commit-status.err { color: #c0392b; }
+
+  .diff-header-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .commit-tags-cell { white-space: nowrap; }
+  .commit-tag-badge {
+    display: inline-block;
+    background: #e8f5e9;
+    color: #2a7a2a;
+    border: 1px solid #a5d6a7;
+    border-radius: 10px;
+    padding: 1px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    margin-right: 4px;
+  }
+</style>
 {% endblock %}
 
 {% block content %}
@@ -44,6 +137,22 @@
         <div id="checkout-status" class="status-message"></div>
     </div>
 
+    <!-- Uncommitted changes + commit form -->
+    <div class="uncommitted-section">
+        <h2>Незакоммиченные изменения</h2>
+        <div class="diff-header-row">
+            <button class="btn-refresh" id="refresh-diff-btn">&#x21bb; Обновить</button>
+            <span id="diff-loading" style="font-size:12px; color:#888;"></span>
+        </div>
+        <pre class="diff-pre" id="diff-output"><span class="diff-empty">Загрузка...</span></pre>
+
+        <div class="commit-form">
+            <input type="text" id="commit-message-input" placeholder="Сообщение коммита...">
+            <button class="btn-commit" id="do-commit-btn" disabled>Commit</button>
+            <span class="commit-status" id="commit-status"></span>
+        </div>
+    </div>
+
     <div class="commits-list">
         <h2>Список коммитов</h2>
         <div id="commits-table-container">
@@ -53,6 +162,7 @@
                         <th>Хеш</th>
                         <th>Сообщение</th>
                         <th>Дата</th>
+                        <th>Теги</th>
                         <th>Действия</th>
                     </tr>
                 </thead>
@@ -65,21 +175,111 @@
 
 <script src="/static/js/git-history.js"></script>
 <script>
-    // Инициализация при загрузке страницы с проверкой загрузки библиотеки
+    // ── GitgraphJS init ────────────────────────────────────────────
     function initGitHistory() {
         if (typeof window.GitgraphJS === 'undefined') {
-            console.log('Waiting for GitgraphJS to load...');
             setTimeout(initGitHistory, 100);
             return;
         }
-        console.log('GitgraphJS loaded successfully');
         GitHistory.init('{{ module_id }}');
     }
-    
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', initGitHistory);
     } else {
         initGitHistory();
     }
+
+    // ── Diff + Commit ──────────────────────────────────────────────
+    const MODULE_ID = '{{ module_id }}';
+
+    function renderDiff(diffText) {
+        const pre = document.getElementById('diff-output');
+        if (!diffText || !diffText.trim()) {
+            pre.innerHTML = '<span class="diff-empty">Нет незакоммиченных изменений</span>';
+            document.getElementById('do-commit-btn').disabled = true;
+            return;
+        }
+        document.getElementById('do-commit-btn').disabled = false;
+
+        const lines = diffText.split('\n');
+        pre.innerHTML = lines.map(line => {
+            const escaped = line
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+            if (line.startsWith('+++') || line.startsWith('---')) {
+                return `<span class="diff-meta">${escaped}</span>`;
+            }
+            if (line.startsWith('+')) return `<span class="diff-add">${escaped}</span>`;
+            if (line.startsWith('-')) return `<span class="diff-del">${escaped}</span>`;
+            if (line.startsWith('@@')) return `<span class="diff-hunk">${escaped}</span>`;
+            if (line.startsWith('diff ') || line.startsWith('index ')) {
+                return `<span class="diff-meta">${escaped}</span>`;
+            }
+            return escaped;
+        }).join('\n');
+    }
+
+    async function loadDiff() {
+        const loading = document.getElementById('diff-loading');
+        loading.textContent = 'Загрузка...';
+        try {
+            const res = await fetch(`/api/modules/${MODULE_ID}/git-diff`);
+            if (!res.ok) throw new Error(res.status);
+            const data = await res.json();
+            renderDiff(data.diff);
+        } catch (e) {
+            document.getElementById('diff-output').textContent = `Ошибка: ${e.message}`;
+        } finally {
+            loading.textContent = '';
+        }
+    }
+
+    document.getElementById('refresh-diff-btn').addEventListener('click', loadDiff);
+
+    document.getElementById('do-commit-btn').addEventListener('click', async () => {
+        const msg = document.getElementById('commit-message-input').value.trim();
+        const statusEl = document.getElementById('commit-status');
+        if (!msg) {
+            statusEl.className = 'commit-status err';
+            statusEl.textContent = 'Введите сообщение коммита';
+            return;
+        }
+        const btn = document.getElementById('do-commit-btn');
+        btn.disabled = true;
+        statusEl.className = 'commit-status';
+        statusEl.textContent = 'Коммит...';
+
+        try {
+            const res = await fetch(`/api/modules/${MODULE_ID}/git-commit`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: msg }),
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                statusEl.className = 'commit-status err';
+                statusEl.textContent = `Ошибка: ${data.detail || res.status}`;
+                return;
+            }
+            statusEl.className = 'commit-status ok';
+            statusEl.textContent = `Закоммичено: ${data.commit_hash.substring(0, 8)}`;
+            document.getElementById('commit-message-input').value = '';
+            await loadDiff();
+            // Перезагрузить список коммитов если GitHistory поддерживает это
+            if (typeof GitHistory !== 'undefined' && typeof GitHistory.reload === 'function') {
+                GitHistory.reload();
+            } else {
+                setTimeout(() => location.reload(), 800);
+            }
+        } catch (e) {
+            statusEl.className = 'commit-status err';
+            statusEl.textContent = `Ошибка сети: ${e.message}`;
+        } finally {
+            btn.disabled = false;
+        }
+    });
+
+    document.addEventListener('DOMContentLoaded', loadDiff);
 </script>
 {% endblock %}

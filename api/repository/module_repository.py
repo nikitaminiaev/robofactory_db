@@ -1,12 +1,13 @@
+import uuid as uuid_mod
 from typing import Optional, List
 from uuid import UUID
 
 from sqlalchemy.orm import selectinload
-from sqlalchemy import func
+from sqlalchemy import func, select
 
 from . import BaseRepository
 from .bounding_contour_repository import BoundingContourRepository
-from models import Module, ModuleBoundary, Stream, Platform
+from models import Module, ModuleBoundary
 from models.associations import parent_child_module, module_stream, module_platform, module_boundary
 from service.brep_storage import delete_module_brep_directory
 
@@ -21,7 +22,8 @@ class ModuleRepository(BaseRepository):
                 selectinload(Module.boundaries),
                 selectinload(Module.streams),
                 selectinload(Module.platforms),
-                selectinload(Module.versions)
+                selectinload(Module.versions),
+                selectinload(Module.roles),
             ).order_by(
                 Module.id
             )
@@ -41,7 +43,8 @@ class ModuleRepository(BaseRepository):
                 selectinload(Module.boundaries),
                 selectinload(Module.streams),
                 selectinload(Module.platforms),
-                selectinload(Module.versions)
+                selectinload(Module.versions),
+                selectinload(Module.roles),
             )
             
             if top_level_ids is None:
@@ -75,7 +78,8 @@ class ModuleRepository(BaseRepository):
                 selectinload(Module.boundaries),
                 selectinload(Module.streams),
                 selectinload(Module.platforms),
-                selectinload(Module.versions)
+                selectinload(Module.versions),
+                selectinload(Module.roles),
             )
             
             if name:
@@ -105,7 +109,8 @@ class ModuleRepository(BaseRepository):
                 selectinload(Module.boundaries),
                 selectinload(Module.streams),
                 selectinload(Module.platforms),
-                selectinload(Module.versions)
+                selectinload(Module.versions),
+                selectinload(Module.roles),
             ).filter_by(id=id).first()
             print(f"DEBUG get_module_with_relations_by_id: module found = {module is not None}")
             if module:
@@ -114,6 +119,90 @@ class ModuleRepository(BaseRepository):
                 if module.bounding_contour:
                     print(f"DEBUG get_module_with_relations_by_id: contour.brep_files = {module.bounding_contour.brep_files}")
         return module
+
+    def get_child_counts(self, parent_id: UUID) -> dict:
+        """
+        Возвращает словарь {child_id_str: количество_вхождений} для родителя.
+        Считает строки в parent_child_module через GROUP BY.
+        """
+        with self.db_session.session() as db:
+            stmt = (
+                select(
+                    parent_child_module.c.child_id,
+                    func.count().label('cnt'),
+                )
+                .where(parent_child_module.c.parent_id == parent_id)
+                .group_by(parent_child_module.c.child_id)
+            )
+            rows = db.execute(stmt).fetchall()
+            return {str(row.child_id): row.cnt for row in rows}
+
+    def get_parent_counts(self, child_id: UUID) -> dict:
+        """
+        Возвращает словарь {parent_id_str: количество_вхождений} для ребёнка.
+        Считает строки в parent_child_module через GROUP BY.
+        """
+        with self.db_session.session() as db:
+            stmt = (
+                select(
+                    parent_child_module.c.parent_id,
+                    func.count().label('cnt'),
+                )
+                .where(parent_child_module.c.child_id == child_id)
+                .group_by(parent_child_module.c.parent_id)
+            )
+            rows = db.execute(stmt).fetchall()
+            return {str(row.parent_id): row.cnt for row in rows}
+
+    def get_children_roles(self, parent_id: UUID) -> dict:
+        """
+        Возвращает словарь {child_id_str: [role_id_str, ...]} — роли, назначенные
+        каждому дочернему модулю (для отображения состояния чекбоксов в матрице).
+        """
+        from models.associations import module_role_assignment
+        with self.db_session.session() as db:
+            children_ids = db.execute(
+                select(parent_child_module.c.child_id).where(
+                    parent_child_module.c.parent_id == parent_id
+                ).distinct()
+            ).scalars().all()
+
+            if not children_ids:
+                return {}
+
+            rows = db.execute(
+                select(
+                    module_role_assignment.c.module_id,
+                    module_role_assignment.c.role_id,
+                ).where(module_role_assignment.c.module_id.in_(children_ids))
+            ).fetchall()
+
+        result: dict = {}
+        for row in rows:
+            key = str(row.module_id)
+            result.setdefault(key, []).append(str(row.role_id))
+        return result
+
+    def get_children_coordinates(self, parent_id: UUID) -> List[dict]:
+        """
+        Возвращает список всех записей children для данного родителя, включая дубликаты.
+        Каждая запись содержит parent_child_module_id, child_id и coordinates.
+        Используется при загрузке сборки для создания нескольких копий одного объекта.
+        
+        Returns:
+            List[dict]: [{"parent_child_module_id": "uuid", "child_id": "uuid", "coordinates": {...}}, ...]
+        """
+        with self.db_session.session() as db:
+            stmt = (
+                select(
+                    parent_child_module.c.id,
+                    parent_child_module.c.child_id,
+                    parent_child_module.c.coordinates,
+                )
+                .where(parent_child_module.c.parent_id == parent_id)
+            )
+            rows = db.execute(stmt).fetchall()
+            return [{"parent_child_module_id": str(row.id), "child_id": str(row.child_id), "coordinates": row.coordinates} for row in rows]
 
     def get_child_coordinates(self, parent_id: UUID, child_id: UUID):
         return self._get_coordinates(parent_id, child_id, is_parent=True)
@@ -148,16 +237,17 @@ class ModuleRepository(BaseRepository):
                 selectinload(Module.boundaries),
                 selectinload(Module.streams),
                 selectinload(Module.platforms),
-                selectinload(Module.versions)
+                selectinload(Module.versions),
+                selectinload(Module.roles),
             )
             
             query = query.join(
                 parent_child_module,
                 Module.id == parent_child_module.c.child_id
-            ).filter(parent_child_module.c.parent_id == parent_id)
-            
+            ).filter(parent_child_module.c.parent_id == parent_id).distinct()
+
             query = query.order_by(Module.id)
-            
+
             modules = query.all()
         return modules
 
@@ -170,7 +260,8 @@ class ModuleRepository(BaseRepository):
                 selectinload(Module.boundaries),
                 selectinload(Module.streams),
                 selectinload(Module.platforms),
-                selectinload(Module.versions)
+                selectinload(Module.versions),
+                selectinload(Module.roles),
             )
             
             query = query.join(
@@ -214,6 +305,19 @@ class ModuleRepository(BaseRepository):
             )
         )
 
+    def remove_child_relations(self, parent_id: UUID, relation_ids: List[UUID], db_session):
+        """
+        Удаляет конкретные связи по parent_child_module_id
+        """
+        if not relation_ids:
+            return
+        db_session.execute(
+            parent_child_module.delete().where(
+                (parent_child_module.c.parent_id == parent_id) &
+                (parent_child_module.c.id.in_(relation_ids))
+            )
+        )
+
     def remove_parents(self, child_id: UUID, parent_ids: List[UUID], db_session):
         """
         Удаляет связи с родительскими модулями
@@ -229,29 +333,34 @@ class ModuleRepository(BaseRepository):
 
     def add_child_relation(self, parent_id: UUID, child_id: UUID, coordinates: Optional[dict] = None, role_id: Optional[UUID] = None, db_session = None):
         """
-        Добавляет связь с дочерним модулем
+        Добавляет связь с дочерним модулем.
+        Каждый вызов создаёт новую строку с уникальным id — позволяет иметь
+        несколько вхождений одного дочернего модуля с разными координатами.
         """
         target_db = db_session if db_session else self.db_session.session()
         target_db.execute(
             parent_child_module.insert().values(
+                id=uuid_mod.uuid4(),
                 parent_id=parent_id,
                 child_id=child_id,
                 coordinates=coordinates,
-                role_id=role_id
+                role_id=role_id,
             )
         )
 
     def add_parent_relation(self, child_id: UUID, parent_id: UUID, coordinates: Optional[dict] = None, role_id: Optional[UUID] = None, db_session = None):
         """
-        Добавляет связь с родительским модулем
+        Добавляет связь с родительским модулем.
+        Каждый вызов создаёт новую строку с уникальным id.
         """
         target_db = db_session if db_session else self.db_session.session()
         target_db.execute(
             parent_child_module.insert().values(
+                id=uuid_mod.uuid4(),
                 parent_id=parent_id,
                 child_id=child_id,
                 coordinates=coordinates,
-                role_id=role_id
+                role_id=role_id,
             )
         )
 
@@ -297,10 +406,11 @@ class ModuleRepository(BaseRepository):
             db.add(new_module)
             db.flush()  # Получить id для нового модуля
 
-            # Копировать bounding_contour если есть
+            # Копировать bounding_contour в той же транзакции, чтобы FK-constraint
+            # не упал: новый модуль ещё не закоммичен в этой точке.
             if original.bounding_contour:
                 bounding_contour_repo = BoundingContourRepository()
-                bounding_contour_repo.copy_bounding_contour(original.id, new_module.id)
+                bounding_contour_repo.copy_bounding_contour(original.id, new_module.id, db_session=db)
 
             # Копировать роли из parent_child_module
             # Где оригинальный модуль - child
@@ -309,10 +419,11 @@ class ModuleRepository(BaseRepository):
             ).all()
             for rel in child_relations:
                 db.execute(parent_child_module.insert().values(
+                    id=uuid_mod.uuid4(),
                     parent_id=rel.parent_id,
                     child_id=new_module.id,
                     coordinates=rel.coordinates,
-                    role_id=rel.role_id
+                    role_id=rel.role_id,
                 ))
 
             # Где оригинальный модуль - parent
@@ -321,10 +432,11 @@ class ModuleRepository(BaseRepository):
             ).all()
             for rel in parent_relations:
                 db.execute(parent_child_module.insert().values(
+                    id=uuid_mod.uuid4(),
                     parent_id=new_module.id,
                     child_id=rel.child_id,
                     coordinates=rel.coordinates,
-                    role_id=rel.role_id
+                    role_id=rel.role_id,
                 ))
 
             db.commit()
@@ -338,6 +450,7 @@ class ModuleRepository(BaseRepository):
                 selectinload(Module.platforms),
                 selectinload(Module.boundaries),
                 selectinload(Module.versions),
+                selectinload(Module.roles),
             ).filter_by(id=new_module.id).first()
 
             return new_module

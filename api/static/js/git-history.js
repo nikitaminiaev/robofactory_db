@@ -9,6 +9,7 @@ const GitHistory = (function() {
     let currentCommitHash = null;
     let gitgraph = null;
     let commits = [];
+    let commitTags = {};
 
     /**
      * Инициализация модуля
@@ -20,24 +21,32 @@ const GitHistory = (function() {
     }
 
     /**
-     * Загрузка истории коммитов с сервера
+     * Загрузка истории коммитов и текущего HEAD параллельно,
+     * рендеринг только после получения обоих ответов.
      */
     function loadCommitHistory() {
         showLoading();
 
-        $.ajax({
-            url: `/api/modules/${moduleId}/commits`,
-            method: 'GET',
-            success: function(data) {
-                commits = data;
+        const commitsReq = $.ajax({ url: `/api/modules/${moduleId}/commits`, method: 'GET' });
+        const headReq    = $.ajax({ url: `/api/modules/${moduleId}/git-head`, method: 'GET' });
+        const tagsReq    = $.ajax({ url: `/api/modules/${moduleId}/git-tags`, method: 'GET' });
+
+        $.when(commitsReq, headReq, tagsReq)
+            .done(function(commitsResp, headResp, tagsResp) {
+                commits           = commitsResp[0];
+                currentCommitHash = (headResp[0] && headResp[0].head) || null;
+                commitTags        = tagsResp[0] || {};
+                // Если HEAD не определён, считаем первый коммит текущим
+                if (!currentCommitHash && commits.length > 0) {
+                    currentCommitHash = commits[0].hash;
+                }
                 renderGraph();
                 renderCommitsTable();
                 hideLoading();
-            },
-            error: function(xhr, status, error) {
+            })
+            .fail(function(xhr, status, error) {
                 showError('Ошибка загрузки истории коммитов: ' + error);
-            }
-        });
+            });
     }
 
     /**
@@ -69,9 +78,6 @@ const GitHistory = (function() {
             $('#git-graph').html('<div class="loading">Нет коммитов для отображения</div>');
             return;
         }
-
-        // Определяем текущий HEAD
-        determineCurrentHead();
 
         // Инициализация GitGraph
         const graphContainer = document.getElementById('git-graph');
@@ -114,34 +120,9 @@ const GitHistory = (function() {
     }
 
     /**
-     * Определение текущего HEAD коммита
-     */
-    function determineCurrentHead() {
-        // Получаем текущую версию модуля
-        $.ajax({
-            url: `/api/modules/${moduleId}/versions/latest`,
-            method: 'GET',
-            success: function(version) {
-                if (version && version.commit_hash) {
-                    currentCommitHash = version.commit_hash;
-                    updateCurrentCommitDisplay();
-                }
-            },
-            error: function() {
-                // Если не удалось получить версию, используем первый коммит
-                if (commits.length > 0) {
-                    currentCommitHash = commits[0].hash;
-                    updateCurrentCommitDisplay();
-                }
-            }
-        });
-    }
-
-    /**
-     * Обновление отображения текущего коммита
+     * Обновление подсветки текущего коммита в таблице без перерисовки всего
      */
     function updateCurrentCommitDisplay() {
-        // Обновляем таблицу
         $('#commits-tbody tr').removeClass('current');
         $(`#commits-tbody tr[data-hash="${currentCommitHash}"]`).addClass('current');
     }
@@ -196,8 +177,16 @@ const GitHistory = (function() {
             row.append($('<td>').text(commit.message));
             row.append($('<td class="commit-date-cell">').text(formatDate(commit.date)));
 
-            const actionsCell = $('<td>');
+            const tagsCell = $('<td class="commit-tags-cell">');
+            const tags = commitTags[commit.hash] || [];
+            tags.forEach(function(tag) {
+                tagsCell.append(
+                    $('<span class="commit-tag-badge">').text(tag)
+                );
+            });
+            row.append(tagsCell);
 
+            const actionsCell = $('<td>');
             if (isCurrent) {
                 actionsCell.append($('<span class="current-badge">Текущая</span>'));
             } else {
@@ -216,42 +205,52 @@ const GitHistory = (function() {
 
     /**
      * Выполнение checkout на указанный коммит
+     * @param {string} commitHash
+     * @param {boolean} force - сбросить незакоммиченные изменения перед checkout
      */
-    function performCheckout(commitHash) {
+    function performCheckout(commitHash, force) {
         const statusDiv = $('#checkout-status');
         statusDiv.removeClass('success error').text('Выполняется checkout...');
 
-        // Блокируем все кнопки checkout
         $('.checkout-button, .checkout-btn-small').prop('disabled', true);
 
         $.ajax({
             url: `/api/modules/${moduleId}/checkout`,
             method: 'POST',
             contentType: 'application/json',
-            data: JSON.stringify({ commit_hash: commitHash }),
+            data: JSON.stringify({ commit_hash: commitHash, force: !!force }),
             success: function(response) {
                 statusDiv
                     .removeClass('error')
                     .addClass('success')
                     .text('✓ ' + response.message);
 
-                // Обновляем текущий коммит
                 currentCommitHash = commitHash;
                 updateCurrentCommitDisplay();
                 renderCommitsTable();
-
-                // Обновляем граф
                 renderGraph();
             },
             error: function(xhr) {
-                const errorMsg = xhr.responseJSON ? xhr.responseJSON.detail : 'Неизвестная ошибка';
-                statusDiv
-                    .removeClass('success')
-                    .addClass('error')
-                    .text('✗ Ошибка: ' + errorMsg);
+                if (xhr.status === 409) {
+                    const confirmed = window.confirm(
+                        'В рабочей директории есть незакоммиченные изменения.\n\n' +
+                        'Они будут сброшены (git checkout -- .). Продолжить?'
+                    );
+                    if (confirmed) {
+                        statusDiv.removeClass('success error').text('');
+                        performCheckout(commitHash, true);
+                        return;
+                    }
+                    statusDiv.removeClass('success error').text('');
+                } else {
+                    const errorMsg = xhr.responseJSON ? xhr.responseJSON.detail : 'Неизвестная ошибка';
+                    statusDiv
+                        .removeClass('success')
+                        .addClass('error')
+                        .text('✗ Ошибка: ' + errorMsg);
+                }
             },
             complete: function() {
-                // Разблокируем кнопки
                 $('.checkout-button, .checkout-btn-small').prop('disabled', false);
             }
         });

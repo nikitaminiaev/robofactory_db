@@ -1,6 +1,5 @@
-from service.constants import BREP_FILES_PATH
+from service.constants import resolve_brep_absolute_path
 from models import Module
-from pathlib import Path
 
 class BasicObject:
     def __init__(self, data: dict):
@@ -33,8 +32,7 @@ class BasicObject:
                 # Найдем файл brep_string
                 brep_file_path = brep_files.get('brep_string')
                 if brep_file_path:
-                    # Построим полный путь к файлу
-                    full_path = Path(BREP_FILES_PATH) / brep_file_path
+                    full_path = resolve_brep_absolute_path(brep_file_path)
                     try:
                         if full_path.exists():
                             self.brep_string = full_path.read_text()

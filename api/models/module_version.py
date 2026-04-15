@@ -1,7 +1,7 @@
 import uuid
 from typing import Optional, TYPE_CHECKING
 from uuid import UUID
-from sqlalchemy import DateTime, ForeignKey, String, Text, UUID as SQLUUID, Boolean
+from sqlalchemy import DateTime, ForeignKey, JSON, String, Text, UUID as SQLUUID, Boolean
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from sqlalchemy.sql import func
 
@@ -23,5 +23,6 @@ class ModuleVersion(Base):
     git_repo_path: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     is_released: Mapped[bool] = mapped_column(Boolean, default=False)
     created_ts: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    version_metadata: Mapped[Optional[dict]] = mapped_column("metadata", JSON, nullable=True)
 
     module: Mapped["Module"] = relationship(back_populates="versions")

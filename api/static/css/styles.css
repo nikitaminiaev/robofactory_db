@@ -459,6 +459,20 @@ button:hover {
     border-bottom: none;
 }
 
+.child-count-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 8px;
+    padding: 1px 7px;
+    border-radius: 10px;
+    background-color: #e8f0fe;
+    color: #1a73e8;
+    font-size: 0.78em;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
 /* Стили для режима редактирования */
 .edit-mode .detail-table td input,
 .edit-mode .detail-table td textarea {
@@ -644,4 +658,267 @@ button:hover {
 
 .modal-actions button {
     padding: 10px 20px;
+}
+
+.breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    color: #666;
+    margin-bottom: 20px;
+    padding: 8px 0;
+}
+
+.breadcrumb a {
+    color: #3498db;
+    text-decoration: none;
+}
+
+.breadcrumb a:hover {
+    color: #2980b9;
+    text-decoration: underline;
+}
+
+.breadcrumb-separator {
+    color: #aaa;
+    user-select: none;
+}
+
+.breadcrumb-current {
+    color: #333;
+    font-weight: 500;
+}
+
+/* =====================================================================
+   Матрица ролей
+   ===================================================================== */
+
+.roles-matrix__section {
+    margin-top: 32px;
+}
+
+.roles-matrix__header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.roles-matrix__header h2 {
+    margin: 0;
+}
+
+.roles-matrix__edit-btn {
+    padding: 4px 12px;
+    font-size: 13px;
+    border: 1px solid #3498db;
+    background: #fff;
+    color: #3498db;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+
+.roles-matrix__edit-btn:hover {
+    background: #3498db;
+    color: #fff;
+}
+
+.roles-matrix__edit-btn--done {
+    border-color: #27ae60;
+    color: #27ae60;
+}
+
+.roles-matrix__edit-btn--done:hover {
+    background: #27ae60;
+    color: #fff;
+}
+
+.roles-matrix {
+    border-collapse: collapse;
+    font-size: 14px;
+    max-width: 100%;
+    overflow-x: auto;
+    display: block;
+    table-layout: auto;
+}
+
+.roles-matrix__th {
+    padding: 6px 8px;
+    background: #f4f6f8;
+    border: 1px solid #dde1e7;
+    font-weight: 600;
+    white-space: nowrap;
+    text-align: center;
+    cursor: default;
+    position: relative;
+    width: 1px;
+}
+
+.roles-matrix__th--child {
+    text-align: left;
+    min-width: 140px;
+    width: auto;
+}
+
+.roles-matrix__th--add {
+    width: 1px;
+}
+
+.roles-matrix__th-inner {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    justify-content: center;
+    white-space: nowrap;
+}
+
+.roles-matrix__child-name {
+    padding: 5px 10px;
+    border: 1px solid #dde1e7;
+    white-space: nowrap;
+}
+
+.roles-matrix__child-name a {
+    color: #3498db;
+    text-decoration: none;
+}
+
+.roles-matrix__child-name a:hover {
+    text-decoration: underline;
+}
+
+.roles-matrix__cell {
+    padding: 4px 6px;
+    border: 1px solid #dde1e7;
+    text-align: center;
+    vertical-align: middle;
+    width: 1px;
+}
+
+.roles-matrix__checkbox {
+    width: 15px;
+    height: 15px;
+    cursor: pointer;
+    display: block;
+    margin: 0 auto;
+}
+
+.roles-matrix__checkbox:disabled {
+    cursor: default;
+    opacity: 0.7;
+}
+
+/* Collapse button */
+.roles-matrix__collapse-btn {
+    flex-shrink: 0;
+    width: 14px;
+    height: 14px;
+    padding: 0;
+    font-size: 10px;
+    line-height: 14px;
+    background: #e2e6ea;
+    border: 1px solid #c8cdd4;
+    border-radius: 2px;
+    color: #666;
+    cursor: pointer;
+    text-align: center;
+    font-style: normal;
+    user-select: none;
+}
+
+.roles-matrix__collapse-btn:hover {
+    background: #c8cdd4;
+    color: #333;
+}
+
+/* Collapsed column */
+.roles-matrix th.roles-matrix__col--collapsed {
+    width: 20px;
+    min-width: 20px;
+    max-width: 20px;
+    padding: 4px 2px;
+}
+
+.roles-matrix td.roles-matrix__col--collapsed {
+    width: 20px;
+    min-width: 20px;
+    max-width: 20px;
+    padding: 0;
+    overflow: hidden;
+}
+
+.roles-matrix th.roles-matrix__col--collapsed .roles-matrix__col-label,
+.roles-matrix th.roles-matrix__col--collapsed .roles-matrix__delete-role-btn {
+    display: none;
+}
+
+.roles-matrix td.roles-matrix__col--collapsed > * {
+    display: none;
+}
+
+.roles-matrix__delete-role-btn {
+    flex-shrink: 0;
+    padding: 0 3px;
+    font-size: 12px;
+    line-height: 1;
+    background: none;
+    border: none;
+    color: #e74c3c;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+.roles-matrix__delete-role-btn:hover {
+    color: #c0392b;
+}
+
+.roles-matrix__add-form {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    flex-wrap: wrap;
+}
+
+.roles-matrix__input {
+    padding: 5px 10px;
+    font-size: 13px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    outline: none;
+}
+
+.roles-matrix__input:focus {
+    border-color: #3498db;
+}
+
+.roles-matrix__btn {
+    padding: 5px 14px;
+    font-size: 13px;
+    border-radius: 4px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: background 0.15s;
+}
+
+.roles-matrix__btn--confirm {
+    background: #27ae60;
+    color: #fff;
+    border-color: #27ae60;
+}
+
+.roles-matrix__btn--confirm:hover {
+    background: #219150;
+}
+
+.roles-matrix__btn--cancel {
+    background: #fff;
+    color: #666;
+    border-color: #ccc;
+}
+
+.roles-matrix__btn--cancel:hover {
+    background: #f0f0f0;
 }

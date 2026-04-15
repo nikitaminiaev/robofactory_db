@@ -1,14 +1,12 @@
 from typing import Dict
 from uuid import UUID
-import logging
 import hashlib
+from service.constants import get_module_resource_path
 from repository.bounding_contour_repository import BoundingContourRepository
 from repository.module_version_repository import ModuleVersionRepository
 from service.brep_storage import save_brep_file
-from service.git_manager import init_module_git_repo, commit_module_changes, calculate_brep_files_hash
+from service.git_manager import commit_module_changes, init_module_git_repo, is_module_git_repo_initialized
 from models.module_version import ModuleVersion
-
-logger = logging.getLogger(__name__)
 
 
 def calculate_brep_dict_hash(brep_files_dict: Dict[str, str]) -> str:
@@ -36,6 +34,30 @@ def calculate_brep_dict_hash(brep_files_dict: Dict[str, str]) -> str:
 
 
 class BrepFileService:
+    @staticmethod
+    def _create_initial_version_if_needed(
+        module_id: UUID,
+        description: str,
+        file_hash: str,
+    ) -> ModuleVersion:
+        version_repo = ModuleVersionRepository()
+        latest_version = version_repo.get_latest_version(module_id)
+        if latest_version:
+            return latest_version
+
+        git_repo_path = str(get_module_resource_path(module_id))
+        if not is_module_git_repo_initialized(module_id):
+            git_repo_path = init_module_git_repo(module_id)
+        commit_hash = commit_module_changes(module_id, description)
+        return version_repo.create_version(
+            module_id=module_id,
+            version_number="auto",
+            description=description,
+            commit_hash=commit_hash,
+            file_hash=file_hash,
+            git_repo_path=git_repo_path,
+        )
+
     def save_brep_files_from_dict(
         self,
         module_id: UUID,
@@ -43,8 +65,8 @@ class BrepFileService:
         description: str = "Update BREP files"
     ) -> ModuleVersion:
         """
-        Сохраняет BREP файлы из словаря в файловую систему, обновляет BoundingContour,
-        выполняет Git коммит и создает новую версию модуля.
+        Сохраняет BREP файлы из словаря и обновляет BoundingContour.
+        Инициализирующий Git-коммит и версия создаются только один раз.
 
         Args:
             module_id: UUID модуля
@@ -56,22 +78,12 @@ class BrepFileService:
 
         Raises:
             OSError: Если не удается сохранить файлы
-            CalledProcessError: Если Git команды не удались
-            ValueError: Если модуль или bounding_contour не найдены
+            RuntimeError: Если не удалось создать инициализирующую версию
         """
         if not brep_files_dict:
             raise ValueError("brep_files_dict не может быть пустым")
 
-        version_repo = ModuleVersionRepository()
-
-        # Вычисляем хеш новых файлов
         current_hash = calculate_brep_dict_hash(brep_files_dict)
-
-        # Получаем последнюю версию модуля
-        latest_version = version_repo.get_latest_version(module_id)
-        if latest_version and latest_version.file_hash == current_hash:
-            logger.info(f"Файлы BREP не изменились для модуля {module_id}, пропускаем обновление")
-            return latest_version
 
         saved_paths = {}
         try:
@@ -81,27 +93,17 @@ class BrepFileService:
         except OSError as e:
             raise OSError(f"Не удалось сохранить BREP файлы: {e}") from e
 
-        print(f"DEBUG BrepFileService: saved_paths = {saved_paths}")
         contour_repo = BoundingContourRepository()
         contour_repo.update_brep_files(module_id, saved_paths)
 
         try:
-            # Инициализировать git репозиторий если он не существует
-            git_repo_path = init_module_git_repo(module_id)
-            commit_hash = commit_module_changes(module_id, description)
+            return self._create_initial_version_if_needed(
+                module_id=module_id,
+                description=description,
+                file_hash=current_hash,
+            )
         except Exception as e:
-            raise RuntimeError(f"Не удалось выполнить Git коммит: {e}") from e
-
-        version = version_repo.create_version(
-            module_id=module_id,
-            version_number="auto",
-            description=description,
-            commit_hash=commit_hash,
-            file_hash=current_hash,
-            git_repo_path=git_repo_path
-        )
-
-        return version
+            raise RuntimeError(f"Не удалось создать инициализирующую версию: {e}") from e
 
     def save_single_brep_file(
         self,
@@ -111,8 +113,7 @@ class BrepFileService:
         description: str = "Add BREP file"
     ) -> ModuleVersion:
         """
-        Сохраняет один BREP файл, обновляет BoundingContour,
-        выполняет Git коммит и создает новую версию модуля.
+        Сохраняет один BREP файл и обновляет BoundingContour.
 
         Args:
             module_id: UUID модуля
@@ -125,19 +126,9 @@ class BrepFileService:
 
         Raises:
             OSError: Если не удается сохранить файл
-            CalledProcessError: Если Git команды не удались
-            ValueError: Если модуль или bounding_contour не найдены
+            RuntimeError: Если не удалось создать инициализирующую версию
         """
-        # Вычисляем хеш файла
-        content_str = file_content.decode('utf-8')
-        current_hash = calculate_brep_dict_hash({filename: content_str})
-
-        version_repo = ModuleVersionRepository()
-        # Получаем последнюю версию модуля
-        latest_version = version_repo.get_latest_version(module_id)
-        if latest_version and latest_version.file_hash == current_hash:
-            logger.info(f"Файл BREP не изменился для модуля {module_id}, пропускаем обновление")
-            return latest_version
+        content_str = file_content.decode("utf-8")
 
         try:
             relative_path = save_brep_file(module_id, filename, file_content)
@@ -148,19 +139,10 @@ class BrepFileService:
         contour_repo.update_brep_files(module_id, {filename: relative_path})
 
         try:
-            # Инициализировать git репозиторий если он не существует
-            git_repo_path = init_module_git_repo(module_id)
-            commit_hash = commit_module_changes(module_id, description)
+            return self._create_initial_version_if_needed(
+                module_id=module_id,
+                description=description,
+                file_hash=calculate_brep_dict_hash({filename: content_str}),
+            )
         except Exception as e:
-            raise RuntimeError(f"Не удалось выполнить Git коммит: {e}") from e
-
-        version = version_repo.create_version(
-            module_id=module_id,
-            version_number="auto",
-            description=description,
-            commit_hash=commit_hash,
-            file_hash=current_hash,
-            git_repo_path=git_repo_path
-        )
-
-        return version
+            raise RuntimeError(f"Не удалось создать инициализирующую версию: {e}") from e

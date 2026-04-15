@@ -359,71 +359,28 @@ class WebSocketServer:
         return result
 
     def send_message(self, message, host="localhost", port=None, chunk_size=262144):
-        """Отправляет сообщение через WebSocket-сервер с поддержкой больших сообщений
+        """Отправляет сообщение всем подключенным WebSocket-клиентам
         
         Args:
             message: сообщение для отправки
-            host: хост сервера (по умолчанию localhost)
-            port: порт сервера (по умолчанию self.port)
-            chunk_size: размер фрагмента для разбиения больших сообщений
+            host: хост (не используется, оставлен для совместимости)
+            port: порт (не используется, оставлен для совместимости)
+            chunk_size: размер фрагмента (не используется)
         """
-        if port is None:
-            port = self.port
+        log(f"[WebSocketServer] Попытка отправить сообщение размером {len(message)} байт")
         
-        log(f"[WebSocketServer] Попытка отправить сообщение размером {len(message)} байт на {host}:{port}")
-            
+        # Проверяем, есть ли подключенные клиенты
+        if not self.connected_clients:
+            log(f"[WebSocketServer] Ошибка: нет подключенных WebSocket-клиентов")
+            return False
+        
+        # Используем broadcast для отправки всем клиентам
         try:
-            # Сначала проверяем, запущен ли сервер
-            if not self.is_running(host, port):
-                log(f"[WebSocketServer] Ошибка: сервер не запущен на {host}:{port}")
-                return False
-                
-            # Создаем простой клиент для отправки сообщения
-            log(f"[WebSocketServer] Создание сокета для отправки сообщения")
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            
-            try:
-                log(f"[WebSocketServer] Подключение к {host}:{port}")
-                sock.connect((host, port))
-                
-                # Разбиваем большое сообщение на части и отправляем
-                encoded_message = message.encode('utf-8')
-                total_size = len(encoded_message)
-                sent_bytes = 0
-                
-                while sent_bytes < total_size:
-                    # Определяем размер текущего фрагмента
-                    current_chunk = encoded_message[sent_bytes:sent_bytes+chunk_size]
-                    chunk_len = len(current_chunk)
-                    
-                    log(f"[WebSocketServer] Отправка фрагмента {sent_bytes+1}-{sent_bytes+chunk_len} из {total_size} байт")
-                    sock.sendall(current_chunk)
-                    sent_bytes += chunk_len
-                
-                # Устанавливаем неблокирующий режим для сокета
-                sock.setblocking(False)
-                
-                log(f"[WebSocketServer] Ожидание ответа от сервера")
-                sock.recv(65536)
-                
-                return True
-            except socket.timeout:
-                log(f"[WebSocketServer] Ошибка: превышено время ожидания при подключении к {host}:{port}")
-                return False
-            except ConnectionRefusedError:
-                log(f"[WebSocketServer] Ошибка: соединение отклонено сервером {host}:{port}")
-                return False
-            finally:
-                try:
-                    sock.close()
-                    log(f"[WebSocketServer] Сокет закрыт")
-                except:
-                    pass
-                
+            self._broadcast_message(message)
+            log(f"[WebSocketServer] Сообщение успешно отправлено {len(self.connected_clients)} клиентам")
+            return True
         except Exception as e:
-            log(f"[WebSocketServer] Общая ошибка при отправке сообщения: {e}")
-            import traceback
-            traceback.print_exc()
+            log(f"[WebSocketServer] Ошибка при отправке сообщения: {e}")
             return False
 
     def start(self):

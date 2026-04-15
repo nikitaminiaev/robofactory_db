@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Any, Dict
 from pydantic import BaseModel
 
 
@@ -11,12 +11,10 @@ class ModuleVersionDTO(BaseModel):
     git_repo_path: Optional[str] = None
     is_released: bool
     created_ts: Optional[str] = None
-    
+    version_metadata: Optional[Dict[str, Any]] = None
+
     @classmethod
     def from_module_version(cls, version):
-        """
-        Фабричный метод для создания DTO из модели ModuleVersion
-        """
         return cls(
             id=str(version.id),
             module_id=str(version.module_id),
@@ -25,19 +23,19 @@ class ModuleVersionDTO(BaseModel):
             description=version.description,
             git_repo_path=version.git_repo_path,
             is_released=version.is_released,
-            created_ts=version.created_ts.isoformat() if version.created_ts else None
+            created_ts=version.created_ts.isoformat() if version.created_ts else None,
+            version_metadata=version.version_metadata,
         )
-    
+
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class ModuleVersionCreateDTO(BaseModel):
     version_number: str
     description: str
-    commit_hash: Optional[str] = None
-    git_repo_path: Optional[str] = None
     is_released: bool = False
+    make_git_commit: bool = False
 
 
 class ModuleVersionUpdateDTO(BaseModel):
