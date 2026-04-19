@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from repository.module_repository import ModuleRepository
 from schemas import BasicObjectDTO
+from schemas.basic_object_dto import ParentEdgeRoleDTO
 
 
 router = APIRouter()
@@ -35,8 +36,10 @@ async def get_basic_object_by_id(request: Request, id: UUID, repo: ModuleReposit
     children_counts = repo.get_child_counts(id)
     parent_counts = repo.get_parent_counts(id)
     children_roles = repo.get_children_roles(id)
+    parent_edges = repo.get_parent_edges_with_roles(id)
     result = BasicObjectDTO.from_module(basic_object, children_counts=children_counts, parent_counts=parent_counts)
     result.children_roles = children_roles
+    result.parent_edges = [ParentEdgeRoleDTO(**edge) for edge in parent_edges]
 
     if result.bounding_contour:
         if hasattr(result.bounding_contour.brep_files, 'get'):

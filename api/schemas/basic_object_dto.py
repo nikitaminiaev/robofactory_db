@@ -2,6 +2,15 @@ from typing import Optional, List, Dict
 from pydantic import BaseModel
 from .bounding_contour_dto import BoundingContourDTO
 
+
+class ParentEdgeRoleDTO(BaseModel):
+    parent_child_module_id: str
+    parent_id: str
+    role_id: Optional[str] = None
+    role_name: Optional[str] = None
+    role_description: Optional[str] = None
+
+
 class BasicObjectDTO(BaseModel):
     id: str
     name: str
@@ -20,6 +29,7 @@ class BasicObjectDTO(BaseModel):
     parent_counts: Dict[str, int] = {}
     children_coordinates: Dict[str, Optional[dict]] = {}
     children_with_coordinates: List[dict] = []
+    parent_edges: List[ParentEdgeRoleDTO] = []
     roles: List[Dict] = []
     children_roles: Dict[str, List[str]] = {}
     created_ts: Optional[str] = None

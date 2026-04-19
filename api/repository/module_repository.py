@@ -7,7 +7,7 @@ from sqlalchemy import func, select
 
 from . import BaseRepository
 from .bounding_contour_repository import BoundingContourRepository
-from models import Module, ModuleBoundary
+from models import Module, ModuleBoundary, ModuleRole
 from models.associations import parent_child_module, module_stream, module_platform, module_boundary
 from service.brep_storage import delete_module_brep_directory
 
@@ -190,7 +190,7 @@ class ModuleRepository(BaseRepository):
         Используется при загрузке сборки для создания нескольких копий одного объекта.
         
         Returns:
-            List[dict]: [{"parent_child_module_id": "uuid", "child_id": "uuid", "coordinates": {...}}, ...]
+            List[dict]: [{"parent_child_module_id": "uuid", "child_id": "uuid", "coordinates": {...}, "role_id": "uuid|None"}, ...]
         """
         with self.db_session.session() as db:
             stmt = (
@@ -198,11 +198,53 @@ class ModuleRepository(BaseRepository):
                     parent_child_module.c.id,
                     parent_child_module.c.child_id,
                     parent_child_module.c.coordinates,
+                    parent_child_module.c.role_id,
                 )
                 .where(parent_child_module.c.parent_id == parent_id)
             )
             rows = db.execute(stmt).fetchall()
-            return [{"parent_child_module_id": str(row.id), "child_id": str(row.child_id), "coordinates": row.coordinates} for row in rows]
+            return [
+                {
+                    "parent_child_module_id": str(row.id),
+                    "child_id": str(row.child_id),
+                    "coordinates": row.coordinates,
+                    "role_id": str(row.role_id) if row.role_id else None,
+                }
+                for row in rows
+            ]
+
+    def get_parent_edges_with_roles(self, child_id: UUID) -> List[dict]:
+        """
+        Возвращает список связей parent_child_module для текущего child,
+        включая роль связи (если задана).
+        """
+        with self.db_session.session() as db:
+            stmt = (
+                select(
+                    parent_child_module.c.id,
+                    parent_child_module.c.parent_id,
+                    parent_child_module.c.role_id,
+                    ModuleRole.name,
+                    ModuleRole.description,
+                )
+                .outerjoin(ModuleRole, ModuleRole.id == parent_child_module.c.role_id)
+                .where(parent_child_module.c.child_id == child_id)
+                .order_by(parent_child_module.c.parent_id, parent_child_module.c.id)
+            )
+            rows = db.execute(stmt).fetchall()
+
+        result = []
+        for row in rows:
+            result.append(
+                {
+                    "parent_child_module_id": str(row.id),
+                    "parent_id": str(row.parent_id),
+                    "role_id": str(row.role_id) if row.role_id else None,
+                    "role_name": row.name,
+                    "role_description": row.description,
+                }
+            )
+        return result
 
     def get_child_coordinates(self, parent_id: UUID, child_id: UUID):
         return self._get_coordinates(parent_id, child_id, is_parent=True)

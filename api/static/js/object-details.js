@@ -612,12 +612,7 @@ function renderObjectFullDetails(data) {
     detailsHtml += renderRelatedObjectsList('Parents', data.parents, 'parentsList', data.parent_counts);
     detailsHtml += renderRelatedObjectsList('Children', data.children, 'childrenList', data.children_counts, data.children_with_coordinates || []);
     detailsHtml += `</div>`;
-    detailsHtml += `<div class="module-tab-panel" data-module-tab-panel="roles">
-        <div class="section-card">
-            <p style="margin-top:0; color:#666;">External and internal threads will appear here later.</p>
-        </div>
-        ${renderRolesMatrix(data) || '<div class="info-message">This module has no child roles.</div>'}
-    </div>`;
+    detailsHtml += renderRolesTab(data, loadObjectNames);
     detailsHtml += `<div class="module-tab-panel" data-module-tab-panel="scad">
         <div id="module-scad-tab-slot" style="display:grid; gap:16px;"></div>
     </div>`;
@@ -707,6 +702,74 @@ function renderObjectFullDetails(data) {
     detailsHtml += `</div>`;
 
     return detailsHtml;
+}
+
+function renderExternalRolesTable(data, loadObjectNames) {
+    const parentEdges = Array.isArray(data.parent_edges) ? data.parent_edges : [];
+    if (parentEdges.length === 0) {
+        return `
+            <div class="section-card">
+                <h2 style="margin-top:0;">External Roles</h2>
+                <div class="info-message">No external roles found.</div>
+            </div>
+        `;
+    }
+
+    const parentIds = [...new Set(parentEdges.map(edge => edge.parent_id).filter(Boolean))];
+    setTimeout(async () => {
+        const names = await loadObjectNames(parentIds);
+        parentIds.forEach(parentId => {
+            const parentName = names[parentId];
+            if (!parentName) return;
+            document.querySelectorAll(`.external-role-parent-name[data-parent-id="${parentId}"]`).forEach(link => {
+                link.textContent = parentName;
+            });
+        });
+    }, 0);
+
+    const rows = parentEdges.map(edge => `
+        <tr>
+            <td>
+                <a
+                    href="/basic_object/${edge.parent_id}"
+                    class="external-role-parent-name"
+                    data-parent-id="${edge.parent_id}"
+                >${window.objectNamesCache[edge.parent_id] || edge.parent_id}</a>
+            </td>
+            <td>${edge.role_name ? escapeHtml(edge.role_name) : '—'}</td>
+            <td>${edge.role_description ? escapeHtml(edge.role_description) : '—'}</td>
+        </tr>
+    `).join('');
+
+    return `
+        <div class="section-card">
+            <h2 style="margin-top:0;">External Roles</h2>
+            <table class="detail-table">
+                <thead>
+                    <tr>
+                        <th>Parent module</th>
+                        <th>Role</th>
+                        <th>Role description</th>
+                    </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+            </table>
+        </div>
+    `;
+}
+
+function renderRolesTab(data, loadObjectNames) {
+    const internalRolesHtml = renderRolesMatrix(data) || '<div class="info-message">This module has no child roles.</div>';
+    const externalRolesHtml = renderExternalRolesTable(data, loadObjectNames);
+    return `
+        <div class="module-tab-panel" data-module-tab-panel="roles">
+            <div class="section-card">
+                <p style="margin-top:0; color:#666;">External and internal threads will appear here later.</p>
+            </div>
+            ${internalRolesHtml}
+            ${externalRolesHtml}
+        </div>
+    `;
 }
 
 function toggleEditMode(enable = true) {
@@ -1595,6 +1658,7 @@ function renderRolesMatrix(data) {
     if (!data.children || data.children.length === 0) return '';
 
     window.rolesMatrixCollapsed = window.rolesMatrixCollapsed || new Set();
+    window.rolesMatrixChildrenCollapsed = window.rolesMatrixChildrenCollapsed || new Set();
     const parentId = data.id;
 
     const addRoleFormHtml = `
@@ -1647,8 +1711,15 @@ function rolesMatrixDisableEdit(parentId) {
 
 function buildRolesMatrixTable(data, editMode, parentId) {
     const roles = data.roles || [];
-    const childrenRoles = data.children_roles || {};
+    const childLinks = Array.isArray(data.children_with_coordinates) ? data.children_with_coordinates : [];
     const collapsed = window.rolesMatrixCollapsed || new Set();
+    const childrenCollapsed = window.rolesMatrixChildrenCollapsed || new Set();
+
+    const groupedChildren = {};
+    childLinks.forEach(link => {
+        if (!groupedChildren[link.child_id]) groupedChildren[link.child_id] = [];
+        groupedChildren[link.child_id].push(link);
+    });
 
     const headerCells = roles.map(role => {
         const isCollapsed = collapsed.has(role.id);
@@ -1668,28 +1739,90 @@ function buildRolesMatrixTable(data, editMode, parentId) {
         </th>`;
     }).join('');
 
-    const bodyRows = (data.children || []).map(childId => {
-        const cells = roles.map(role => {
+    const bodyRows = Object.keys(groupedChildren).map(childId => {
+        const group = groupedChildren[childId];
+        const hasCopies = group.length > 1;
+        const singleLink = hasCopies ? null : group[0];
+        const groupExpanded = hasCopies && childrenCollapsed.has(childId);
+        const name = window.objectNamesCache && window.objectNamesCache[childId] ? escapeHtml(window.objectNamesCache[childId]) : childId;
+        const toggleBtn = hasCopies
+            ? `<button class="roles-matrix__collapse-btn" onclick="rolesMatrixToggleChildGroup('${childId}')" title="${groupExpanded ? 'Collapse copies' : 'Expand copies'}">${groupExpanded ? '▾' : '▸'}</button>`
+            : '';
+
+        const groupCells = roles.map(role => {
             const isCollapsed = collapsed.has(role.id);
-            const checked = (childrenRoles[childId] || []).includes(role.id) ? 'checked' : '';
             const collapsedClass = isCollapsed ? ' roles-matrix__col--collapsed' : '';
-            if (editMode) {
-                return `<td class="roles-matrix__cell${collapsedClass}" data-role-col="${role.id}"><input type="checkbox" class="roles-matrix__checkbox" data-child-id="${childId}" data-role-id="${role.id}" ${checked} onchange="rolesMatrixToggleAssignment(this, '${childId}', '${role.id}')"></td>`;
+            if (!hasCopies && singleLink) {
+                const checked = singleLink.role_id === role.id ? 'checked' : '';
+                if (editMode && singleLink.parent_child_module_id) {
+                    return `<td class="roles-matrix__cell${collapsedClass}" data-role-col="${role.id}">
+                        <input type="radio" class="roles-matrix__checkbox" name="roles-copy-${singleLink.parent_child_module_id}" ${checked} onchange="rolesMatrixAssignToCopy('${singleLink.parent_child_module_id}', '${role.id}')">
+                    </td>`;
+                }
+                return `<td class="roles-matrix__cell${collapsedClass}" data-role-col="${role.id}">
+                    <input type="radio" class="roles-matrix__checkbox" ${checked} disabled>
+                </td>`;
             }
-            return `<td class="roles-matrix__cell${collapsedClass}" data-role-col="${role.id}"><input type="checkbox" class="roles-matrix__checkbox" ${checked} disabled></td>`;
+            const assignedCount = group.filter(link => link.role_id === role.id).length;
+            return `<td class="roles-matrix__cell${collapsedClass}" data-role-col="${role.id}">
+                ${assignedCount > 0 ? `<span title="${assignedCount} copies">${assignedCount}</span>` : ''}
+            </td>`;
         }).join('');
 
-        const name = window.objectNamesCache && window.objectNamesCache[childId] ? escapeHtml(window.objectNamesCache[childId]) : childId;
-        return `<tr data-child-id="${childId}">
-            <td class="roles-matrix__child-name"><a href="/basic_object/${childId}">${name}</a></td>
-            ${cells}
+        const singleClearBtn = editMode && !hasCopies && singleLink && singleLink.parent_child_module_id
+            ? `<button class="roles-matrix__clear-btn" type="button" onclick="rolesMatrixAssignToCopy('${singleLink.parent_child_module_id}', null)">Clear</button>`
+            : '';
+
+        let html = `<tr data-child-id="${childId}" class="roles-matrix__group-row">
+            <td class="roles-matrix__child-name">
+                <div style="display:flex; align-items:center; gap:6px;">
+                    ${toggleBtn}
+                    <a href="/basic_object/${childId}">${name}</a>
+                    ${hasCopies ? `<span class="child-count-badge" title="Copies">&times;${group.length}</span>` : ''}
+                    ${singleClearBtn}
+                </div>
+            </td>
+            ${groupCells}
             ${editMode ? '<td class="roles-matrix__th roles-matrix__th--add"></td>' : ''}
         </tr>`;
+
+        if (hasCopies && groupExpanded) {
+            html += group.map((link, index) => {
+                const pcmId = link.parent_child_module_id;
+                const copyLabel = hasCopies ? `Copy #${index + 1}` : 'Copy #1';
+                const cells = roles.map(role => {
+                    const isCollapsed = collapsed.has(role.id);
+                    const checked = link.role_id === role.id ? 'checked' : '';
+                    const collapsedClass = isCollapsed ? ' roles-matrix__col--collapsed' : '';
+                    if (editMode && pcmId) {
+                        return `<td class="roles-matrix__cell${collapsedClass}" data-role-col="${role.id}">
+                            <input type="radio" class="roles-matrix__checkbox" name="roles-copy-${pcmId}" ${checked} onchange="rolesMatrixAssignToCopy('${pcmId}', '${role.id}')">
+                        </td>`;
+                    }
+                    return `<td class="roles-matrix__cell${collapsedClass}" data-role-col="${role.id}">
+                        <input type="radio" class="roles-matrix__checkbox" ${checked} disabled>
+                    </td>`;
+                }).join('');
+
+                const clearBtn = editMode && pcmId
+                    ? `<button class="roles-matrix__clear-btn" type="button" onclick="rolesMatrixAssignToCopy('${pcmId}', null)">Clear</button>`
+                    : '';
+                return `<tr class="roles-matrix__copy-row" data-parent-child-id="${pcmId || ''}">
+                    <td class="roles-matrix__child-name" style="padding-left:26px;">
+                        <span style="color:#666;">${copyLabel}</span> ${clearBtn}
+                    </td>
+                    ${cells}
+                    ${editMode ? '<td class="roles-matrix__th roles-matrix__th--add"></td>' : ''}
+                </tr>`;
+            }).join('');
+        }
+
+        return html;
     }).join('');
 
     return `<table class="roles-matrix">
         <thead><tr>
-            <th class="roles-matrix__th roles-matrix__th--child">Модуль</th>
+            <th class="roles-matrix__th roles-matrix__th--child">Module</th>
             ${headerCells}
             ${editMode ? '<th class="roles-matrix__th roles-matrix__th--add"></th>' : ''}
         </tr></thead>
@@ -1714,29 +1847,42 @@ function rolesMatrixToggleColumn(roleId) {
     }
 }
 
-async function rolesMatrixToggleAssignment(checkbox, childId, roleId) {
-    const method = checkbox.checked ? 'POST' : 'DELETE';
-    const url = method === 'POST'
-        ? `/api/modules/${childId}/roles`
-        : `/api/modules/${childId}/roles/${roleId}`;
+function rolesMatrixToggleChildGroup(childId) {
+    if (!window.rolesMatrixChildrenCollapsed) window.rolesMatrixChildrenCollapsed = new Set();
+    if (window.rolesMatrixChildrenCollapsed.has(childId)) {
+        window.rolesMatrixChildrenCollapsed.delete(childId);
+    } else {
+        window.rolesMatrixChildrenCollapsed.add(childId);
+    }
+    const isEditMode = document.getElementById('roles-matrix-done-btn')?.style.display !== 'none';
+    const parentId = window.currentObjectData?.id;
+    const wrapper = document.getElementById('roles-matrix-table-wrapper');
+    if (!wrapper || !parentId) return;
+    wrapper.innerHTML = buildRolesMatrixTable(window.currentObjectData, isEditMode, parentId);
+}
 
-    const options = { method, headers: { 'Content-Type': 'application/json' } };
-    if (method === 'POST') options.body = JSON.stringify({ role_id: roleId });
-
+async function rolesMatrixAssignToCopy(parentChildModuleId, roleId) {
+    if (!parentChildModuleId) return;
     try {
-        const res = await fetch(url, options);
+        const res = await fetch(`/api/parent_child_module/${parentChildModuleId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ role_id: roleId }),
+        });
         if (!res.ok) throw new Error(await res.text());
 
-        const childrenRoles = window.currentObjectData.children_roles || {};
-        if (!childrenRoles[childId]) childrenRoles[childId] = [];
-        if (checkbox.checked) {
-            if (!childrenRoles[childId].includes(roleId)) childrenRoles[childId].push(roleId);
-        } else {
-            childrenRoles[childId] = childrenRoles[childId].filter(id => id !== roleId);
+        const links = window.currentObjectData.children_with_coordinates || [];
+        const target = links.find(item => item.parent_child_module_id === parentChildModuleId);
+        if (target) {
+            target.role_id = roleId;
         }
-        window.currentObjectData.children_roles = childrenRoles;
+        const isEditMode = document.getElementById('roles-matrix-done-btn')?.style.display !== 'none';
+        const parentId = window.currentObjectData?.id;
+        const wrapper = document.getElementById('roles-matrix-table-wrapper');
+        if (wrapper && parentId) {
+            wrapper.innerHTML = buildRolesMatrixTable(window.currentObjectData, isEditMode, parentId);
+        }
     } catch (err) {
-        checkbox.checked = !checkbox.checked;
         showToast('Ошибка: ' + err.message, 'error');
     }
 }
@@ -1781,6 +1927,10 @@ async function rolesMatrixDeleteColumn(parentId, roleId, roleName) {
         if (!res.ok) throw new Error(await res.text());
 
         window.currentObjectData.roles = (window.currentObjectData.roles || []).filter(r => r.id !== roleId);
+        const childLinks = window.currentObjectData.children_with_coordinates || [];
+        childLinks.forEach(link => {
+            if (link.role_id === roleId) link.role_id = null;
+        });
 
         const wrapper = document.getElementById('roles-matrix-table-wrapper');
         wrapper.innerHTML = buildRolesMatrixTable(window.currentObjectData, true, parentId);

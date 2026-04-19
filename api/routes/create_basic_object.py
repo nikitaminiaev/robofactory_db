@@ -431,6 +431,7 @@ async def update_basic_object(
 
 class ParentChildModuleUpdate(BaseModel):
     coordinates: Optional[Dict] = None
+    role_id: Optional[str] = None
 
 
 @router.patch("/api/parent_child_module/{record_id}", status_code=200)
@@ -441,15 +442,33 @@ async def update_parent_child_module_record(
 ):
     """
     Обновляет конкретную запись в parent_child_module по её ID.
-    Используется для сохранения координат конкретного экземпляра дочернего объекта в сборке.
+    Используется для сохранения координат и роли конкретного экземпляра дочернего объекта в сборке.
     """
     try:
         record_uuid = UUID(record_id)
         with basic_repo.db_session.session() as db:
+            update_values = {}
+            provided_fields = item.__fields_set__
+
+            if "coordinates" in provided_fields:
+                update_values["coordinates"] = item.coordinates
+
+            if "role_id" in provided_fields:
+                if not item.role_id:
+                    update_values["role_id"] = None
+                else:
+                    try:
+                        update_values["role_id"] = UUID(item.role_id)
+                    except ValueError:
+                        raise HTTPException(status_code=400, detail="Неверный формат role_id")
+
+            if not update_values:
+                raise HTTPException(status_code=400, detail="Нет полей для обновления")
+
             stmt = (
                 parent_child_module.update()
                 .where(parent_child_module.c.id == record_uuid)
-                .values(coordinates=item.coordinates)
+                .values(**update_values)
             )
             result = db.execute(stmt)
             if result.rowcount == 0:
