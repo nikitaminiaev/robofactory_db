@@ -690,6 +690,29 @@ button:hover {
     font-weight: 500;
 }
 
+.breadcrumb-freecad {
+    display: flex;
+    align-items: center;
+}
+
+.breadcrumb-freecad-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    font-size: 12px;
+    background: #fef3cd;
+    border: 1px solid #ffc107;
+    border-radius: 4px;
+    cursor: pointer;
+    color: #856404;
+}
+
+.breadcrumb-freecad-btn:hover {
+    background: #ffeeba;
+    border-color: #ffc107;
+}
+
 /* =====================================================================
    Матрица ролей
    ===================================================================== */
