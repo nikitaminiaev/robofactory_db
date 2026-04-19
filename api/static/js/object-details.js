@@ -279,6 +279,12 @@ function renderObjectFullDetails(data) {
             <button id="btn-fc-save-brep"     class="freecad-action-btn" data-id="${data.id}" style="display:none;">Save BREP</button>
             <button id="btn-fc-save-position" class="freecad-action-btn" data-id="${data.id}" style="display:none;">Save Position</button>
         </div>
+        <div class="module-tabs" id="module-detail-tabs">
+            <button class="module-tab-btn active" type="button" data-module-tab="overview">Overview</button>
+            <button class="module-tab-btn" type="button" data-module-tab="roles">Roles</button>
+            <button class="module-tab-btn" type="button" data-module-tab="scad">SCAD & Chat</button>
+        </div>
+        <div class="module-tab-panel active" data-module-tab-panel="overview">
         <table class="detail-table">
             <tr><th>ID</th><td>${data.id} <button class="load-freecad-btn" data-id="${data.id}" style="display: none;">Load FreeCad</button></td></tr>
             <tr><th>Name</th><td id="field-name">${data.name}</td></tr>
@@ -598,7 +604,16 @@ function renderObjectFullDetails(data) {
 
     detailsHtml += renderRelatedObjectsList('Parents', data.parents, 'parentsList', data.parent_counts);
     detailsHtml += renderRelatedObjectsList('Children', data.children, 'childrenList', data.children_counts, data.children_with_coordinates || []);
-    detailsHtml += renderRolesMatrix(data);
+    detailsHtml += `</div>`;
+    detailsHtml += `<div class="module-tab-panel" data-module-tab-panel="roles">
+        <div class="section-card">
+            <p style="margin-top:0; color:#666;">External and internal threads will appear here later.</p>
+        </div>
+        ${renderRolesMatrix(data) || '<div class="info-message">This module has no child roles.</div>'}
+    </div>`;
+    detailsHtml += `<div class="module-tab-panel" data-module-tab-panel="scad">
+        <div id="module-scad-tab-slot" style="display:grid; gap:16px;"></div>
+    </div>`;
     detailsHtml += `
         <div id="copy-modal" class="modal" style="display: none;">
             <div class="modal-content">
@@ -1198,6 +1213,45 @@ function renderObjectDetails(data) {
     return renderObjectFullDetails(data);
 }
 
+function attachScadSectionsToTab() {
+    const slot = document.getElementById('module-scad-tab-slot');
+    const source = document.getElementById('module-extra-sections-source');
+    if (!slot || !source) return;
+    if (slot.childElementCount > 0) return;
+    while (source.firstElementChild) {
+        slot.appendChild(source.firstElementChild);
+    }
+    source.style.display = 'none';
+}
+
+function setActiveModuleTab(tabId) {
+    const tabsContainer = document.getElementById('module-detail-tabs');
+    if (!tabsContainer) return;
+    const buttons = tabsContainer.querySelectorAll('.module-tab-btn');
+    const panels = document.querySelectorAll('[data-module-tab-panel]');
+    buttons.forEach(button => {
+        button.classList.toggle('active', button.dataset.moduleTab === tabId);
+    });
+    panels.forEach(panel => {
+        panel.classList.toggle('active', panel.dataset.moduleTabPanel === tabId);
+    });
+    if (tabId === 'scad' && typeof ensureThreeViewerInitialized === 'function') {
+        ensureThreeViewerInitialized();
+    }
+}
+
+function initModuleDetailsTabs() {
+    const tabsContainer = document.getElementById('module-detail-tabs');
+    if (!tabsContainer) return;
+    attachScadSectionsToTab();
+    const buttons = tabsContainer.querySelectorAll('.module-tab-btn');
+    if (buttons.length === 0) return;
+    buttons.forEach(button => {
+        button.addEventListener('click', () => setActiveModuleTab(button.dataset.moduleTab));
+    });
+    setActiveModuleTab('overview');
+}
+
 // Функции для копирования модуля
 function showCopyModal() {
     const modal = document.getElementById('copy-modal');
@@ -1513,7 +1567,14 @@ async function refreshObjectDetails() {
         window.currentObjectData = data;
         window.currentModuleVersions = versionsRes.ok ? await versionsRes.json() : [];
         const container = document.getElementById('object-detail-container');
-        if (container) container.innerHTML = renderObjectDetails(data);
+        const detailsRoot = document.getElementById('objectDetails');
+        if (detailsRoot) {
+            detailsRoot.innerHTML = renderObjectDetails(data);
+            initModuleDetailsTabs();
+        } else if (container) {
+            container.innerHTML = renderObjectDetails(data);
+            initModuleDetailsTabs();
+        }
     } catch (error) {
         console.error('Ошибка обновления данных:', error);
     }

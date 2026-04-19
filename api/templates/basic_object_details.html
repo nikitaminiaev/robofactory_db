@@ -195,6 +195,33 @@
   .btn-small { padding: 4px 10px; font-size: 12px; }
 
   .row-btns { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+  .module-tabs {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin: 14px 0 10px;
+    flex-wrap: wrap;
+  }
+  .module-tab-btn {
+    border: 1px solid #cfd7e6;
+    background: #f7f9fc;
+    color: #35507a;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .module-tab-btn:hover {
+    background: #eaf0fa;
+  }
+  .module-tab-btn.active {
+    background: #3a7bd5;
+    border-color: #2f65b5;
+    color: #fff;
+  }
+  .module-tab-panel { display: none; }
+  .module-tab-panel.active { display: block; }
 </style>
 {% endblock %}
 
@@ -220,60 +247,62 @@
   <h1 id="module-title">Module details</h1>
   <div id="objectDetails"></div>
 
-  <!-- ── CAD Agent prompt ───────────────────────────────────────── -->
-  <div id="cad-agent-section" class="section-card" style="display:none;">
-    <h2>CAD Agent</h2>
-    <div style="display:grid; gap:8px;">
-      <textarea id="agent-prompt" rows="3"
-        placeholder="Опишите что нужно изменить или создать... (Ctrl+Enter для отправки)"></textarea>
-      <div class="row-btns">
-        <button id="agent-send-btn" class="btn" type="button">Отправить агенту</button>
-        <span id="agent-status" style="font-size:12px; color:#555;"></span>
-      </div>
-      <div id="agent-output"></div>
-    </div>
-  </div>
-
-  <!-- ── SCAD editor + STL viewer ──────────────────────────────── -->
-  <div class="section-card">
-    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
-      <h2 style="margin:0;">SCAD файлы</h2>
-      <a id="git-history-link" href="#" style="font-size:13px; color:#3a7bd5; text-decoration:none;">
-        &#x27A6; Git info
-      </a>
-    </div>
-    <div class="scad-viewer-row">
-
-      <!-- SCAD editor -->
-      <div class="scad-editor-col">
-        <div class="scad-file-header">
-          <span id="scad-filename-label">Загрузка...</span>
-          <div class="row-btns">
-            <select id="scad-file-select" style="display:none; font-size:13px; padding:3px 6px; border:1px solid #ccc; border-radius:4px;"></select>
-          </div>
-        </div>
-        <textarea id="scad-editor" class="scad-textarea"
-          placeholder="Вставьте SCAD код и нажмите «Сохранить и рендерить» — будет предложено имя файла."></textarea>
+  <div id="module-extra-sections-source" style="display:none;">
+    <!-- ── CAD Agent prompt ───────────────────────────────────────── -->
+    <div id="cad-agent-section" class="section-card" style="display:none;">
+      <h2>CAD Agent</h2>
+      <div style="display:grid; gap:8px;">
+        <textarea id="agent-prompt" rows="3"
+          placeholder="Опишите что нужно изменить или создать... (Ctrl+Enter для отправки)"></textarea>
         <div class="row-btns">
-          <button id="save-render-btn" class="btn" type="button">Сохранить и рендерить</button>
-          <span id="scad-status" class="scad-status"></span>
+          <button id="agent-send-btn" class="btn" type="button">Отправить агенту</button>
+          <span id="agent-status" style="font-size:12px; color:#555;"></span>
         </div>
+        <div id="agent-output"></div>
       </div>
+    </div>
 
-      <!-- STL viewer -->
-      <div class="viewer-col">
-        <div class="viewer-header">
-          <span>3D просмотр</span>
+    <!-- ── SCAD editor + STL viewer ──────────────────────────────── -->
+    <div class="section-card">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+        <h2 style="margin:0;">SCAD файлы</h2>
+        <a id="git-history-link" href="#" style="font-size:13px; color:#3a7bd5; text-decoration:none;">
+          &#x27A6; Git info
+        </a>
+      </div>
+      <div class="scad-viewer-row">
+
+        <!-- SCAD editor -->
+        <div class="scad-editor-col">
+          <div class="scad-file-header">
+            <span id="scad-filename-label">Загрузка...</span>
+            <div class="row-btns">
+              <select id="scad-file-select" style="display:none; font-size:13px; padding:3px 6px; border:1px solid #ccc; border-radius:4px;"></select>
+            </div>
+          </div>
+          <textarea id="scad-editor" class="scad-textarea"
+            placeholder="Вставьте SCAD код и нажмите «Сохранить и рендерить» — будет предложено имя файла."></textarea>
           <div class="row-btns">
-            <select id="stl-select" style="display:none;"></select>
-            <button id="reload-stl-btn" class="btn btn-secondary btn-small" type="button">&#x21bb; Обновить</button>
+            <button id="save-render-btn" class="btn" type="button">Сохранить и рендерить</button>
+            <span id="scad-status" class="scad-status"></span>
           </div>
         </div>
-        <div id="stl-canvas-container">
-          <div id="viewer-placeholder">Нет STL файла для отображения</div>
-        </div>
-      </div>
 
+        <!-- STL viewer -->
+        <div class="viewer-col">
+          <div class="viewer-header">
+            <span>3D просмотр</span>
+            <div class="row-btns">
+              <select id="stl-select" style="display:none;"></select>
+              <button id="reload-stl-btn" class="btn btn-secondary btn-small" type="button">&#x21bb; Обновить</button>
+            </div>
+          </div>
+          <div id="stl-canvas-container">
+            <div id="viewer-placeholder">Нет STL файла для отображения</div>
+          </div>
+        </div>
+
+      </div>
     </div>
   </div>
 
@@ -305,6 +334,7 @@ async function loadModuleInfo() {
     const data = await moduleRes.json();
     window.currentModuleVersions = versionsRes.ok ? await versionsRes.json() : [];
     document.getElementById('objectDetails').innerHTML = renderObjectDetails(data);
+    if (typeof initModuleDetailsTabs === 'function') initModuleDetailsTabs();
     const breadcrumbName = document.getElementById('breadcrumb-module-name');
     if (breadcrumbName && data.name) breadcrumbName.textContent = data.name;
     if (typeof updateFreeCadButtonsVisibility === 'function') updateFreeCadButtonsVisibility();
@@ -596,6 +626,7 @@ let threeCamera   = null;
 let threeControls = null;
 let threeAnimId   = null;
 let threeMesh     = null;
+let threeViewerInitialized = false;
 
 function initThreeViewer() {
   if (typeof THREE === 'undefined') {
@@ -643,6 +674,31 @@ function initThreeViewer() {
     threeCamera.updateProjectionMatrix();
     threeRenderer.setSize(nw, nh);
   });
+}
+
+function ensureThreeViewerInitialized() {
+  if (threeViewerInitialized) {
+    if (threeRenderer && threeCamera) {
+      const container = document.getElementById('stl-canvas-container');
+      if (container && container.clientWidth > 0 && container.clientHeight > 0) {
+        threeCamera.aspect = container.clientWidth / container.clientHeight;
+        threeCamera.updateProjectionMatrix();
+        threeRenderer.setSize(container.clientWidth, container.clientHeight);
+      }
+    }
+    return;
+  }
+  try {
+    initThreeViewer();
+    threeViewerInitialized = true;
+    if (stlSelect.options.length > 0 && stlSelect.value) {
+      loadStlIntoViewer(stlSelect.value);
+    }
+  } catch (e) {
+    console.error('3D viewer init failed:', e);
+    const ph = document.getElementById('viewer-placeholder');
+    if (ph) ph.textContent = 'Ошибка инициализации 3D вьювера: ' + e.message;
+  }
 }
 
 function loadStlIntoViewer(filename) {
@@ -755,16 +811,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   checkCadAgentAvailability();
   await loadScadFiles();
   await refreshStlList();
-
-  try {
-    initThreeViewer();
-    if (stlSelect.options.length > 0) {
-      loadStlIntoViewer(stlSelect.value);
-    }
-  } catch (e) {
-    console.error('3D viewer init failed:', e);
-    const ph = document.getElementById('viewer-placeholder');
-    if (ph) ph.textContent = 'Ошибка инициализации 3D вьювера: ' + e.message;
+  const activeTabPanel = document.querySelector('[data-module-tab-panel].active');
+  if (activeTabPanel && activeTabPanel.dataset.moduleTabPanel === 'scad') {
+    ensureThreeViewerInitialized();
   }
 });
 </script>
