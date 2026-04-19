@@ -480,6 +480,9 @@ function initFreecadBreadcrumbButton() {
     const btn = document.getElementById('btn-go-to-freecad-module');
     if (!btn) return;
     
+    // При загрузке страницы один раз получаем текущий module_id из FreeCAD
+    fetchFreecadModuleIdOnce();
+    
     btn.addEventListener('click', async function() {
         try {
             // Отправляем запрос на получение active_module_id через WebSocket
@@ -538,4 +541,27 @@ function initFreecadBreadcrumbButton() {
             showNotification('Ошибка: ' + err.message, 'error');
         }
     });
+}
+
+// Получает ID модуля из FreeCAD один раз при загрузке страницы
+async function fetchFreecadModuleIdOnce() {
+    try {
+        // Проверяем что сервер запущен и есть клиенты
+        const serverRes = await fetch('/api/websocket/status');
+        const serverData = await serverRes.json();
+        if (!serverData.running) return;
+        
+        const clientsRes = await fetch('/api/websocket/clients');
+        const clientsData = await clientsRes.json();
+        if (!clientsData.count || clientsData.count === 0) return;
+        
+        // Отправляем запрос
+        await fetch('/api/websocket/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ "function_call": "get_active_module_id" })
+        });
+    } catch (e) {
+        // Silent fail - кнопка просто не обновится
+    }
 } 
