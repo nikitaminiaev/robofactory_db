@@ -831,7 +831,19 @@ button:hover {
 
 .roles-matrix__checkbox:disabled {
     cursor: default;
-    opacity: 0.7;
+    opacity: 1;
+    filter: none;
+}
+
+.roles-matrix__checkbox:disabled:checked {
+    accent-color: #1f9d55;
+}
+
+.roles-matrix__checkbox--readonly {
+    pointer-events: none;
+    accent-color: #1f9d55;
+    opacity: 1;
+    filter: none;
 }
 
 .roles-matrix__copy-row .roles-matrix__child-name {

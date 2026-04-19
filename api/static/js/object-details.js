@@ -1760,7 +1760,7 @@ function buildRolesMatrixTable(data, editMode, parentId) {
                     </td>`;
                 }
                 return `<td class="roles-matrix__cell${collapsedClass}" data-role-col="${role.id}">
-                    <input type="radio" class="roles-matrix__checkbox" ${checked} disabled>
+                    <input type="radio" class="roles-matrix__checkbox roles-matrix__checkbox--readonly" name="roles-readonly-${singleLink?.parent_child_module_id || childId}" ${checked} tabindex="-1">
                 </td>`;
             }
             const assignedCount = group.filter(link => link.role_id === role.id).length;
@@ -1800,7 +1800,7 @@ function buildRolesMatrixTable(data, editMode, parentId) {
                         </td>`;
                     }
                     return `<td class="roles-matrix__cell${collapsedClass}" data-role-col="${role.id}">
-                        <input type="radio" class="roles-matrix__checkbox" ${checked} disabled>
+                        <input type="radio" class="roles-matrix__checkbox roles-matrix__checkbox--readonly" name="roles-readonly-${pcmId || `${childId}-${index}`}" ${checked} tabindex="-1">
                     </td>`;
                 }).join('');
 
