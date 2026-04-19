@@ -337,12 +337,19 @@ function renderObjectFullDetails(data) {
             </table>`;
     }
 
+    const renderBoolMark = (value) => {
+        if (value) {
+            return '<span title="True" style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:#eaf8ee;color:#2e7d32;font-weight:700;">✓</span>';
+        }
+        return '<span title="False" style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border:1px solid #d6dbe5;border-radius:50%;background:#fff;color:transparent;">✓</span>';
+    };
+
     if (data.bounding_contour) {
         detailsHtml += `
             <h2>Bounding Contour</h2>
             <table class="detail-table">
-                <tr><th>Is Assembly</th><td id="field-is_assembly">${data.bounding_contour.is_assembly ? 'Yes' : 'No'}</td></tr>
-                <tr><th>Is Shell</th><td id="field-is_shell">${data.bounding_contour.is_shell ? 'Yes' : 'No'}</td></tr>
+                <tr><th>Is Assembly</th><td id="field-is_assembly">${renderBoolMark(data.bounding_contour.is_assembly)}</td></tr>
+                <tr><th>Is Shell</th><td id="field-is_shell">${renderBoolMark(data.bounding_contour.is_shell)}</td></tr>
                 <tr><th>BREP Files</th><td>${
                     data.bounding_contour.brep_files 
                     && (typeof data.bounding_contour.brep_files === 'object' 
