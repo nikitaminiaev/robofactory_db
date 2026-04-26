@@ -8,7 +8,13 @@ from sqlalchemy import func, select
 from . import BaseRepository
 from .bounding_contour_repository import BoundingContourRepository
 from models import Module, ModuleBoundary, ModuleRole
-from models.associations import parent_child_module, module_stream, module_platform, module_boundary
+from models.associations import (
+    parent_child_module,
+    parent_child_module_role_assignment,
+    module_stream,
+    module_platform,
+    module_boundary,
+)
 from service.brep_storage import delete_module_brep_directory
 
 
@@ -190,7 +196,7 @@ class ModuleRepository(BaseRepository):
         Используется при загрузке сборки для создания нескольких копий одного объекта.
         
         Returns:
-            List[dict]: [{"parent_child_module_id": "uuid", "child_id": "uuid", "coordinates": {...}, "role_id": "uuid|None"}, ...]
+            List[dict]: [{"parent_child_module_id": "uuid", "child_id": "uuid", "coordinates": {...}, "role_id": "uuid|None", "role_ids": [...]}, ...]
         """
         with self.db_session.session() as db:
             stmt = (
@@ -203,12 +209,28 @@ class ModuleRepository(BaseRepository):
                 .where(parent_child_module.c.parent_id == parent_id)
             )
             rows = db.execute(stmt).fetchall()
+            link_ids = [row.id for row in rows]
+            role_rows = []
+            if link_ids:
+                role_rows = db.execute(
+                    select(
+                        parent_child_module_role_assignment.c.parent_child_module_id,
+                        parent_child_module_role_assignment.c.role_id,
+                    ).where(parent_child_module_role_assignment.c.parent_child_module_id.in_(link_ids))
+                ).fetchall()
+
+            role_map: dict[str, list[str]] = {}
+            for role_row in role_rows:
+                link_id = str(role_row.parent_child_module_id)
+                role_map.setdefault(link_id, []).append(str(role_row.role_id))
+
             return [
                 {
                     "parent_child_module_id": str(row.id),
                     "child_id": str(row.child_id),
                     "coordinates": row.coordinates,
                     "role_id": str(row.role_id) if row.role_id else None,
+                    "role_ids": role_map.get(str(row.id), [str(row.role_id)] if row.role_id else []),
                 }
                 for row in rows
             ]
@@ -380,15 +402,23 @@ class ModuleRepository(BaseRepository):
         несколько вхождений одного дочернего модуля с разными координатами.
         """
         target_db = db_session if db_session else self.db_session.session()
+        relation_id = uuid_mod.uuid4()
         target_db.execute(
             parent_child_module.insert().values(
-                id=uuid_mod.uuid4(),
+                id=relation_id,
                 parent_id=parent_id,
                 child_id=child_id,
                 coordinates=coordinates,
                 role_id=role_id,
             )
         )
+        if role_id:
+            target_db.execute(
+                parent_child_module_role_assignment.insert().values(
+                    parent_child_module_id=relation_id,
+                    role_id=role_id,
+                )
+            )
 
     def add_parent_relation(self, child_id: UUID, parent_id: UUID, coordinates: Optional[dict] = None, role_id: Optional[UUID] = None, db_session = None):
         """
@@ -396,15 +426,23 @@ class ModuleRepository(BaseRepository):
         Каждый вызов создаёт новую строку с уникальным id.
         """
         target_db = db_session if db_session else self.db_session.session()
+        relation_id = uuid_mod.uuid4()
         target_db.execute(
             parent_child_module.insert().values(
-                id=uuid_mod.uuid4(),
+                id=relation_id,
                 parent_id=parent_id,
                 child_id=child_id,
                 coordinates=coordinates,
                 role_id=role_id,
             )
         )
+        if role_id:
+            target_db.execute(
+                parent_child_module_role_assignment.insert().values(
+                    parent_child_module_id=relation_id,
+                    role_id=role_id,
+                )
+            )
 
     def copy_module_with_roles(self, module_id: UUID, new_author: str, version_number: str, description: str) -> Module:
         """
@@ -460,26 +498,52 @@ class ModuleRepository(BaseRepository):
                 parent_child_module.c.child_id == module_id
             ).all()
             for rel in child_relations:
+                new_relation_id = uuid_mod.uuid4()
                 db.execute(parent_child_module.insert().values(
-                    id=uuid_mod.uuid4(),
+                    id=new_relation_id,
                     parent_id=rel.parent_id,
                     child_id=new_module.id,
                     coordinates=rel.coordinates,
                     role_id=rel.role_id,
                 ))
+                role_rows = db.execute(
+                    select(parent_child_module_role_assignment.c.role_id).where(
+                        parent_child_module_role_assignment.c.parent_child_module_id == rel.id
+                    )
+                ).fetchall()
+                for role_row in role_rows:
+                    db.execute(
+                        parent_child_module_role_assignment.insert().values(
+                            parent_child_module_id=new_relation_id,
+                            role_id=role_row.role_id,
+                        )
+                    )
 
             # Где оригинальный модуль - parent
             parent_relations = db.query(parent_child_module).filter(
                 parent_child_module.c.parent_id == module_id
             ).all()
             for rel in parent_relations:
+                new_relation_id = uuid_mod.uuid4()
                 db.execute(parent_child_module.insert().values(
-                    id=uuid_mod.uuid4(),
+                    id=new_relation_id,
                     parent_id=new_module.id,
                     child_id=rel.child_id,
                     coordinates=rel.coordinates,
                     role_id=rel.role_id,
                 ))
+                role_rows = db.execute(
+                    select(parent_child_module_role_assignment.c.role_id).where(
+                        parent_child_module_role_assignment.c.parent_child_module_id == rel.id
+                    )
+                ).fetchall()
+                for role_row in role_rows:
+                    db.execute(
+                        parent_child_module_role_assignment.insert().values(
+                            parent_child_module_id=new_relation_id,
+                            role_id=role_row.role_id,
+                        )
+                    )
 
             db.commit()
 

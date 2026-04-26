@@ -20,6 +20,12 @@ parent_child_module = Table(
     Column('role_id', UUID(as_uuid=True), ForeignKey('module_roles.id'), nullable=True),
 )
 
+parent_child_module_role_assignment = Table(
+    'parent_child_module_role_assignment', Base.metadata,
+    Column('parent_child_module_id', UUID(as_uuid=True), ForeignKey('parent_child_module.id', ondelete='CASCADE'), primary_key=True),
+    Column('role_id', UUID(as_uuid=True), ForeignKey('module_roles.id', ondelete='CASCADE'), primary_key=True),
+)
+
 # Связь модулей и потоков
 module_stream = Table(
     'module_stream', Base.metadata,

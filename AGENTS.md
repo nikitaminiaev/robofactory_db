@@ -27,7 +27,7 @@ run tests manually in api container (tests are at /usr/src/tests/):
     docker exec api python -m pytest /usr/src/tests/ --cov=api --cov-report=html
 
 ## Database Commands
-
+before `cd database`
 - Create migration: `alembic revision --autogenerate -m "message"`
 - Run migrations: `alembic upgrade head`
 - Rollback: `alembic downgrade -1`

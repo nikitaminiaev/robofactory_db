@@ -1711,6 +1711,7 @@ function rolesMatrixDisableEdit(parentId) {
 
 function buildRolesMatrixTable(data, editMode, parentId) {
     const roles = data.roles || [];
+    const childrenRoles = data.children_roles || {};
     const childLinks = Array.isArray(data.children_with_coordinates) ? data.children_with_coordinates : [];
     const collapsed = window.rolesMatrixCollapsed || new Set();
     const childrenCollapsed = window.rolesMatrixChildrenCollapsed || new Set();
@@ -1742,7 +1743,6 @@ function buildRolesMatrixTable(data, editMode, parentId) {
     const bodyRows = Object.keys(groupedChildren).map(childId => {
         const group = groupedChildren[childId];
         const hasCopies = group.length > 1;
-        const singleLink = hasCopies ? null : group[0];
         const groupExpanded = hasCopies && childrenCollapsed.has(childId);
         const name = window.objectNamesCache && window.objectNamesCache[childId] ? escapeHtml(window.objectNamesCache[childId]) : childId;
         const toggleBtn = hasCopies
@@ -1752,26 +1752,16 @@ function buildRolesMatrixTable(data, editMode, parentId) {
         const groupCells = roles.map(role => {
             const isCollapsed = collapsed.has(role.id);
             const collapsedClass = isCollapsed ? ' roles-matrix__col--collapsed' : '';
-            if (!hasCopies && singleLink) {
-                const checked = singleLink.role_id === role.id ? 'checked' : '';
-                if (editMode && singleLink.parent_child_module_id) {
-                    return `<td class="roles-matrix__cell${collapsedClass}" data-role-col="${role.id}">
-                        <input type="radio" class="roles-matrix__checkbox" name="roles-copy-${singleLink.parent_child_module_id}" ${checked} onchange="rolesMatrixAssignToCopy('${singleLink.parent_child_module_id}', '${role.id}')">
-                    </td>`;
-                }
+            const checked = (childrenRoles[childId] || []).includes(role.id) ? 'checked' : '';
+            if (editMode) {
                 return `<td class="roles-matrix__cell${collapsedClass}" data-role-col="${role.id}">
-                    <input type="radio" class="roles-matrix__checkbox roles-matrix__checkbox--readonly" name="roles-readonly-${singleLink?.parent_child_module_id || childId}" ${checked} tabindex="-1">
+                    <input type="checkbox" class="roles-matrix__checkbox" ${checked} onchange="rolesMatrixToggleAssignment(this, '${childId}', '${role.id}')">
                 </td>`;
             }
-            const assignedCount = group.filter(link => link.role_id === role.id).length;
             return `<td class="roles-matrix__cell${collapsedClass}" data-role-col="${role.id}">
-                ${assignedCount > 0 ? `<span title="${assignedCount} copies">${assignedCount}</span>` : ''}
+                <input type="checkbox" class="roles-matrix__checkbox roles-matrix__checkbox--readonly" ${checked} tabindex="-1">
             </td>`;
         }).join('');
-
-        const singleClearBtn = editMode && !hasCopies && singleLink && singleLink.parent_child_module_id
-            ? `<button class="roles-matrix__clear-btn" type="button" onclick="rolesMatrixAssignToCopy('${singleLink.parent_child_module_id}', null)">Clear</button>`
-            : '';
 
         let html = `<tr data-child-id="${childId}" class="roles-matrix__group-row">
             <td class="roles-matrix__child-name">
@@ -1779,7 +1769,6 @@ function buildRolesMatrixTable(data, editMode, parentId) {
                     ${toggleBtn}
                     <a href="/basic_object/${childId}">${name}</a>
                     ${hasCopies ? `<span class="child-count-badge" title="Copies">&times;${group.length}</span>` : ''}
-                    ${singleClearBtn}
                 </div>
             </td>
             ${groupCells}
@@ -1792,24 +1781,21 @@ function buildRolesMatrixTable(data, editMode, parentId) {
                 const copyLabel = hasCopies ? `Copy #${index + 1}` : 'Copy #1';
                 const cells = roles.map(role => {
                     const isCollapsed = collapsed.has(role.id);
-                    const checked = link.role_id === role.id ? 'checked' : '';
+                    const roleIds = Array.isArray(link.role_ids) ? link.role_ids : (link.role_id ? [link.role_id] : []);
+                    const checked = roleIds.includes(role.id) ? 'checked' : '';
                     const collapsedClass = isCollapsed ? ' roles-matrix__col--collapsed' : '';
-                    if (editMode && pcmId) {
+                    if (editMode) {
                         return `<td class="roles-matrix__cell${collapsedClass}" data-role-col="${role.id}">
-                            <input type="radio" class="roles-matrix__checkbox" name="roles-copy-${pcmId}" ${checked} onchange="rolesMatrixAssignToCopy('${pcmId}', '${role.id}')">
+                            <input type="checkbox" class="roles-matrix__checkbox" ${checked} onchange="rolesMatrixToggleAssignmentForCopy(this, '${pcmId}', '${role.id}')">
                         </td>`;
                     }
                     return `<td class="roles-matrix__cell${collapsedClass}" data-role-col="${role.id}">
-                        <input type="radio" class="roles-matrix__checkbox roles-matrix__checkbox--readonly" name="roles-readonly-${pcmId || `${childId}-${index}`}" ${checked} tabindex="-1">
+                        <input type="checkbox" class="roles-matrix__checkbox roles-matrix__checkbox--readonly" ${checked} tabindex="-1">
                     </td>`;
                 }).join('');
-
-                const clearBtn = editMode && pcmId
-                    ? `<button class="roles-matrix__clear-btn" type="button" onclick="rolesMatrixAssignToCopy('${pcmId}', null)">Clear</button>`
-                    : '';
                 return `<tr class="roles-matrix__copy-row" data-parent-child-id="${pcmId || ''}">
                     <td class="roles-matrix__child-name" style="padding-left:26px;">
-                        <span style="color:#666;">${copyLabel}</span> ${clearBtn}
+                        <span style="color:#666;">${copyLabel}</span>
                     </td>
                     ${cells}
                     ${editMode ? '<td class="roles-matrix__th roles-matrix__th--add"></td>' : ''}
@@ -1861,21 +1847,29 @@ function rolesMatrixToggleChildGroup(childId) {
     wrapper.innerHTML = buildRolesMatrixTable(window.currentObjectData, isEditMode, parentId);
 }
 
-async function rolesMatrixAssignToCopy(parentChildModuleId, roleId) {
-    if (!parentChildModuleId) return;
+async function rolesMatrixToggleAssignment(checkbox, childId, roleId) {
+    const method = checkbox.checked ? 'POST' : 'DELETE';
+    const url = method === 'POST'
+        ? `/api/modules/${childId}/roles`
+        : `/api/modules/${childId}/roles/${roleId}`;
+
+    const options = { method, headers: { 'Content-Type': 'application/json' } };
+    if (method === 'POST') options.body = JSON.stringify({ role_id: roleId });
+
     try {
-        const res = await fetch(`/api/parent_child_module/${parentChildModuleId}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ role_id: roleId }),
-        });
+        const res = await fetch(url, options);
         if (!res.ok) throw new Error(await res.text());
 
-        const links = window.currentObjectData.children_with_coordinates || [];
-        const target = links.find(item => item.parent_child_module_id === parentChildModuleId);
-        if (target) {
-            target.role_id = roleId;
+        const childrenRoles = window.currentObjectData.children_roles || {};
+        if (!childrenRoles[childId]) childrenRoles[childId] = [];
+        if (checkbox.checked) {
+            if (!childrenRoles[childId].includes(roleId)) childrenRoles[childId].push(roleId);
+        } else {
+            childrenRoles[childId] = childrenRoles[childId].filter(id => id !== roleId);
         }
+        window.currentObjectData.children_roles = childrenRoles;
+
+        // Перерисовываем чтобы синхронизировать состояние групп/копий
         const isEditMode = document.getElementById('roles-matrix-done-btn')?.style.display !== 'none';
         const parentId = window.currentObjectData?.id;
         const wrapper = document.getElementById('roles-matrix-table-wrapper');
@@ -1883,6 +1877,48 @@ async function rolesMatrixAssignToCopy(parentChildModuleId, roleId) {
             wrapper.innerHTML = buildRolesMatrixTable(window.currentObjectData, isEditMode, parentId);
         }
     } catch (err) {
+        checkbox.checked = !checkbox.checked;
+        showToast('Ошибка: ' + err.message, 'error');
+    }
+}
+
+async function rolesMatrixToggleAssignmentForCopy(checkbox, parentChildModuleId, roleId) {
+    if (!parentChildModuleId) {
+        checkbox.checked = !checkbox.checked;
+        showToast('Error: parent-child link is missing', 'error');
+        return;
+    }
+
+    const links = window.currentObjectData.children_with_coordinates || [];
+    const target = links.find(item => item.parent_child_module_id === parentChildModuleId);
+    if (!target) {
+        checkbox.checked = !checkbox.checked;
+        showToast('Error: copy link not found', 'error');
+        return;
+    }
+
+    const currentRoleIds = Array.isArray(target.role_ids) ? [...target.role_ids] : (target.role_id ? [target.role_id] : []);
+    const nextRoleIds = checkbox.checked
+        ? (currentRoleIds.includes(roleId) ? currentRoleIds : [...currentRoleIds, roleId])
+        : currentRoleIds.filter(id => id !== roleId);
+    try {
+        const res = await fetch(`/api/parent_child_module/${parentChildModuleId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ role_ids: nextRoleIds }),
+        });
+        if (!res.ok) throw new Error(await res.text());
+
+        target.role_ids = nextRoleIds;
+        target.role_id = nextRoleIds.length > 0 ? nextRoleIds[0] : null;
+        const isEditMode = document.getElementById('roles-matrix-done-btn')?.style.display !== 'none';
+        const parentId = window.currentObjectData?.id;
+        const wrapper = document.getElementById('roles-matrix-table-wrapper');
+        if (wrapper && parentId) {
+            wrapper.innerHTML = buildRolesMatrixTable(window.currentObjectData, isEditMode, parentId);
+        }
+    } catch (err) {
+        checkbox.checked = !checkbox.checked;
         showToast('Ошибка: ' + err.message, 'error');
     }
 }

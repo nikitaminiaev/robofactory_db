@@ -8,7 +8,7 @@ from typing import Optional, Dict, List
 from models import BoundingContour, Module
 from uuid import UUID
 import logging
-from models.associations import parent_child_module
+from models.associations import parent_child_module, parent_child_module_role_assignment
 from models.module import ModuleStatus
 from service.brep_file_service import BrepFileService
 from service.constants import get_module_resource_path, get_module_stl_directory, build_brep_relative_path, build_stl_relative_path
@@ -128,15 +128,23 @@ async def _create_module_in_db(
                 role_obj = role_repo.get_or_create_role(db, role, role_description)
                 role_id = role_obj.id
 
+            relation_id = uuid_mod.uuid4()
             db.execute(
                 parent_child_module.insert().values(
-                    id=uuid_mod.uuid4(),
+                    id=relation_id,
                     parent_id=parent_id,
                     child_id=basic_object.id,
                     coordinates=coordinates,
                     role_id=role_id,
                 )
             )
+            if role_id:
+                db.execute(
+                    parent_child_module_role_assignment.insert().values(
+                        parent_child_module_id=relation_id,
+                        role_id=role_id,
+                    )
+                )
 
         contour_data["module_id"] = basic_object.id
         contour = BoundingContour.create(**contour_data)
@@ -379,16 +387,36 @@ async def update_basic_object(
                             .where(parent_child_module.c.child_id == obj_id_uuid)
                             .values(**update_values)
                         )
+                        if role_id and hasattr(current_relation, "id"):
+                            db.execute(
+                                parent_child_module_role_assignment.delete().where(
+                                    parent_child_module_role_assignment.c.parent_child_module_id == current_relation.id
+                                )
+                            )
+                            db.execute(
+                                parent_child_module_role_assignment.insert().values(
+                                    parent_child_module_id=current_relation.id,
+                                    role_id=role_id,
+                                )
+                            )
                 elif new_parent_uuid and new_coordinates:
+                    relation_id = uuid_mod.uuid4()
                     db.execute(
                         parent_child_module.insert().values(
-                            id=uuid_mod.uuid4(),
+                            id=relation_id,
                             parent_id=new_parent_uuid,
                             child_id=obj_id_uuid,
                             coordinates=new_coordinates,
                             role_id=role_id,
                         )
                     )
+                    if role_id:
+                        db.execute(
+                            parent_child_module_role_assignment.insert().values(
+                                parent_child_module_id=relation_id,
+                                role_id=role_id,
+                            )
+                        )
 
             # Удаляем поля, которые обрабатываются отдельно
             for field in ["parent_id", "coordinates", "role", "role_description"]:
@@ -432,6 +460,7 @@ async def update_basic_object(
 class ParentChildModuleUpdate(BaseModel):
     coordinates: Optional[Dict] = None
     role_id: Optional[str] = None
+    role_ids: Optional[List[str]] = None
 
 
 @router.patch("/api/parent_child_module/{record_id}", status_code=200)
@@ -462,7 +491,17 @@ async def update_parent_child_module_record(
                     except ValueError:
                         raise HTTPException(status_code=400, detail="Неверный формат role_id")
 
-            if not update_values:
+            role_ids_uuids: Optional[List[UUID]] = None
+            if "role_ids" in provided_fields:
+                role_ids_uuids = []
+                for role_id_str in item.role_ids or []:
+                    try:
+                        role_ids_uuids.append(UUID(role_id_str))
+                    except ValueError:
+                        raise HTTPException(status_code=400, detail=f"Неверный формат role_id: {role_id_str}")
+                update_values["role_id"] = role_ids_uuids[0] if role_ids_uuids else None
+
+            if not update_values and "role_ids" not in provided_fields:
                 raise HTTPException(status_code=400, detail="Нет полей для обновления")
 
             stmt = (
@@ -476,6 +515,20 @@ async def update_parent_child_module_record(
                     status_code=404,
                     detail=f"Запись в parent_child_module с ID '{record_id}' не найдена"
                 )
+
+            if "role_ids" in provided_fields:
+                db.execute(
+                    parent_child_module_role_assignment.delete().where(
+                        parent_child_module_role_assignment.c.parent_child_module_id == record_uuid
+                    )
+                )
+                for role_uuid in role_ids_uuids or []:
+                    db.execute(
+                        parent_child_module_role_assignment.insert().values(
+                            parent_child_module_id=record_uuid,
+                            role_id=role_uuid,
+                        )
+                    )
             db.commit()
             return {"ok": True, "id": str(record_uuid)}
 
