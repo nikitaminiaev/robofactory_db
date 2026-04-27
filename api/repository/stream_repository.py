@@ -74,21 +74,11 @@ class StreamRepository(BaseRepository):
                     module_role_stream.c.module_id == module_id,
                     module_role_stream.c.source_role_id == source_role_id,
                     module_role_stream.c.target_role_id == target_role_id,
+                    module_role_stream.c.stream_id == stream.id,
                 )
             ).first()
 
-            old_stream_id = existing.stream_id if existing else None
-            if existing:
-                db.execute(
-                    module_role_stream.update()
-                    .where(
-                        module_role_stream.c.module_id == module_id,
-                        module_role_stream.c.source_role_id == source_role_id,
-                        module_role_stream.c.target_role_id == target_role_id,
-                    )
-                    .values(stream_id=stream.id)
-                )
-            else:
+            if not existing:
                 db.execute(
                     module_role_stream.insert().values(
                         module_id=module_id,
@@ -99,8 +89,6 @@ class StreamRepository(BaseRepository):
                 )
 
             self._ensure_module_stream(db, module_id, stream.id)
-            if old_stream_id and old_stream_id != stream.id:
-                self._remove_unused_module_stream(db, module_id, old_stream_id)
 
             db.commit()
             db.refresh(stream)
@@ -118,26 +106,28 @@ class StreamRepository(BaseRepository):
         module_id: UUID,
         source_role_id: UUID,
         target_role_id: UUID,
+        stream_id: Optional[UUID] = None,
     ) -> None:
         with self.db_session.session() as db:
-            existing = db.execute(
-                select(module_role_stream.c.stream_id).where(
-                    module_role_stream.c.module_id == module_id,
-                    module_role_stream.c.source_role_id == source_role_id,
-                    module_role_stream.c.target_role_id == target_role_id,
-                )
-            ).first()
-            if not existing:
+            where_clause = [
+                module_role_stream.c.module_id == module_id,
+                module_role_stream.c.source_role_id == source_role_id,
+                module_role_stream.c.target_role_id == target_role_id,
+            ]
+            if stream_id:
+                where_clause.append(module_role_stream.c.stream_id == stream_id)
+
+            existing_rows = db.execute(
+                select(module_role_stream.c.stream_id).where(*where_clause)
+            ).fetchall()
+            if not existing_rows:
                 return
 
             db.execute(
-                module_role_stream.delete().where(
-                    module_role_stream.c.module_id == module_id,
-                    module_role_stream.c.source_role_id == source_role_id,
-                    module_role_stream.c.target_role_id == target_role_id,
-                )
+                module_role_stream.delete().where(*where_clause)
             )
-            self._remove_unused_module_stream(db, module_id, existing.stream_id)
+            for row in existing_rows:
+                self._remove_unused_module_stream(db, module_id, row.stream_id)
             db.commit()
 
     def _ensure_roles_belong_to_module(self, db, module_id: UUID, source_role_id: UUID, target_role_id: UUID) -> None:

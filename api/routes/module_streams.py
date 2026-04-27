@@ -91,3 +91,20 @@ async def delete_module_role_stream(
 
     stream_repo.delete_module_role_stream(module_uuid, source_role_uuid, target_role_uuid)
     return {"message": "Поток успешно удален из ячейки"}
+
+
+@router.delete("/modules/{module_id}/role-streams/{source_role_id}/{target_role_id}/{stream_id}", status_code=200)
+async def delete_single_module_role_stream(
+    module_id: str,
+    source_role_id: str,
+    target_role_id: str,
+    stream_id: str,
+    stream_repo: StreamRepository = Depends(),
+):
+    module_uuid = _parse_uuid(module_id, "module_id")
+    source_role_uuid = _parse_uuid(source_role_id, "source_role_id")
+    target_role_uuid = _parse_uuid(target_role_id, "target_role_id")
+    stream_uuid = _parse_uuid(stream_id, "stream_id")
+
+    stream_repo.delete_module_role_stream(module_uuid, source_role_uuid, target_role_uuid, stream_uuid)
+    return {"message": "Поток успешно удален из ячейки"}

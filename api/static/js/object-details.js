@@ -776,7 +776,7 @@ function renderStreamsMatrix(data) {
     const roles = data.roles || [];
     if (roles.length < 2) {
         return `
-            <div class="section-card">
+            <div class="section-card" id="streams-matrix-section">
                 <h2 style="margin-top:0;">Streams</h2>
                 <div class="info-message">Add at least two roles to connect them with streams.</div>
             </div>
@@ -784,7 +784,12 @@ function renderStreamsMatrix(data) {
     }
 
     const roleStreams = data.role_streams || [];
-    const streamsByPair = new Map(roleStreams.map(stream => [`${stream.source_role_id}:${stream.target_role_id}`, stream]));
+    const streamsByPair = new Map();
+    roleStreams.forEach(stream => {
+        const key = `${stream.source_role_id}:${stream.target_role_id}`;
+        if (!streamsByPair.has(key)) streamsByPair.set(key, []);
+        streamsByPair.get(key).push(stream);
+    });
     const headerCells = roles.map(role => `
         <th class="streams-matrix__th" title="${escapeHtml(role.description || '')}">
             ${escapeHtml(role.name)}
@@ -828,11 +833,15 @@ function renderStreamMatrixCell(sourceRole, targetRole, streamsByPair) {
         return '<td class="streams-matrix__cell streams-matrix__cell--disabled">—</td>';
     }
 
-    const stream = streamsByPair.get(`${sourceRole.id}:${targetRole.id}`);
-    const hasStreamClass = stream ? ' streams-matrix__cell-btn--filled' : '';
-    const label = stream ? escapeHtml(stream.name) : '+';
-    const title = stream
-        ? `Edit stream: ${escapeHtml(stream.name)}`
+    const streams = streamsByPair.get(`${sourceRole.id}:${targetRole.id}`) || [];
+    const hasStreamClass = streams.length > 0 ? ' streams-matrix__cell-btn--filled' : '';
+    const label = streams.length === 0
+        ? '+'
+        : streams.length === 1
+            ? escapeHtml(streams[0].name)
+            : `${streams.length} streams`;
+    const title = streams.length > 0
+        ? `Edit streams: ${streams.map(stream => stream.name).join(', ')}`
         : 'Create stream';
 
     return `
@@ -854,6 +863,7 @@ function renderStreamModal() {
                 <h3 id="stream-modal-title">Stream</h3>
                 <input type="hidden" id="stream-source-role-id">
                 <input type="hidden" id="stream-target-role-id">
+                <div id="stream-existing-list" class="stream-existing-list"></div>
                 <form id="stream-form">
                     <div class="form-group stream-search-block">
                         <label for="stream-search">Выбрать существующий поток:</label>
@@ -882,9 +892,9 @@ function renderStreamModal() {
     `;
 }
 
-function getRoleStream(sourceRoleId, targetRoleId) {
+function getRoleStreams(sourceRoleId, targetRoleId) {
     const roleStreams = window.currentObjectData?.role_streams || [];
-    return roleStreams.find(stream => (
+    return roleStreams.filter(stream => (
         stream.source_role_id === sourceRoleId &&
         stream.target_role_id === targetRoleId
     ));
@@ -899,21 +909,44 @@ function showStreamModal(sourceRoleId, targetRoleId) {
     const modal = document.getElementById('stream-modal');
     if (!modal) return;
 
-    const stream = getRoleStream(sourceRoleId, targetRoleId);
+    const streams = getRoleStreams(sourceRoleId, targetRoleId);
     const sourceRole = getRoleById(sourceRoleId);
     const targetRole = getRoleById(targetRoleId);
-    const title = stream ? 'Редактировать stream' : 'Создать stream';
+    const title = streams.length > 0 ? 'Редактировать streams' : 'Создать stream';
 
     document.getElementById('stream-modal-title').textContent =
         `${title}: ${sourceRole?.name || sourceRoleId} → ${targetRole?.name || targetRoleId}`;
     document.getElementById('stream-source-role-id').value = sourceRoleId;
     document.getElementById('stream-target-role-id').value = targetRoleId;
-    document.getElementById('stream-name').value = stream?.name || '';
-    document.getElementById('stream-description').value = stream?.description || '';
-    document.getElementById('stream-delete-btn').style.display = stream ? 'inline-block' : 'none';
+    document.getElementById('stream-name').value = '';
+    document.getElementById('stream-description').value = '';
+    document.getElementById('stream-delete-btn').style.display = streams.length > 0 ? 'inline-block' : 'none';
+    renderStreamExistingList(streams);
     resetStreamSearchSelection();
 
     modal.style.display = 'flex';
+}
+
+function renderStreamExistingList(streams) {
+    const list = document.getElementById('stream-existing-list');
+    if (!list) return;
+    if (!streams || streams.length === 0) {
+        list.innerHTML = '';
+        return;
+    }
+
+    list.innerHTML = `
+        <div class="stream-existing-list__title">Потоки в этой ячейке:</div>
+        ${streams.map(stream => `
+            <div class="stream-existing-list__item">
+                <div>
+                    <strong>${escapeHtml(stream.name)}</strong>
+                    ${stream.description ? `<small>${escapeHtml(stream.description)}</small>` : ''}
+                </div>
+                <button type="button" class="stream-existing-list__delete" onclick="deleteSingleRoleStream('${stream.id}')">Удалить</button>
+            </div>
+        `).join('')}
+    `;
 }
 
 function hideStreamModal() {
@@ -1013,7 +1046,7 @@ async function saveRoleStream() {
         upsertRoleStreamInCurrentData(savedStream);
         rerenderStreamsMatrix();
         hideStreamModal();
-        showToast('Stream сохранен', 'success');
+        showToast('Stream добавлен', 'success');
     } catch (err) {
         showToast('Ошибка: ' + err.message, 'error');
     }
@@ -1044,21 +1077,50 @@ async function deleteRoleStream() {
     }
 }
 
+async function deleteSingleRoleStream(streamId) {
+    const moduleId = window.currentObjectData?.id;
+    const sourceRoleId = document.getElementById('stream-source-role-id')?.value;
+    const targetRoleId = document.getElementById('stream-target-role-id')?.value;
+
+    if (!moduleId || !sourceRoleId || !targetRoleId || !streamId) {
+        showToast('Ошибка: не найдены данные stream', 'error');
+        return;
+    }
+
+    try {
+        const res = await fetch(`/api/modules/${moduleId}/role-streams/${sourceRoleId}/${targetRoleId}/${streamId}`, {
+            method: 'DELETE',
+        });
+        if (!res.ok) throw new Error(await res.text());
+
+        removeRoleStreamFromCurrentData(sourceRoleId, targetRoleId, streamId);
+        rerenderStreamsMatrix();
+        const streams = getRoleStreams(sourceRoleId, targetRoleId);
+        renderStreamExistingList(streams);
+        document.getElementById('stream-delete-btn').style.display = streams.length > 0 ? 'inline-block' : 'none';
+        showToast('Stream удален из ячейки', 'success');
+    } catch (err) {
+        showToast('Ошибка: ' + err.message, 'error');
+    }
+}
+
 function upsertRoleStreamInCurrentData(savedStream) {
     const roleStreams = window.currentObjectData.role_streams || [];
     const nextStreams = roleStreams.filter(stream => (
         stream.source_role_id !== savedStream.source_role_id ||
-        stream.target_role_id !== savedStream.target_role_id
+        stream.target_role_id !== savedStream.target_role_id ||
+        stream.id !== savedStream.id
     ));
     nextStreams.push(savedStream);
     window.currentObjectData.role_streams = nextStreams;
 }
 
-function removeRoleStreamFromCurrentData(sourceRoleId, targetRoleId) {
+function removeRoleStreamFromCurrentData(sourceRoleId, targetRoleId, streamId = null) {
     const roleStreams = window.currentObjectData.role_streams || [];
     window.currentObjectData.role_streams = roleStreams.filter(stream => (
         stream.source_role_id !== sourceRoleId ||
-        stream.target_role_id !== targetRoleId
+        stream.target_role_id !== targetRoleId ||
+        (streamId && stream.id !== streamId)
     ));
 }
 

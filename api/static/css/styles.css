@@ -1125,3 +1125,52 @@ button:hover {
     color: #667085;
     font-size: 13px;
 }
+
+.stream-existing-list {
+    margin: 8px 0 12px;
+}
+
+.stream-existing-list__title {
+    margin-bottom: 6px;
+    font-size: 13px;
+    color: #667085;
+}
+
+.stream-existing-list__item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 10px;
+    margin-bottom: 6px;
+    background: #f8fbff;
+    border: 1px solid #dde1e7;
+    border-radius: 6px;
+    color: #2c3e50;
+}
+
+.stream-existing-list__item strong {
+    display: block;
+    color: #2c3e50;
+}
+
+.stream-existing-list__item small {
+    display: block;
+    margin-top: 2px;
+    color: #667085;
+}
+
+.stream-existing-list__delete {
+    flex-shrink: 0;
+    padding: 4px 8px;
+    border: 1px solid #e74c3c;
+    border-radius: 4px;
+    background: #fff;
+    color: #e74c3c;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.stream-existing-list__delete:hover {
+    background: #fff1f0;
+}
