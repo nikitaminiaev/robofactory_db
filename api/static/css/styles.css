@@ -1054,3 +1054,74 @@ button:hover {
     color: #1f7f46;
     font-weight: 500;
 }
+
+.stream-search-block {
+    position: relative;
+}
+
+.stream-search-wrap {
+    position: relative;
+}
+
+.stream-search-wrap input {
+    width: 100%;
+}
+
+.stream-search-results {
+    position: absolute;
+    z-index: 30;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    max-height: 240px;
+    overflow-y: auto;
+    background: #fff;
+    border: 1px solid #cfd7e6;
+    border-radius: 6px;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+    color: #2c3e50;
+}
+
+.stream-search-item {
+    display: block;
+    width: 100%;
+    padding: 7px 10px;
+    text-align: left;
+    border: none;
+    border-bottom: 1px solid #eef1f5;
+    background: #fff;
+    color: #2c3e50;
+    cursor: pointer;
+}
+
+.stream-search-item:hover {
+    background: #f3f7ff;
+    color: #2c3e50;
+}
+
+.stream-search-item span {
+    display: block;
+    font-weight: 500;
+    color: #2c3e50;
+}
+
+.stream-search-item small {
+    display: block;
+    margin-top: 2px;
+    color: #667085;
+}
+
+.stream-search-empty {
+    padding: 8px 10px;
+    color: #667085;
+    font-size: 13px;
+    background: #fff;
+}
+
+.stream-create-divider {
+    margin: 10px 0;
+    padding-top: 10px;
+    border-top: 1px solid #dde1e7;
+    color: #667085;
+    font-size: 13px;
+}

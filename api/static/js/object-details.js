@@ -855,6 +855,14 @@ function renderStreamModal() {
                 <input type="hidden" id="stream-source-role-id">
                 <input type="hidden" id="stream-target-role-id">
                 <form id="stream-form">
+                    <div class="form-group stream-search-block">
+                        <label for="stream-search">Выбрать существующий поток:</label>
+                        <div class="stream-search-wrap">
+                            <input type="text" id="stream-search" placeholder="Поиск потока..." oninput="searchStreamsForModal(this.value)">
+                            <div id="stream-search-results" class="stream-search-results" style="display: none;"></div>
+                        </div>
+                    </div>
+                    <div class="stream-create-divider">Или создать новый поток</div>
                     <div class="form-group">
                         <label for="stream-name">Название потока:</label>
                         <input type="text" id="stream-name" required>
@@ -903,6 +911,7 @@ function showStreamModal(sourceRoleId, targetRoleId) {
     document.getElementById('stream-name').value = stream?.name || '';
     document.getElementById('stream-description').value = stream?.description || '';
     document.getElementById('stream-delete-btn').style.display = stream ? 'inline-block' : 'none';
+    resetStreamSearchSelection();
 
     modal.style.display = 'flex';
 }
@@ -911,6 +920,64 @@ function hideStreamModal() {
     const modal = document.getElementById('stream-modal');
     if (!modal) return;
     modal.style.display = 'none';
+    resetStreamSearchSelection();
+}
+
+async function searchStreamsForModal(query) {
+    const resultsDiv = document.getElementById('stream-search-results');
+    if (!resultsDiv) return;
+
+    window.selectedExistingStream = null;
+    if (!query || query.trim().length < 1) {
+        resultsDiv.innerHTML = '';
+        resultsDiv.style.display = 'none';
+        return;
+    }
+
+    try {
+        const res = await fetch(`/api/streams?query=${encodeURIComponent(query.trim())}&limit=20`);
+        if (!res.ok) throw new Error(await res.text());
+        const streams = await res.json();
+
+        if (streams.length === 0) {
+            resultsDiv.innerHTML = '<div class="stream-search-empty">Совпадений нет. Можно создать новый поток ниже.</div>';
+        } else {
+            resultsDiv.innerHTML = streams.map(stream => `
+                <button
+                    type="button"
+                    class="stream-search-item"
+                    onclick="selectStreamForModal(decodeURIComponent('${encodeURIComponent(stream.name)}'), decodeURIComponent('${encodeURIComponent(stream.description || '')}'))"
+                >
+                    <span>${escapeHtml(stream.name)}</span>
+                    ${stream.description ? `<small>${escapeHtml(stream.description)}</small>` : ''}
+                </button>
+            `).join('');
+        }
+        resultsDiv.style.display = 'block';
+    } catch (err) {
+        resultsDiv.innerHTML = '<div class="stream-search-empty">Ошибка поиска потоков</div>';
+        resultsDiv.style.display = 'block';
+    }
+}
+
+function selectStreamForModal(name, description) {
+    window.selectedExistingStream = { name, description };
+    document.getElementById('stream-search').value = name;
+    document.getElementById('stream-name').value = name;
+    document.getElementById('stream-description').value = description || '';
+    const resultsDiv = document.getElementById('stream-search-results');
+    if (resultsDiv) resultsDiv.style.display = 'none';
+}
+
+function resetStreamSearchSelection() {
+    window.selectedExistingStream = null;
+    const searchInput = document.getElementById('stream-search');
+    const resultsDiv = document.getElementById('stream-search-results');
+    if (searchInput) searchInput.value = '';
+    if (resultsDiv) {
+        resultsDiv.innerHTML = '';
+        resultsDiv.style.display = 'none';
+    }
 }
 
 async function saveRoleStream() {
@@ -1927,7 +1994,8 @@ function rolesMatrixEnableEdit(parentId) {
     document.getElementById('roles-matrix-add-form').style.display = 'flex';
 }
 
-function rolesMatrixDisableEdit(parentId) {
+async function rolesMatrixDisableEdit(parentId) {
+    await rolesMatrixRefreshCurrentData(parentId);
     const data = window.currentObjectData;
     document.getElementById('roles-matrix-edit-btn').style.display = 'inline-block';
     document.getElementById('roles-matrix-done-btn').style.display = 'none';
@@ -1936,6 +2004,7 @@ function rolesMatrixDisableEdit(parentId) {
     wrapper.innerHTML = buildRolesMatrixTable(data, false, parentId);
 
     document.getElementById('roles-matrix-add-form').style.display = 'none';
+    rerenderStreamsMatrix();
 }
 
 function buildRolesMatrixTable(data, editMode, parentId) {
@@ -2171,13 +2240,16 @@ async function rolesMatrixAddColumn(parentId) {
         const newRole = await res.json();
 
         if (!window.currentObjectData.roles) window.currentObjectData.roles = [];
-        window.currentObjectData.roles.push(newRole);
+        if (!window.currentObjectData.roles.some(role => role.id === newRole.id)) {
+            window.currentObjectData.roles.push(newRole);
+        }
 
         nameInput.value = '';
         descInput.value = '';
 
         const wrapper = document.getElementById('roles-matrix-table-wrapper');
         wrapper.innerHTML = buildRolesMatrixTable(window.currentObjectData, true, parentId);
+        rerenderStreamsMatrix();
         showToast('Роль добавлена', 'success');
     } catch (err) {
         showToast('Ошибка: ' + err.message, 'error');
@@ -2199,9 +2271,20 @@ async function rolesMatrixDeleteColumn(parentId, roleId, roleName) {
 
         const wrapper = document.getElementById('roles-matrix-table-wrapper');
         wrapper.innerHTML = buildRolesMatrixTable(window.currentObjectData, true, parentId);
+        rerenderStreamsMatrix();
         showToast('Роль удалена', 'success');
     } catch (err) {
         showToast('Ошибка: ' + err.message, 'error');
+    }
+}
+
+async function rolesMatrixRefreshCurrentData(parentId) {
+    try {
+        const res = await fetch(`/api/basic_object/${parentId}`);
+        if (!res.ok) throw new Error(await res.text());
+        window.currentObjectData = await res.json();
+    } catch (err) {
+        showToast('Ошибка обновления данных ролей: ' + err.message, 'error');
     }
 }
 

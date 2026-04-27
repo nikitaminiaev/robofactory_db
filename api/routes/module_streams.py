@@ -41,6 +41,15 @@ async def get_module_role_streams(
     return stream_repo.get_module_role_streams(module_uuid)
 
 
+@router.get("/streams")
+async def search_streams(
+    query: Optional[str] = None,
+    limit: int = 20,
+    stream_repo: StreamRepository = Depends(),
+):
+    return stream_repo.search_streams(query=query, limit=limit)
+
+
 @router.put("/modules/{module_id}/role-streams", response_model=RoleStreamResponse)
 async def upsert_module_role_stream(
     module_id: str,

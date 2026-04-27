@@ -9,6 +9,18 @@ from models.associations import module_role_assignment, module_role_stream, modu
 
 
 class StreamRepository(BaseRepository):
+    def search_streams(self, query: Optional[str] = None, limit: int = 20) -> list[dict]:
+        with self.db_session.session() as db:
+            stmt = db.query(Stream).order_by(Stream.name)
+            if query:
+                stmt = stmt.filter(Stream.name.ilike(f"%{query}%"))
+            streams = stmt.limit(limit).all()
+
+        return [
+            {"id": str(stream.id), "name": stream.name, "description": stream.description}
+            for stream in streams
+        ]
+
     def get_module_role_streams(self, module_id: UUID) -> list[dict]:
         with self.db_session.session() as db:
             rows = db.execute(
