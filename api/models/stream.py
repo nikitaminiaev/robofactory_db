@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, Text, DateTime, UUID
+from sqlalchemy import Column, String, Text, DateTime, UUID
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 
@@ -10,6 +10,7 @@ class Stream(Base):
     __tablename__ = "streams"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String, nullable=False, unique=True, index=True)
     description = Column(Text, nullable=True)
     
     modules = relationship(
@@ -22,4 +23,4 @@ class Stream(Base):
     updated_ts = Column(DateTime(timezone=True), onupdate=func.now())
 
     def __str__(self):
-        return f"Stream(id={self.id!r})" 
+        return f"Stream(id={self.id!r}, name={self.name!r})"

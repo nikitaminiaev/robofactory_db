@@ -32,6 +32,7 @@ class BasicObjectDTO(BaseModel):
     parent_edges: List[ParentEdgeRoleDTO] = []
     roles: List[Dict] = []
     children_roles: Dict[str, List[str]] = {}
+    role_streams: List[Dict] = []
     created_ts: Optional[str] = None
     updated_ts: Optional[str] = None
 

@@ -4,7 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from routes import get_all_basic_objects, get_basic_object, create_basic_object
 from routes import websocket_routes, copy_module, module_versions, brep_files, cad_agent_proxy, module_files
-from routes import module_roles
+from routes import module_roles, module_streams
 import threading
 from service.web_soket_server import get_server_instance
 
@@ -25,6 +25,7 @@ app.include_router(brep_files.router, prefix="/api")
 app.include_router(cad_agent_proxy.router, prefix="/api")
 app.include_router(module_files.router, prefix="/api")
 app.include_router(module_roles.router, prefix="/api")
+app.include_router(module_streams.router, prefix="/api")
 
 # Функция для запуска WebSocket-сервера в отдельном потоке
 def start_websocket_server_thread():

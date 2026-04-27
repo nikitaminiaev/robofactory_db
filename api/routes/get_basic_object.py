@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, Request, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from repository.module_repository import ModuleRepository
+from repository.stream_repository import StreamRepository
 from schemas import BasicObjectDTO
 from schemas.basic_object_dto import ParentEdgeRoleDTO
 
@@ -28,7 +29,12 @@ async def get_basic_object(
 
 
 @router.get("/api/basic_object/{id}", response_model=BasicObjectDTO)
-async def get_basic_object_by_id(request: Request, id: UUID, repo: ModuleRepository = Depends()):
+async def get_basic_object_by_id(
+    request: Request,
+    id: UUID,
+    repo: ModuleRepository = Depends(),
+    stream_repo: StreamRepository = Depends(),
+):
     basic_object = repo.get_module_with_relations_by_id(id)
     if not basic_object:
         raise HTTPException(status_code=404, detail=f"Объект с ID '{id}' не найден")
@@ -40,6 +46,7 @@ async def get_basic_object_by_id(request: Request, id: UUID, repo: ModuleReposit
     result = BasicObjectDTO.from_module(basic_object, children_counts=children_counts, parent_counts=parent_counts)
     result.children_roles = children_roles
     result.parent_edges = [ParentEdgeRoleDTO(**edge) for edge in parent_edges]
+    result.role_streams = stream_repo.get_module_role_streams(id)
 
     if result.bounding_contour:
         if hasattr(result.bounding_contour.brep_files, 'get'):

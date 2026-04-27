@@ -977,3 +977,80 @@ button:hover {
 .roles-matrix__btn--cancel:hover {
     background: #f0f0f0;
 }
+
+/* =====================================================================
+   Матрица потоков между ролями
+   ===================================================================== */
+
+.streams-matrix__header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.streams-matrix__header h2 {
+    margin: 0;
+}
+
+.streams-matrix__wrapper {
+    overflow-x: auto;
+}
+
+.streams-matrix {
+    border-collapse: collapse;
+    font-size: 14px;
+    max-width: 100%;
+    table-layout: auto;
+}
+
+.streams-matrix__corner,
+.streams-matrix__th,
+.streams-matrix__role {
+    padding: 6px 8px;
+    background: #f4f6f8;
+    border: 1px solid #dde1e7;
+    color: #2c3e50;
+    white-space: nowrap;
+}
+
+.streams-matrix__role {
+    text-align: left;
+}
+
+.streams-matrix__cell {
+    padding: 4px 6px;
+    border: 1px solid #dde1e7;
+    text-align: center;
+    min-width: 92px;
+}
+
+.streams-matrix__cell--disabled {
+    color: #9aa3ad;
+    background: #fafbfd;
+}
+
+.streams-matrix__cell-btn {
+    width: 100%;
+    min-height: 30px;
+    padding: 4px 8px;
+    border: 1px dashed #b7c1cc;
+    border-radius: 4px;
+    background: #fff;
+    color: #607080;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.streams-matrix__cell-btn:hover {
+    background: #eef6ff;
+    color: #2c3e50;
+}
+
+.streams-matrix__cell-btn--filled {
+    border-style: solid;
+    border-color: #27ae60;
+    background: #eefaf2;
+    color: #1f7f46;
+    font-weight: 500;
+}

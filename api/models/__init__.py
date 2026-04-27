@@ -10,6 +10,7 @@ from .platform import Platform
 from .service import Service
 from .associations import module_platform
 from .associations import module_stream
+from .associations import module_role_stream
 from .associations import module_boundary
 from .associations import parent_child_module
 from .associations import module_role_assignment
