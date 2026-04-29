@@ -2339,7 +2339,13 @@ async function rolesMatrixDeleteColumn(parentId, roleId, roleName) {
         const childLinks = window.currentObjectData.children_with_coordinates || [];
         childLinks.forEach(link => {
             if (link.role_id === roleId) link.role_id = null;
+            if (Array.isArray(link.role_ids)) {
+                link.role_ids = link.role_ids.filter(id => id !== roleId);
+            }
         });
+        window.currentObjectData.role_streams = (window.currentObjectData.role_streams || []).filter(stream =>
+            stream.source_role_id !== roleId && stream.target_role_id !== roleId
+        );
 
         const wrapper = document.getElementById('roles-matrix-table-wrapper');
         wrapper.innerHTML = buildRolesMatrixTable(window.currentObjectData, true, parentId);

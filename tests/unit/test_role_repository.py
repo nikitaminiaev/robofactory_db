@@ -147,7 +147,7 @@ class TestRoleRepositoryModuleAssignment:
         role_id = uuid4()
         repo.remove_role_from_module(mock_db, module_id, role_id)
 
-        mock_db.execute.assert_called_once()
+        assert mock_db.execute.call_count == 3
         mock_db.flush.assert_called_once()
 
     @patch('repository.base_repository.Db_session')

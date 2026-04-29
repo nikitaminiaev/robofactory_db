@@ -1,11 +1,17 @@
 from uuid import UUID
 from typing import Optional, List
 
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from . import BaseRepository
 from models import ModuleRole, Module
-from models.associations import module_role_assignment
+from models.associations import (
+    module_role_assignment,
+    module_role_stream,
+    parent_child_module,
+    parent_child_module_role_assignment,
+)
 
 
 class RoleRepository(BaseRepository):
@@ -43,6 +49,24 @@ class RoleRepository(BaseRepository):
         db.flush()
 
     def remove_role_from_module(self, db: Session, module_id: UUID, role_id: UUID) -> None:
+        child_link_ids = select(parent_child_module.c.id).where(
+            parent_child_module.c.parent_id == module_id
+        )
+        db.execute(
+            parent_child_module_role_assignment.delete().where(
+                parent_child_module_role_assignment.c.parent_child_module_id.in_(child_link_ids),
+                parent_child_module_role_assignment.c.role_id == role_id,
+            )
+        )
+        db.execute(
+            module_role_stream.delete().where(
+                module_role_stream.c.module_id == module_id,
+                or_(
+                    module_role_stream.c.source_role_id == role_id,
+                    module_role_stream.c.target_role_id == role_id,
+                ),
+            )
+        )
         db.execute(
             module_role_assignment.delete().where(
                 module_role_assignment.c.module_id == module_id,
