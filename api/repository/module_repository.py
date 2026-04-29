@@ -10,6 +10,7 @@ from .bounding_contour_repository import BoundingContourRepository
 from models import Module, ModuleBoundary, ModuleRole
 from models.associations import (
     parent_child_module,
+    module_role_assignment,
     parent_child_module_role_assignment,
     module_stream,
     module_platform,
@@ -162,31 +163,29 @@ class ModuleRepository(BaseRepository):
 
     def get_children_roles(self, parent_id: UUID) -> dict:
         """
-        Возвращает словарь {child_id_str: [role_id_str, ...]} — роли, назначенные
-        каждому дочернему модулю (для отображения состояния чекбоксов в матрице).
+        Возвращает словарь {child_id_str: [role_id_str, ...]} для конкретного parent.
+        Роли берутся с parent_child_module_role_assignment, поэтому назначение
+        роли одному child в одном parent не протекает в другие parent-модули.
         """
-        from models.associations import module_role_assignment
         with self.db_session.session() as db:
-            children_ids = db.execute(
-                select(parent_child_module.c.child_id).where(
-                    parent_child_module.c.parent_id == parent_id
-                ).distinct()
-            ).scalars().all()
-
-            if not children_ids:
-                return {}
-
             rows = db.execute(
                 select(
-                    module_role_assignment.c.module_id,
-                    module_role_assignment.c.role_id,
-                ).where(module_role_assignment.c.module_id.in_(children_ids))
+                    parent_child_module.c.child_id,
+                    parent_child_module_role_assignment.c.role_id,
+                )
+                .join(
+                    parent_child_module_role_assignment,
+                    parent_child_module_role_assignment.c.parent_child_module_id == parent_child_module.c.id,
+                )
+                .where(parent_child_module.c.parent_id == parent_id)
             ).fetchall()
 
         result: dict = {}
         for row in rows:
-            key = str(row.module_id)
-            result.setdefault(key, []).append(str(row.role_id))
+            key = str(row.child_id)
+            role_id = str(row.role_id)
+            if role_id not in result.setdefault(key, []):
+                result[key].append(role_id)
         return result
 
     def get_children_coordinates(self, parent_id: UUID) -> List[dict]:
@@ -230,7 +229,7 @@ class ModuleRepository(BaseRepository):
                     "child_id": str(row.child_id),
                     "coordinates": row.coordinates,
                     "role_id": str(row.role_id) if row.role_id else None,
-                    "role_ids": role_map.get(str(row.id), [str(row.role_id)] if row.role_id else []),
+                    "role_ids": role_map.get(str(row.id), []),
                 }
                 for row in rows
             ]
@@ -238,22 +237,25 @@ class ModuleRepository(BaseRepository):
     def get_parent_edges_with_roles(self, child_id: UUID) -> List[dict]:
         """
         Возвращает список связей parent_child_module для текущего child,
-        включая роль связи (если задана).
+        включая роли, назначенные child в рамках конкретного parent-child.
         """
         with self.db_session.session() as db:
-            stmt = (
+            rows = db.execute(
                 select(
                     parent_child_module.c.id,
                     parent_child_module.c.parent_id,
-                    parent_child_module.c.role_id,
+                    parent_child_module_role_assignment.c.role_id,
                     ModuleRole.name,
                     ModuleRole.description,
                 )
-                .outerjoin(ModuleRole, ModuleRole.id == parent_child_module.c.role_id)
+                .outerjoin(
+                    parent_child_module_role_assignment,
+                    parent_child_module_role_assignment.c.parent_child_module_id == parent_child_module.c.id,
+                )
+                .outerjoin(ModuleRole, ModuleRole.id == parent_child_module_role_assignment.c.role_id)
                 .where(parent_child_module.c.child_id == child_id)
-                .order_by(parent_child_module.c.parent_id, parent_child_module.c.id)
-            )
-            rows = db.execute(stmt).fetchall()
+                .order_by(parent_child_module.c.parent_id, parent_child_module.c.id, ModuleRole.name)
+            ).fetchall()
 
         result = []
         for row in rows:

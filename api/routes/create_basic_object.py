@@ -8,6 +8,7 @@ from typing import Optional, Dict, List
 from models import BoundingContour, Module
 from uuid import UUID
 import logging
+from sqlalchemy import select
 from models.associations import parent_child_module, parent_child_module_role_assignment
 from models.module import ModuleStatus
 from service.brep_file_service import BrepFileService
@@ -499,18 +500,24 @@ async def update_parent_child_module_record(
                         role_ids_uuids.append(UUID(role_id_str))
                     except ValueError:
                         raise HTTPException(status_code=400, detail=f"Неверный формат role_id: {role_id_str}")
-                update_values["role_id"] = role_ids_uuids[0] if role_ids_uuids else None
 
             if not update_values and "role_ids" not in provided_fields:
                 raise HTTPException(status_code=400, detail="Нет полей для обновления")
 
-            stmt = (
-                parent_child_module.update()
-                .where(parent_child_module.c.id == record_uuid)
-                .values(**update_values)
-            )
-            result = db.execute(stmt)
-            if result.rowcount == 0:
+            if update_values:
+                stmt = (
+                    parent_child_module.update()
+                    .where(parent_child_module.c.id == record_uuid)
+                    .values(**update_values)
+                )
+                result = db.execute(stmt)
+                record_exists = result.rowcount > 0
+            else:
+                record_exists = db.execute(
+                    select(parent_child_module.c.id).where(parent_child_module.c.id == record_uuid)
+                ).first() is not None
+
+            if not record_exists:
                 raise HTTPException(
                     status_code=404,
                     detail=f"Запись в parent_child_module с ID '{record_id}' не найдена"

@@ -16,6 +16,11 @@ class RoleAssignRequest(BaseModel):
     description: Optional[str] = None
 
 
+class RoleUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+
+
 class RoleResponse(BaseModel):
     id: str
     name: str
@@ -73,6 +78,33 @@ async def add_role_to_module(
         raise HTTPException(status_code=400, detail="Необходимо указать role_id или name")
 
     role = role_repo.create_and_assign_role(module_uuid, body.name, body.description)
+    return RoleResponse(id=str(role.id), name=role.name, description=role.description)
+
+
+@router.patch("/roles/{role_id}", response_model=RoleResponse)
+async def update_role(
+    role_id: str,
+    body: RoleUpdateRequest,
+    role_repo: RoleRepository = Depends(),
+):
+    try:
+        role_uuid = UUID(role_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Неверный формат role_id")
+
+    name = body.name.strip() if body.name is not None else None
+    if body.name is not None and not name:
+        raise HTTPException(status_code=400, detail="Название роли не может быть пустым")
+
+    try:
+        role = role_repo.update_role(
+            role_uuid,
+            name=name,
+            description=body.description,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
     return RoleResponse(id=str(role.id), name=role.name, description=role.description)
 
 

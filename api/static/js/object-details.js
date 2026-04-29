@@ -2026,6 +2026,28 @@ function renderRolesMatrix(data) {
             <button class="roles-matrix__btn roles-matrix__btn--confirm" onclick="rolesMatrixAddColumn('${parentId}')">Добавить</button>
         </div>`;
 
+    const editRoleModalHtml = `
+        <div id="edit-role-modal" class="modal" style="display:none;">
+            <div class="modal-content">
+                <h3>Редактировать роль</h3>
+                <input type="hidden" id="edit-role-id">
+                <form id="edit-role-form">
+                    <div class="form-group">
+                        <label for="edit-role-name">Название роли:</label>
+                        <input type="text" id="edit-role-name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-role-description">Описание:</label>
+                        <textarea id="edit-role-description"></textarea>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" onclick="submitEditRole()">Сохранить</button>
+                        <button type="button" onclick="hideEditRoleModal()">Отмена</button>
+                    </div>
+                </form>
+            </div>
+        </div>`;
+
     return `
         <div class="roles-matrix__section" id="roles-matrix-section">
             <div class="roles-matrix__header">
@@ -2037,6 +2059,7 @@ function renderRolesMatrix(data) {
                 ${buildRolesMatrixTable(data, false, parentId)}
             </div>
             ${addRoleFormHtml}
+            ${editRoleModalHtml}
         </div>`;
 }
 
@@ -2071,7 +2094,6 @@ async function rolesMatrixDisableEdit(parentId) {
 
 function buildRolesMatrixTable(data, editMode, parentId) {
     const roles = data.roles || [];
-    const childrenRoles = data.children_roles || {};
     const childLinks = Array.isArray(data.children_with_coordinates) ? data.children_with_coordinates : [];
     const collapsed = window.rolesMatrixCollapsed || new Set();
     const childrenCollapsed = window.rolesMatrixChildrenCollapsed || new Set();
@@ -2087,6 +2109,9 @@ function buildRolesMatrixTable(data, editMode, parentId) {
         const collapseIcon = isCollapsed ? '›' : '‹';
         const collapseTitle = isCollapsed ? 'Развернуть' : 'Свернуть';
         const collapseBtn = `<button class="roles-matrix__collapse-btn" onclick="rolesMatrixToggleColumn('${role.id}')" title="${collapseTitle}">${collapseIcon}</button>`;
+        const editBtn = editMode
+            ? `<button class="roles-matrix__edit-role-btn roles-matrix__col-label" onclick="showEditRoleModal('${role.id}')" title="Редактировать роль">✎</button>`
+            : '';
         const deleteBtn = editMode
             ? `<button class="roles-matrix__delete-role-btn roles-matrix__col-label" onclick="rolesMatrixDeleteColumn('${parentId}', '${role.id}', '${escapeHtml(role.name)}')" title="Удалить роль из модуля">×</button>`
             : '';
@@ -2095,6 +2120,7 @@ function buildRolesMatrixTable(data, editMode, parentId) {
             <div class="roles-matrix__th-inner">
                 ${collapseBtn}
                 <span class="roles-matrix__col-label">${escapeHtml(role.name)}</span>
+                ${editBtn}
                 ${deleteBtn}
             </div>
         </th>`;
@@ -2112,7 +2138,7 @@ function buildRolesMatrixTable(data, editMode, parentId) {
         const groupCells = roles.map(role => {
             const isCollapsed = collapsed.has(role.id);
             const collapsedClass = isCollapsed ? ' roles-matrix__col--collapsed' : '';
-            const checked = (childrenRoles[childId] || []).includes(role.id) ? 'checked' : '';
+            const checked = group.some(link => getLinkRoleIds(link).includes(role.id)) ? 'checked' : '';
             if (editMode) {
                 return `<td class="roles-matrix__cell${collapsedClass}" data-role-col="${role.id}">
                     <input type="checkbox" class="roles-matrix__checkbox" ${checked} onchange="rolesMatrixToggleAssignment(this, '${childId}', '${role.id}')">
@@ -2141,7 +2167,7 @@ function buildRolesMatrixTable(data, editMode, parentId) {
                 const copyLabel = hasCopies ? `Copy #${index + 1}` : 'Copy #1';
                 const cells = roles.map(role => {
                     const isCollapsed = collapsed.has(role.id);
-                    const roleIds = Array.isArray(link.role_ids) ? link.role_ids : (link.role_id ? [link.role_id] : []);
+                    const roleIds = getLinkRoleIds(link);
                     const checked = roleIds.includes(role.id) ? 'checked' : '';
                     const collapsedClass = isCollapsed ? ' roles-matrix__col--collapsed' : '';
                     if (editMode) {
@@ -2207,27 +2233,38 @@ function rolesMatrixToggleChildGroup(childId) {
     wrapper.innerHTML = buildRolesMatrixTable(window.currentObjectData, isEditMode, parentId);
 }
 
-async function rolesMatrixToggleAssignment(checkbox, childId, roleId) {
-    const method = checkbox.checked ? 'POST' : 'DELETE';
-    const url = method === 'POST'
-        ? `/api/modules/${childId}/roles`
-        : `/api/modules/${childId}/roles/${roleId}`;
+function getLinkRoleIds(link) {
+    if (Array.isArray(link.role_ids)) return [...link.role_ids];
+    return link.role_id ? [link.role_id] : [];
+}
 
-    const options = { method, headers: { 'Content-Type': 'application/json' } };
-    if (method === 'POST') options.body = JSON.stringify({ role_id: roleId });
+async function rolesMatrixToggleAssignment(checkbox, childId, roleId) {
+    const links = (window.currentObjectData.children_with_coordinates || [])
+        .filter(item => item.child_id === childId);
+
+    if (links.length === 0) {
+        checkbox.checked = !checkbox.checked;
+        showToast('Error: child link not found', 'error');
+        return;
+    }
 
     try {
-        const res = await fetch(url, options);
-        if (!res.ok) throw new Error(await res.text());
+        await Promise.all(links.map(async (link) => {
+            const currentRoleIds = getLinkRoleIds(link);
+            const nextRoleIds = checkbox.checked
+                ? (currentRoleIds.includes(roleId) ? currentRoleIds : [...currentRoleIds, roleId])
+                : currentRoleIds.filter(id => id !== roleId);
 
-        const childrenRoles = window.currentObjectData.children_roles || {};
-        if (!childrenRoles[childId]) childrenRoles[childId] = [];
-        if (checkbox.checked) {
-            if (!childrenRoles[childId].includes(roleId)) childrenRoles[childId].push(roleId);
-        } else {
-            childrenRoles[childId] = childrenRoles[childId].filter(id => id !== roleId);
-        }
-        window.currentObjectData.children_roles = childrenRoles;
+            const res = await fetch(`/api/parent_child_module/${link.parent_child_module_id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ role_ids: nextRoleIds }),
+            });
+            if (!res.ok) throw new Error(await res.text());
+
+            link.role_ids = nextRoleIds;
+            link.role_id = nextRoleIds.length > 0 ? nextRoleIds[0] : null;
+        }));
 
         // Перерисовываем чтобы синхронизировать состояние групп/копий
         const isEditMode = document.getElementById('roles-matrix-done-btn')?.style.display !== 'none';
@@ -2257,7 +2294,7 @@ async function rolesMatrixToggleAssignmentForCopy(checkbox, parentChildModuleId,
         return;
     }
 
-    const currentRoleIds = Array.isArray(target.role_ids) ? [...target.role_ids] : (target.role_id ? [target.role_id] : []);
+    const currentRoleIds = getLinkRoleIds(target);
     const nextRoleIds = checkbox.checked
         ? (currentRoleIds.includes(roleId) ? currentRoleIds : [...currentRoleIds, roleId])
         : currentRoleIds.filter(id => id !== roleId);
@@ -2318,6 +2355,61 @@ async function rolesMatrixAddColumn(parentId) {
     }
 }
 
+function showEditRoleModal(roleId) {
+    const role = (window.currentObjectData.roles || []).find(item => item.id === roleId);
+    if (!role) {
+        showToast('Роль не найдена', 'error');
+        return;
+    }
+
+    document.getElementById('edit-role-id').value = role.id;
+    document.getElementById('edit-role-name').value = role.name || '';
+    document.getElementById('edit-role-description').value = role.description || '';
+    document.getElementById('edit-role-modal').style.display = 'flex';
+}
+
+function hideEditRoleModal() {
+    const modal = document.getElementById('edit-role-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+async function submitEditRole() {
+    const roleId = document.getElementById('edit-role-id').value;
+    const name = document.getElementById('edit-role-name').value.trim();
+    const description = document.getElementById('edit-role-description').value.trim();
+
+    if (!roleId || !name) {
+        showToast('Введите название роли', 'error');
+        return;
+    }
+
+    try {
+        const res = await fetch(`/api/roles/${roleId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, description }),
+        });
+        if (!res.ok) throw new Error(await res.text());
+
+        const updatedRole = await res.json();
+        window.currentObjectData.roles = (window.currentObjectData.roles || []).map(role =>
+            role.id === updatedRole.id ? updatedRole : role
+        );
+
+        const parentId = window.currentObjectData?.id;
+        const wrapper = document.getElementById('roles-matrix-table-wrapper');
+        if (wrapper && parentId) {
+            const isEditMode = document.getElementById('roles-matrix-done-btn')?.style.display !== 'none';
+            wrapper.innerHTML = buildRolesMatrixTable(window.currentObjectData, isEditMode, parentId);
+        }
+        rerenderStreamsMatrix();
+        hideEditRoleModal();
+        showToast('Роль обновлена', 'success');
+    } catch (err) {
+        showToast('Ошибка: ' + err.message, 'error');
+    }
+}
+
 async function rolesMatrixDeleteColumn(parentId, roleId, roleName) {
     if (!confirm(`Удалить роль "${roleName}" из модуля?`)) return;
 
@@ -2342,7 +2434,9 @@ async function rolesMatrixDeleteColumn(parentId, roleId, roleName) {
 
 async function rolesMatrixRefreshCurrentData(parentId) {
     try {
-        const res = await fetch(`/api/basic_object/${parentId}`);
+        const res = await fetch(`/api/basic_object/${parentId}?_=${Date.now()}`, {
+            cache: 'no-store',
+        });
         if (!res.ok) throw new Error(await res.text());
         window.currentObjectData = await res.json();
     } catch (err) {
