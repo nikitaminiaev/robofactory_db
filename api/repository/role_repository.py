@@ -24,30 +24,6 @@ class RoleRepository(BaseRepository):
         db.flush()
         return role
 
-    def update_role(
-        self,
-        role_id: UUID,
-        name: Optional[str] = None,
-        description: Optional[str] = None,
-    ) -> ModuleRole:
-        with self.db_session.session() as db:
-            role = self.get_role_by_id(db, role_id)
-            if not role:
-                raise ValueError(f"Роль с ID '{role_id}' не найдена")
-
-            if name is not None:
-                existing_role = self.get_role_by_name(db, name)
-                if existing_role and existing_role.id != role_id:
-                    raise ValueError(f"Роль с именем '{name}' уже существует")
-                role.name = name
-
-            if description is not None:
-                role.description = description
-
-            db.commit()
-            db.refresh(role)
-            return role
-
     def get_or_create_role(self, db: Session, name: str, description: Optional[str] = None) -> ModuleRole:
         existing_role = self.get_role_by_name(db, name)
         if existing_role:

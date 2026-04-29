@@ -905,7 +905,6 @@ button:hover {
 }
 
 .roles-matrix th.roles-matrix__col--collapsed .roles-matrix__col-label,
-.roles-matrix th.roles-matrix__col--collapsed .roles-matrix__edit-role-btn,
 .roles-matrix th.roles-matrix__col--collapsed .roles-matrix__delete-role-btn {
     display: none;
 }
@@ -928,22 +927,6 @@ button:hover {
 
 .roles-matrix__delete-role-btn:hover {
     color: #c0392b;
-}
-
-.roles-matrix__edit-role-btn {
-    flex-shrink: 0;
-    padding: 0 3px;
-    font-size: 12px;
-    line-height: 1;
-    background: none;
-    border: none;
-    color: #3498db;
-    cursor: pointer;
-    font-weight: bold;
-}
-
-.roles-matrix__edit-role-btn:hover {
-    color: #21618c;
 }
 
 .roles-matrix__add-form {

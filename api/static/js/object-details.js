@@ -2026,28 +2026,6 @@ function renderRolesMatrix(data) {
             <button class="roles-matrix__btn roles-matrix__btn--confirm" onclick="rolesMatrixAddColumn('${parentId}')">Добавить</button>
         </div>`;
 
-    const editRoleModalHtml = `
-        <div id="edit-role-modal" class="modal" style="display:none;">
-            <div class="modal-content">
-                <h3>Редактировать роль</h3>
-                <input type="hidden" id="edit-role-id">
-                <form id="edit-role-form">
-                    <div class="form-group">
-                        <label for="edit-role-name">Название роли:</label>
-                        <input type="text" id="edit-role-name" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="edit-role-description">Описание:</label>
-                        <textarea id="edit-role-description"></textarea>
-                    </div>
-                    <div class="modal-actions">
-                        <button type="button" onclick="submitEditRole()">Сохранить</button>
-                        <button type="button" onclick="hideEditRoleModal()">Отмена</button>
-                    </div>
-                </form>
-            </div>
-        </div>`;
-
     return `
         <div class="roles-matrix__section" id="roles-matrix-section">
             <div class="roles-matrix__header">
@@ -2059,7 +2037,6 @@ function renderRolesMatrix(data) {
                 ${buildRolesMatrixTable(data, false, parentId)}
             </div>
             ${addRoleFormHtml}
-            ${editRoleModalHtml}
         </div>`;
 }
 
@@ -2109,9 +2086,6 @@ function buildRolesMatrixTable(data, editMode, parentId) {
         const collapseIcon = isCollapsed ? '›' : '‹';
         const collapseTitle = isCollapsed ? 'Развернуть' : 'Свернуть';
         const collapseBtn = `<button class="roles-matrix__collapse-btn" onclick="rolesMatrixToggleColumn('${role.id}')" title="${collapseTitle}">${collapseIcon}</button>`;
-        const editBtn = editMode
-            ? `<button class="roles-matrix__edit-role-btn roles-matrix__col-label" onclick="showEditRoleModal('${role.id}')" title="Редактировать роль">✎</button>`
-            : '';
         const deleteBtn = editMode
             ? `<button class="roles-matrix__delete-role-btn roles-matrix__col-label" onclick="rolesMatrixDeleteColumn('${parentId}', '${role.id}', '${escapeHtml(role.name)}')" title="Удалить роль из модуля">×</button>`
             : '';
@@ -2120,7 +2094,6 @@ function buildRolesMatrixTable(data, editMode, parentId) {
             <div class="roles-matrix__th-inner">
                 ${collapseBtn}
                 <span class="roles-matrix__col-label">${escapeHtml(role.name)}</span>
-                ${editBtn}
                 ${deleteBtn}
             </div>
         </th>`;
@@ -2350,61 +2323,6 @@ async function rolesMatrixAddColumn(parentId) {
         wrapper.innerHTML = buildRolesMatrixTable(window.currentObjectData, true, parentId);
         rerenderStreamsMatrix();
         showToast('Роль добавлена', 'success');
-    } catch (err) {
-        showToast('Ошибка: ' + err.message, 'error');
-    }
-}
-
-function showEditRoleModal(roleId) {
-    const role = (window.currentObjectData.roles || []).find(item => item.id === roleId);
-    if (!role) {
-        showToast('Роль не найдена', 'error');
-        return;
-    }
-
-    document.getElementById('edit-role-id').value = role.id;
-    document.getElementById('edit-role-name').value = role.name || '';
-    document.getElementById('edit-role-description').value = role.description || '';
-    document.getElementById('edit-role-modal').style.display = 'flex';
-}
-
-function hideEditRoleModal() {
-    const modal = document.getElementById('edit-role-modal');
-    if (modal) modal.style.display = 'none';
-}
-
-async function submitEditRole() {
-    const roleId = document.getElementById('edit-role-id').value;
-    const name = document.getElementById('edit-role-name').value.trim();
-    const description = document.getElementById('edit-role-description').value.trim();
-
-    if (!roleId || !name) {
-        showToast('Введите название роли', 'error');
-        return;
-    }
-
-    try {
-        const res = await fetch(`/api/roles/${roleId}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, description }),
-        });
-        if (!res.ok) throw new Error(await res.text());
-
-        const updatedRole = await res.json();
-        window.currentObjectData.roles = (window.currentObjectData.roles || []).map(role =>
-            role.id === updatedRole.id ? updatedRole : role
-        );
-
-        const parentId = window.currentObjectData?.id;
-        const wrapper = document.getElementById('roles-matrix-table-wrapper');
-        if (wrapper && parentId) {
-            const isEditMode = document.getElementById('roles-matrix-done-btn')?.style.display !== 'none';
-            wrapper.innerHTML = buildRolesMatrixTable(window.currentObjectData, isEditMode, parentId);
-        }
-        rerenderStreamsMatrix();
-        hideEditRoleModal();
-        showToast('Роль обновлена', 'success');
     } catch (err) {
         showToast('Ошибка: ' + err.message, 'error');
     }
