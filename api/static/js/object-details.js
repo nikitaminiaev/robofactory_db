@@ -2076,11 +2076,13 @@ async function refreshObjectDetails() {
 // =====================================================================
 
 function renderRolesMatrix(data) {
-    if (!data.children || data.children.length === 0) return '';
-
     window.rolesMatrixCollapsed = window.rolesMatrixCollapsed || new Set();
     window.rolesMatrixChildrenCollapsed = window.rolesMatrixChildrenCollapsed || new Set();
     const parentId = data.id;
+    const hasChildren = Array.isArray(data.children) && data.children.length > 0;
+    const childrenHint = hasChildren
+        ? ''
+        : '<div class="info-message" style="margin-bottom:8px;">У модуля нет дочерних модулей. Можно управлять списком ролей и удалять лишние роли.</div>';
 
     const addRoleFormHtml = `
         <div id="roles-matrix-add-form" class="roles-matrix__add-form" style="display:none;">
@@ -2105,6 +2107,7 @@ function renderRolesMatrix(data) {
                 <button class="roles-matrix__edit-btn" id="roles-matrix-edit-btn" onclick="rolesMatrixEnableEdit('${parentId}')">Edit</button>
                 <button class="roles-matrix__edit-btn roles-matrix__edit-btn--done" id="roles-matrix-done-btn" onclick="rolesMatrixDisableEdit('${parentId}')" style="display:none;">Done</button>
             </div>
+            ${childrenHint}
             <div id="roles-matrix-table-wrapper">
                 ${buildRolesMatrixTable(data, false, parentId)}
             </div>
