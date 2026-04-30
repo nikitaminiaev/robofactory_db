@@ -1,11 +1,18 @@
-from typing import Optional
+from typing import Any, Optional, cast
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
+from sqlalchemy.orm import aliased
 
 from . import BaseRepository
-from models import Module, Stream
-from models.associations import module_role_assignment, module_role_stream, module_stream
+from models import Module, ModuleRole, Stream
+from models.associations import (
+    module_role_assignment,
+    module_role_stream,
+    module_stream,
+    parent_child_module,
+    parent_child_module_role_assignment,
+)
 
 
 class StreamRepository(BaseRepository):
@@ -47,6 +54,89 @@ class StreamRepository(BaseRepository):
             for row in rows
         ]
 
+    def get_external_role_streams(self, child_id: UUID) -> list[dict]:
+        external_roles = (
+            select(
+                parent_child_module.c.parent_id.label("parent_module_id"),
+                parent_child_module_role_assignment.c.role_id.label("external_role_id"),
+            )
+            .join(
+                parent_child_module_role_assignment,
+                parent_child_module_role_assignment.c.parent_child_module_id == parent_child_module.c.id,
+            )
+            .where(parent_child_module.c.child_id == child_id)
+            .subquery()
+        )
+        source_role = aliased(ModuleRole)
+        target_role = aliased(ModuleRole)
+        external_role = aliased(ModuleRole)
+
+        with self.db_session.session() as db:
+            rows = db.execute(
+                select(
+                    external_roles.c.parent_module_id,
+                    external_roles.c.external_role_id,
+                    Module.name.label("parent_module_name"),
+                    module_role_stream.c.source_role_id,
+                    source_role.name.label("source_role_name"),
+                    module_role_stream.c.target_role_id,
+                    target_role.name.label("target_role_name"),
+                    Stream.id,
+                    Stream.name,
+                    Stream.description,
+                    external_role.name.label("external_role_name"),
+                )
+                .join(Module, Module.id == external_roles.c.parent_module_id)
+                .join(
+                    module_role_stream,
+                    module_role_stream.c.module_id == external_roles.c.parent_module_id,
+                )
+                .join(Stream, Stream.id == module_role_stream.c.stream_id)
+                .join(source_role, source_role.id == module_role_stream.c.source_role_id)
+                .join(target_role, target_role.id == module_role_stream.c.target_role_id)
+                .join(external_role, external_role.id == external_roles.c.external_role_id)
+                .where(
+                    or_(
+                        module_role_stream.c.source_role_id == external_roles.c.external_role_id,
+                        module_role_stream.c.target_role_id == external_roles.c.external_role_id,
+                    )
+                )
+                .order_by(Module.name, source_role.name, target_role.name, Stream.name)
+            ).fetchall()
+
+        streams_by_key: dict[tuple, dict] = {}
+        for row in rows:
+            key = (
+                row.parent_module_id,
+                row.source_role_id,
+                row.target_role_id,
+                row.id,
+            )
+            stream = streams_by_key.get(key)
+            external_role_data = {
+                "id": str(row.external_role_id),
+                "name": row.external_role_name,
+            }
+            if stream:
+                if external_role_data not in stream["external_roles"]:
+                    stream["external_roles"].append(external_role_data)
+                continue
+
+            streams_by_key[key] = {
+                "id": str(row.id),
+                "name": row.name,
+                "description": row.description,
+                "parent_module_id": str(row.parent_module_id),
+                "parent_module_name": row.parent_module_name,
+                "source_role_id": str(row.source_role_id),
+                "source_role_name": row.source_role_name,
+                "target_role_id": str(row.target_role_id),
+                "target_role_name": row.target_role_name,
+                "external_roles": [external_role_data],
+            }
+
+        return list(streams_by_key.values())
+
     def upsert_module_role_stream(
         self,
         module_id: UUID,
@@ -67,14 +157,15 @@ class StreamRepository(BaseRepository):
                 db.add(stream)
                 db.flush()
             elif description is not None:
-                stream.description = description
+                cast(Any, stream).description = description
 
+            stream_obj = cast(Any, stream)
             existing = db.execute(
                 select(module_role_stream.c.stream_id).where(
                     module_role_stream.c.module_id == module_id,
                     module_role_stream.c.source_role_id == source_role_id,
                     module_role_stream.c.target_role_id == target_role_id,
-                    module_role_stream.c.stream_id == stream.id,
+                    module_role_stream.c.stream_id == stream_obj.id,
                 )
             ).first()
 
@@ -84,19 +175,19 @@ class StreamRepository(BaseRepository):
                         module_id=module_id,
                         source_role_id=source_role_id,
                         target_role_id=target_role_id,
-                        stream_id=stream.id,
+                        stream_id=stream_obj.id,
                     )
                 )
 
-            self._ensure_module_stream(db, module_id, stream.id)
+            self._ensure_module_stream(db, module_id, stream_obj.id)
 
             db.commit()
             db.refresh(stream)
 
             return {
-                "id": str(stream.id),
-                "name": stream.name,
-                "description": stream.description,
+                "id": str(stream_obj.id),
+                "name": stream_obj.name,
+                "description": stream_obj.description,
                 "source_role_id": str(source_role_id),
                 "target_role_id": str(target_role_id),
             }

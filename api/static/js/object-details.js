@@ -761,19 +761,31 @@ function renderExternalRolesTable(data, loadObjectNames) {
 function renderRolesTab(data, loadObjectNames) {
     const internalRolesHtml = renderRolesMatrix(data) || '<div class="info-message">This module has no child roles.</div>';
     const externalRolesHtml = renderExternalRolesTable(data, loadObjectNames);
+    const externalStreamsHtml = renderExternalStreamsTable(data);
     const streamsHtml = renderStreamsMatrix(data);
     return `
         <div class="module-tab-panel" data-module-tab-panel="roles">
             ${internalRolesHtml}
             ${externalRolesHtml}
             ${streamsHtml}
+            ${externalStreamsHtml}
             ${renderStreamModal()}
         </div>
     `;
 }
 
-function renderStreamsMatrix(data) {
+function getInternalStreamRoles(data) {
     const roles = data.roles || [];
+    const externalRoleIds = new Set(
+        (data.parent_edges || [])
+            .map(edge => edge.role_id)
+            .filter(Boolean)
+    );
+    return roles.filter(role => !externalRoleIds.has(role.id));
+}
+
+function renderStreamsMatrix(data) {
+    const roles = getInternalStreamRoles(data);
     if (roles.length < 2) {
         return `
             <div class="section-card" id="streams-matrix-section">
@@ -783,7 +795,11 @@ function renderStreamsMatrix(data) {
         `;
     }
 
-    const roleStreams = data.role_streams || [];
+    const roleIds = new Set(roles.map(role => role.id));
+    const roleStreams = (data.role_streams || []).filter(stream => (
+        roleIds.has(stream.source_role_id) &&
+        roleIds.has(stream.target_role_id)
+    ));
     const streamsByPair = new Map();
     roleStreams.forEach(stream => {
         const key = `${stream.source_role_id}:${stream.target_role_id}`;
@@ -792,16 +808,16 @@ function renderStreamsMatrix(data) {
     });
     const headerCells = roles.map(role => `
         <th class="streams-matrix__th" title="${escapeHtml(role.description || '')}">
-            ${escapeHtml(role.name)}
+            <span class="streams-matrix__target-label">→ ${escapeHtml(role.name)}</span>
         </th>
     `).join('');
 
-    const bodyRows = roles.map(targetRole => {
-        const cells = roles.map(sourceRole => renderStreamMatrixCell(sourceRole, targetRole, streamsByPair));
+    const bodyRows = roles.map(sourceRole => {
+        const cells = roles.map(targetRole => renderStreamMatrixCell(sourceRole, targetRole, streamsByPair));
         return `
             <tr>
-                <th class="streams-matrix__role" title="${escapeHtml(targetRole.description || '')}">
-                    ${escapeHtml(targetRole.name)}
+                <th class="streams-matrix__role" title="${escapeHtml(sourceRole.description || '')}">
+                    <span class="streams-matrix__source-label">${escapeHtml(sourceRole.name)} →</span>
                 </th>
                 ${cells.join('')}
             </tr>
@@ -817,7 +833,7 @@ function renderStreamsMatrix(data) {
                 <table class="streams-matrix">
                     <thead>
                         <tr>
-                            <th class="streams-matrix__corner">Role \\ Role</th>
+                            <th class="streams-matrix__corner">From ↓ / To →</th>
                             ${headerCells}
                         </tr>
                     </thead>
@@ -838,8 +854,8 @@ function renderStreamMatrixCell(sourceRole, targetRole, streamsByPair) {
     const label = streams.length === 0
         ? '+'
         : streams.length === 1
-            ? escapeHtml(streams[0].name)
-            : `${streams.length} streams`;
+            ? `→ ${escapeHtml(streams[0].name)}`
+            : `→ ${streams.length} streams`;
     const title = streams.length > 0
         ? `Edit streams: ${streams.map(stream => stream.name).join(', ')}`
         : 'Create stream';
@@ -853,6 +869,53 @@ function renderStreamMatrixCell(sourceRole, targetRole, streamsByPair) {
                 onclick="showStreamModal('${sourceRole.id}', '${targetRole.id}')"
             >${label}</button>
         </td>
+    `;
+}
+
+function renderExternalStreamsTable(data) {
+    const externalStreams = data.external_role_streams || [];
+    if (externalStreams.length === 0) {
+        return `
+            <div class="section-card">
+                <h2 style="margin-top:0;">External Streams</h2>
+                <div class="info-message">No external streams found.</div>
+            </div>
+        `;
+    }
+
+    const rows = externalStreams.map(stream => `
+        <tr>
+            <td>
+                <a href="/basic_object/${stream.parent_module_id}">
+                    ${escapeHtml(stream.parent_module_name || stream.parent_module_id)}
+                </a>
+            </td>
+            <td>${escapeHtml(stream.source_role_name || stream.source_role_id)}</td>
+            <td class="external-streams__direction">→</td>
+            <td>${escapeHtml(stream.target_role_name || stream.target_role_id)}</td>
+            <td>
+                <strong>${escapeHtml(stream.name)}</strong>
+                ${stream.description ? `<small>${escapeHtml(stream.description)}</small>` : ''}
+            </td>
+        </tr>
+    `).join('');
+
+    return `
+        <div class="section-card">
+            <h2 style="margin-top:0;">External Streams</h2>
+            <table class="detail-table external-streams">
+                <thead>
+                    <tr>
+                        <th>Parent module</th>
+                        <th>From role</th>
+                        <th></th>
+                        <th>To role</th>
+                        <th>Stream</th>
+                    </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+            </table>
+        </div>
     `;
 }
 
@@ -2021,7 +2084,16 @@ function renderRolesMatrix(data) {
 
     const addRoleFormHtml = `
         <div id="roles-matrix-add-form" class="roles-matrix__add-form" style="display:none;">
-            <input type="text" id="roles-matrix-new-name" placeholder="Название роли" class="roles-matrix__input">
+            <div class="roles-matrix__search-wrap">
+                <input
+                    type="text"
+                    id="roles-matrix-new-name"
+                    placeholder="Название роли"
+                    class="roles-matrix__input"
+                    oninput="searchRolesForMatrix(this.value)"
+                >
+                <div id="roles-matrix-search-results" class="stream-search-results" style="display:none;"></div>
+            </div>
             <input type="text" id="roles-matrix-new-desc" placeholder="Описание (необязательно)" class="roles-matrix__input">
             <button class="roles-matrix__btn roles-matrix__btn--confirm" onclick="rolesMatrixAddColumn('${parentId}')">Добавить</button>
         </div>`;
@@ -2047,6 +2119,7 @@ function escapeHtml(str) {
 
 function rolesMatrixEnableEdit(parentId) {
     const data = window.currentObjectData;
+    window.selectedExistingRole = null;
     document.getElementById('roles-matrix-edit-btn').style.display = 'none';
     document.getElementById('roles-matrix-done-btn').style.display = 'inline-block';
 
@@ -2058,6 +2131,7 @@ function rolesMatrixEnableEdit(parentId) {
 
 async function rolesMatrixDisableEdit(parentId) {
     await rolesMatrixRefreshCurrentData(parentId);
+    resetRolesSearchSelection();
     const data = window.currentObjectData;
     document.getElementById('roles-matrix-edit-btn').style.display = 'inline-block';
     document.getElementById('roles-matrix-done-btn').style.display = 'none';
@@ -2297,16 +2371,21 @@ async function rolesMatrixAddColumn(parentId) {
     const nameInput = document.getElementById('roles-matrix-new-name');
     const descInput = document.getElementById('roles-matrix-new-desc');
     const name = nameInput.value.trim();
+    const selectedRole = window.selectedExistingRole;
     if (!name) {
         showToast('Введите название роли', 'error');
         return;
     }
 
+    const body = selectedRole
+        ? { role_id: selectedRole.id }
+        : { name, description: descInput.value.trim() || null };
+
     try {
         const res = await fetch(`/api/modules/${parentId}/roles`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, description: descInput.value.trim() || null }),
+            body: JSON.stringify(body),
         });
         if (!res.ok) throw new Error(await res.text());
         const newRole = await res.json();
@@ -2318,6 +2397,7 @@ async function rolesMatrixAddColumn(parentId) {
 
         nameInput.value = '';
         descInput.value = '';
+        resetRolesSearchSelection();
 
         const wrapper = document.getElementById('roles-matrix-table-wrapper');
         wrapper.innerHTML = buildRolesMatrixTable(window.currentObjectData, true, parentId);
@@ -2326,6 +2406,78 @@ async function rolesMatrixAddColumn(parentId) {
     } catch (err) {
         showToast('Ошибка: ' + err.message, 'error');
     }
+}
+
+async function searchRolesForMatrix(query) {
+    const resultsDiv = document.getElementById('roles-matrix-search-results');
+    if (!resultsDiv) return;
+
+    const normalizedQuery = (query || '').trim();
+    if (window.selectedExistingRole && window.selectedExistingRole.name !== normalizedQuery) {
+        window.selectedExistingRole = null;
+    }
+    if (!normalizedQuery) {
+        resetRolesSearchSelection();
+        return;
+    }
+
+    try {
+        const res = await fetch(`/api/roles?query=${encodeURIComponent(normalizedQuery)}&limit=20`);
+        if (!res.ok) throw new Error(await res.text());
+        const roles = await res.json();
+
+        if (roles.length === 0) {
+            resultsDiv.innerHTML = '<div class="stream-search-empty">Совпадений нет. Можно создать новую роль.</div>';
+            resultsDiv.style.display = 'block';
+            return;
+        }
+
+        const currentRoleIds = new Set((window.currentObjectData?.roles || []).map(role => role.id));
+        resultsDiv.innerHTML = roles.map(role => {
+            const assignedBadge = currentRoleIds.has(role.id)
+                ? '<small class="roles-matrix__search-meta">Уже назначена этому модулю</small>'
+                : '';
+            const description = role.description ? `<small>${escapeHtml(role.description)}</small>` : '';
+            return `
+                <button
+                    type="button"
+                    class="stream-search-item"
+                    onclick="selectRoleForMatrix('${role.id}', decodeURIComponent('${encodeURIComponent(role.name)}'), decodeURIComponent('${encodeURIComponent(role.description || '')}'))"
+                >
+                    <span>${escapeHtml(role.name)}</span>
+                    ${description}
+                    ${assignedBadge}
+                </button>
+            `;
+        }).join('');
+        resultsDiv.style.display = 'block';
+    } catch (err) {
+        resultsDiv.innerHTML = '<div class="stream-search-empty">Ошибка поиска ролей</div>';
+        resultsDiv.style.display = 'block';
+    }
+}
+
+function selectRoleForMatrix(roleId, name, description) {
+    window.selectedExistingRole = {
+        id: roleId,
+        name,
+        description: description || '',
+    };
+    const nameInput = document.getElementById('roles-matrix-new-name');
+    const descInput = document.getElementById('roles-matrix-new-desc');
+    const resultsDiv = document.getElementById('roles-matrix-search-results');
+    if (nameInput) nameInput.value = name;
+    if (descInput) descInput.value = description || '';
+    if (resultsDiv) resultsDiv.style.display = 'none';
+}
+
+function resetRolesSearchSelection() {
+    const resultsDiv = document.getElementById('roles-matrix-search-results');
+    if (resultsDiv) {
+        resultsDiv.innerHTML = '';
+        resultsDiv.style.display = 'none';
+    }
+    window.selectedExistingRole = null;
 }
 
 async function rolesMatrixDeleteColumn(parentId, roleId, roleName) {

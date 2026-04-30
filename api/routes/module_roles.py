@@ -1,5 +1,5 @@
 from uuid import UUID
-from typing import Optional
+from typing import Any, Optional, cast
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -22,6 +22,15 @@ class RoleResponse(BaseModel):
     description: Optional[str] = None
 
 
+def _role_response(role) -> RoleResponse:
+    role_obj = cast(Any, role)
+    return RoleResponse(
+        id=str(role_obj.id),
+        name=role_obj.name,
+        description=role_obj.description,
+    )
+
+
 @router.get("/modules/{module_id}/roles")
 async def get_module_roles(
     module_id: str,
@@ -38,7 +47,16 @@ async def get_module_roles(
         raise HTTPException(status_code=404, detail=f"Модуль с ID '{module_id}' не найден")
 
     roles = role_repo.fetch_module_roles(module_uuid)
-    return [RoleResponse(id=str(r.id), name=r.name, description=r.description) for r in roles]
+    return [_role_response(role) for role in roles]
+
+
+@router.get("/roles")
+async def search_roles(
+    query: Optional[str] = None,
+    limit: int = 20,
+    role_repo: RoleRepository = Depends(),
+):
+    return role_repo.search_roles(query=query, limit=limit)
 
 
 @router.post("/modules/{module_id}/roles", status_code=201)
@@ -67,13 +85,13 @@ async def add_role_to_module(
         role = next((r for r in roles if str(r.id) == body.role_id), None)
         if not role:
             raise HTTPException(status_code=404, detail=f"Роль с ID '{body.role_id}' не найдена")
-        return RoleResponse(id=str(role.id), name=role.name, description=role.description)
+        return _role_response(role)
 
     if not body.name:
         raise HTTPException(status_code=400, detail="Необходимо указать role_id или name")
 
     role = role_repo.create_and_assign_role(module_uuid, body.name, body.description)
-    return RoleResponse(id=str(role.id), name=role.name, description=role.description)
+    return _role_response(role)
 
 
 @router.delete("/modules/{module_id}/roles/{role_id}", status_code=200)

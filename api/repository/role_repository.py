@@ -1,5 +1,5 @@
 from uuid import UUID
-from typing import Optional, List
+from typing import Any, Optional, List, cast
 
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
@@ -23,6 +23,18 @@ class RoleRepository(BaseRepository):
 
     def get_all_roles(self, db: Session) -> List[ModuleRole]:
         return db.query(ModuleRole).order_by(ModuleRole.name).all()
+
+    def search_roles(self, query: Optional[str] = None, limit: int = 20) -> List[dict]:
+        with self.db_session.session() as db:
+            stmt = db.query(ModuleRole).order_by(ModuleRole.name)
+            if query:
+                stmt = stmt.filter(ModuleRole.name.ilike(f"%{query}%"))
+            roles = stmt.limit(limit).all()
+
+        return [
+            {"id": str(role.id), "name": role.name, "description": role.description}
+            for role in roles
+        ]
 
     def create_role(self, db: Session, name: str, description: Optional[str] = None) -> ModuleRole:
         role = ModuleRole(name=name, description=description)
@@ -100,7 +112,7 @@ class RoleRepository(BaseRepository):
     def create_and_assign_role(self, module_id: UUID, name: str, description: Optional[str] = None) -> ModuleRole:
         with self.db_session.session() as db:
             role = self.get_or_create_role(db, name, description)
-            self.add_role_to_module(db, module_id, role.id)
+            self.add_role_to_module(db, module_id, cast(Any, role).id)
             db.commit()
             db.refresh(role)
             return role

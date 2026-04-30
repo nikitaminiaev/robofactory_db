@@ -88,6 +88,29 @@ class TestModuleRolesRoutes:
         finally:
             app.dependency_overrides.clear()
 
+    def test_search_roles_success(self, app, client):
+        from routes.module_roles import RoleRepository
+
+        role_id = uuid4()
+        mock_role_instance = MagicMock()
+        mock_role_instance.search_roles.return_value = [
+            {"id": str(role_id), "name": "controller", "description": "Main controller"},
+        ]
+
+        def override_role_repo():
+            return mock_role_instance
+
+        app.dependency_overrides[RoleRepository] = override_role_repo
+        try:
+            response = client.get("/api/roles?query=cont&limit=5")
+            assert response.status_code == 200
+            assert response.json() == [
+                {"id": str(role_id), "name": "controller", "description": "Main controller"},
+            ]
+            mock_role_instance.search_roles.assert_called_once_with(query="cont", limit=5)
+        finally:
+            app.dependency_overrides.clear()
+
     def test_add_role_by_role_id_success(self, app, client):
         from routes.module_roles import RoleRepository
 

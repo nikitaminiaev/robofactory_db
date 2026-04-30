@@ -937,6 +937,10 @@ button:hover {
     flex-wrap: wrap;
 }
 
+.roles-matrix__search-wrap {
+    position: relative;
+}
+
 .roles-matrix__input {
     padding: 5px 10px;
     font-size: 13px;
@@ -976,6 +980,11 @@ button:hover {
 
 .roles-matrix__btn--cancel:hover {
     background: #f0f0f0;
+}
+
+.roles-matrix__search-meta {
+    color: #1f7f46;
+    font-weight: 500;
 }
 
 /* =====================================================================
@@ -1018,6 +1027,13 @@ button:hover {
     text-align: left;
 }
 
+.streams-matrix__source-label,
+.streams-matrix__target-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
 .streams-matrix__cell {
     padding: 4px 6px;
     border: 1px solid #dde1e7;
@@ -1053,6 +1069,23 @@ button:hover {
     background: #eefaf2;
     color: #1f7f46;
     font-weight: 500;
+}
+
+.external-streams td {
+    vertical-align: top;
+}
+
+.external-streams small {
+    display: block;
+    margin-top: 2px;
+    color: #667085;
+}
+
+.external-streams__direction {
+    width: 32px;
+    text-align: center;
+    color: #1f7f46;
+    font-weight: 600;
 }
 
 .stream-search-block {

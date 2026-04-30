@@ -33,6 +33,7 @@ class BasicObjectDTO(BaseModel):
     roles: List[Dict] = []
     children_roles: Dict[str, List[str]] = {}
     role_streams: List[Dict] = []
+    external_role_streams: List[Dict] = []
     created_ts: Optional[str] = None
     updated_ts: Optional[str] = None
 

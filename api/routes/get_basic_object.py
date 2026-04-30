@@ -47,6 +47,7 @@ async def get_basic_object_by_id(
     result.children_roles = children_roles
     result.parent_edges = [ParentEdgeRoleDTO(**edge) for edge in parent_edges]
     result.role_streams = stream_repo.get_module_role_streams(id)
+    result.external_role_streams = stream_repo.get_external_role_streams(id)
 
     if result.bounding_contour:
         if hasattr(result.bounding_contour.brep_files, 'get'):
