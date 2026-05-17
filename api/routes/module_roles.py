@@ -101,6 +101,22 @@ async def update_role(
     return role
 
 
+@router.delete("/roles/{role_id}", status_code=200)
+async def delete_role(
+    role_id: str,
+    role_repo: RoleRepository = Depends(),
+):
+    try:
+        role_uuid = UUID(role_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Неверный формат role_id")
+
+    deleted = role_repo.delete_role(role_uuid)
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"Роль с ID '{role_id}' не найдена")
+    return {"message": "Роль успешно удалена"}
+
+
 @router.post("/modules/{module_id}/roles", status_code=201)
 async def add_role_to_module(
     module_id: str,

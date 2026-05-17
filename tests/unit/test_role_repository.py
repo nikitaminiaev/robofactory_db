@@ -444,3 +444,39 @@ class TestRoleRepositoryDetails:
 
         assert result is None
         mock_db.commit.assert_not_called()
+
+    @patch('repository.base_repository.Db_session')
+    def test_delete_role_success(self, mock_db_session_class):
+        mock_db_session_instance = MagicMock()
+        mock_db_session_class.return_value = mock_db_session_instance
+        mock_db = MagicMock()
+        mock_db_session_instance.session.return_value.__enter__.return_value = mock_db
+
+        role_id = uuid4()
+        mock_role = MagicMock()
+        mock_role.id = role_id
+        mock_db.query.return_value.filter.return_value.first.return_value = mock_role
+
+        repo = RoleRepository()
+        result = repo.delete_role(role_id)
+
+        assert result is True
+        assert mock_db.execute.call_count == 4
+        mock_db.delete.assert_called_once_with(mock_role)
+        mock_db.commit.assert_called_once()
+
+    @patch('repository.base_repository.Db_session')
+    def test_delete_role_not_found(self, mock_db_session_class):
+        mock_db_session_instance = MagicMock()
+        mock_db_session_class.return_value = mock_db_session_instance
+        mock_db = MagicMock()
+        mock_db_session_instance.session.return_value.__enter__.return_value = mock_db
+        mock_db.query.return_value.filter.return_value.first.return_value = None
+
+        repo = RoleRepository()
+        result = repo.delete_role(uuid4())
+
+        assert result is False
+        mock_db.execute.assert_not_called()
+        mock_db.delete.assert_not_called()
+        mock_db.commit.assert_not_called()

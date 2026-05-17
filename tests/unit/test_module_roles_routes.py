@@ -228,6 +228,46 @@ class TestModuleRolesRoutes:
         finally:
             app.dependency_overrides.clear()
 
+    def test_delete_role_success(self, app, client):
+        from routes.module_roles import RoleRepository
+
+        role_id = uuid4()
+        mock_role_instance = MagicMock()
+        mock_role_instance.delete_role.return_value = True
+
+        def override_role_repo():
+            return mock_role_instance
+
+        app.dependency_overrides[RoleRepository] = override_role_repo
+        try:
+            response = client.delete(f"/api/roles/{role_id}")
+            assert response.status_code == 200
+            assert response.json() == {"message": "Роль успешно удалена"}
+            mock_role_instance.delete_role.assert_called_once_with(role_id)
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_delete_role_invalid_uuid(self, client):
+        response = client.delete("/api/roles/invalid-uuid")
+
+        assert response.status_code == 400
+
+    def test_delete_role_not_found(self, app, client):
+        from routes.module_roles import RoleRepository
+
+        mock_role_instance = MagicMock()
+        mock_role_instance.delete_role.return_value = False
+
+        def override_role_repo():
+            return mock_role_instance
+
+        app.dependency_overrides[RoleRepository] = override_role_repo
+        try:
+            response = client.delete(f"/api/roles/{uuid4()}")
+            assert response.status_code == 404
+        finally:
+            app.dependency_overrides.clear()
+
     def test_add_role_by_role_id_success(self, app, client):
         from routes.module_roles import RoleRepository
 

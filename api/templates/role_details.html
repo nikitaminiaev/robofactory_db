@@ -131,6 +131,7 @@ function renderRoleDetails(role) {
                 <h2>${escapeRoleDetailsHtml(role.name)}</h2>
                 <div class="role-actions">
                     <button type="button" id="role-edit-btn" onclick="toggleRoleEdit(true)">Edit</button>
+                    <button type="button" id="role-delete-btn" class="danger-btn" onclick="deleteRole()" style="display:none;">Delete</button>
                     <button type="button" id="role-save-btn" onclick="saveRole()" style="display:none;">Save</button>
                     <button type="button" id="role-cancel-btn" onclick="toggleRoleEdit(false)" style="display:none;">Cancel</button>
                 </div>
@@ -165,6 +166,7 @@ function renderRoleDetails(role) {
 function toggleRoleEdit(enable) {
     const form = document.getElementById('role-edit-form');
     document.getElementById('role-edit-btn').style.display = enable ? 'none' : 'inline-block';
+    document.getElementById('role-delete-btn').style.display = enable ? 'inline-block' : 'none';
     document.getElementById('role-save-btn').style.display = enable ? 'inline-block' : 'none';
     document.getElementById('role-cancel-btn').style.display = enable ? 'inline-block' : 'none';
     form.classList.toggle('active', enable);
@@ -195,6 +197,29 @@ async function saveRole() {
         alert(`Ошибка сохранения роли: ${error.message}`);
     } finally {
         saveBtn.disabled = false;
+    }
+}
+
+async function deleteRole() {
+    const role = window.currentRoleData;
+    const roleName = role?.name || getRoleId();
+    if (!confirm(`Удалить роль "${roleName}" и все её связи?`)) {
+        return;
+    }
+
+    const deleteBtn = document.getElementById('role-delete-btn');
+    deleteBtn.disabled = true;
+
+    try {
+        const response = await fetch(`/api/roles/${getRoleId()}`, {
+            method: 'DELETE',
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || response.status);
+        window.location.href = '/roles';
+    } catch (error) {
+        alert(`Ошибка удаления роли: ${error.message}`);
+        deleteBtn.disabled = false;
     }
 }
 

@@ -219,6 +219,39 @@ class RoleRepository(BaseRepository):
                 "created_ts": role_obj.created_ts.isoformat() if role_obj.created_ts else None,
             }
 
+    def delete_role(self, role_id: UUID) -> bool:
+        with self.db_session.session() as db:
+            role = self.get_role_by_id(db, role_id)
+            if not role:
+                return False
+
+            db.execute(
+                module_role_stream.delete().where(
+                    or_(
+                        module_role_stream.c.source_role_id == role_id,
+                        module_role_stream.c.target_role_id == role_id,
+                    )
+                )
+            )
+            db.execute(
+                parent_child_module_role_assignment.delete().where(
+                    parent_child_module_role_assignment.c.role_id == role_id
+                )
+            )
+            db.execute(
+                parent_child_module.update()
+                .where(parent_child_module.c.role_id == role_id)
+                .values(role_id=None)
+            )
+            db.execute(
+                module_role_assignment.delete().where(
+                    module_role_assignment.c.role_id == role_id
+                )
+            )
+            db.delete(role)
+            db.commit()
+            return True
+
     # --- Методы с самостоятельным управлением сессией (для API эндпоинтов) ---
 
     def fetch_module_roles(self, module_id: UUID) -> List[ModuleRole]:
