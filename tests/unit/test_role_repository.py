@@ -1,4 +1,5 @@
 import pytest
+from types import SimpleNamespace
 from uuid import UUID, uuid4
 from unittest.mock import MagicMock, patch
 from repository.role_repository import RoleRepository
@@ -277,3 +278,169 @@ class TestRoleRepositoryModuleAssignment:
 
         assert result == existing_role
         mock_db.add.assert_not_called()
+
+
+class TestRoleRepositoryDetails:
+    @patch('repository.base_repository.Db_session')
+    def test_get_role_details_found(self, mock_db_session_class):
+        mock_db_session_instance = MagicMock()
+        mock_db_session_class.return_value = mock_db_session_instance
+        mock_db = MagicMock()
+        mock_db_session_instance.session.return_value.__enter__.return_value = mock_db
+
+        role_id = uuid4()
+        mock_role = MagicMock()
+        mock_role.id = role_id
+        mock_role.name = "controller"
+        mock_role.description = "Main controller"
+        mock_role.created_ts = None
+        mock_db.query.return_value.filter.return_value.first.return_value = mock_role
+        mock_db.execute.return_value.fetchall.return_value = []
+
+        repo = RoleRepository()
+        result = repo.get_role_details(role_id)
+
+        assert result["id"] == str(role_id)
+        assert result["name"] == "controller"
+        assert result["stream_usages"] == []
+
+    @patch('repository.base_repository.Db_session')
+    def test_get_role_details_not_found(self, mock_db_session_class):
+        mock_db_session_instance = MagicMock()
+        mock_db_session_class.return_value = mock_db_session_instance
+        mock_db = MagicMock()
+        mock_db_session_instance.session.return_value.__enter__.return_value = mock_db
+        mock_db.query.return_value.filter.return_value.first.return_value = None
+
+        repo = RoleRepository()
+        result = repo.get_role_details(uuid4())
+
+        assert result is None
+
+    @patch('repository.base_repository.Db_session')
+    def test_get_role_modules(self, mock_db_session_class):
+        mock_db_session_instance = MagicMock()
+        mock_db_session_class.return_value = mock_db_session_instance
+        mock_db = MagicMock()
+        mock_db_session_instance.session.return_value.__enter__.return_value = mock_db
+        module_id = uuid4()
+        mock_db.execute.return_value.fetchall.return_value = [
+            SimpleNamespace(id=module_id, name="Module A", description="Description"),
+        ]
+
+        repo = RoleRepository()
+        result = repo.get_role_modules(mock_db, uuid4())
+
+        assert result == [
+            {"id": str(module_id), "name": "Module A", "description": "Description"},
+        ]
+
+    @patch('repository.base_repository.Db_session')
+    def test_get_role_port_usages(self, mock_db_session_class):
+        mock_db_session_instance = MagicMock()
+        mock_db_session_class.return_value = mock_db_session_instance
+        mock_db = MagicMock()
+        mock_db_session_instance.session.return_value.__enter__.return_value = mock_db
+        link_id = uuid4()
+        parent_id = uuid4()
+        child_id = uuid4()
+        mock_db.execute.return_value.fetchall.return_value = [
+            SimpleNamespace(
+                parent_child_module_id=link_id,
+                parent_id=parent_id,
+                parent_name="Parent",
+                child_id=child_id,
+                child_name="Child",
+            ),
+        ]
+
+        repo = RoleRepository()
+        result = repo.get_role_port_usages(mock_db, uuid4())
+
+        assert result == [
+            {
+                "parent_child_module_id": str(link_id),
+                "parent_id": str(parent_id),
+                "parent_name": "Parent",
+                "child_id": str(child_id),
+                "child_name": "Child",
+            },
+        ]
+
+    @patch('repository.base_repository.Db_session')
+    def test_get_role_stream_usages(self, mock_db_session_class):
+        mock_db_session_instance = MagicMock()
+        mock_db_session_class.return_value = mock_db_session_instance
+        mock_db = MagicMock()
+        mock_db_session_instance.session.return_value.__enter__.return_value = mock_db
+        module_id = uuid4()
+        stream_id = uuid4()
+        source_role_id = uuid4()
+        target_role_id = uuid4()
+        mock_db.execute.return_value.fetchall.return_value = [
+            SimpleNamespace(
+                module_id=module_id,
+                module_name="Parent",
+                source_role_id=source_role_id,
+                source_role_name="Source",
+                target_role_id=target_role_id,
+                target_role_name="Target",
+                stream_id=stream_id,
+                stream_name="Command",
+                stream_description="Command stream",
+            ),
+        ]
+
+        repo = RoleRepository()
+        result = repo.get_role_stream_usages(mock_db, source_role_id)
+
+        assert result == [
+            {
+                "module_id": str(module_id),
+                "module_name": "Parent",
+                "source_role_id": str(source_role_id),
+                "source_role_name": "Source",
+                "target_role_id": str(target_role_id),
+                "target_role_name": "Target",
+                "stream_id": str(stream_id),
+                "stream_name": "Command",
+                "stream_description": "Command stream",
+            },
+        ]
+
+    @patch('repository.base_repository.Db_session')
+    def test_update_role_success(self, mock_db_session_class):
+        mock_db_session_instance = MagicMock()
+        mock_db_session_class.return_value = mock_db_session_instance
+        mock_db = MagicMock()
+        mock_db_session_instance.session.return_value.__enter__.return_value = mock_db
+
+        role_id = uuid4()
+        mock_role = MagicMock()
+        mock_role.id = role_id
+        mock_role.name = "old"
+        mock_role.description = "Old"
+        mock_role.created_ts = None
+        mock_db.query.return_value.filter.return_value.first.return_value = mock_role
+
+        repo = RoleRepository()
+        result = repo.update_role(role_id, "new", "New")
+
+        assert result["name"] == "new"
+        assert result["description"] == "New"
+        mock_db.commit.assert_called_once()
+        mock_db.refresh.assert_called_once_with(mock_role)
+
+    @patch('repository.base_repository.Db_session')
+    def test_update_role_not_found(self, mock_db_session_class):
+        mock_db_session_instance = MagicMock()
+        mock_db_session_class.return_value = mock_db_session_instance
+        mock_db = MagicMock()
+        mock_db_session_instance.session.return_value.__enter__.return_value = mock_db
+        mock_db.query.return_value.filter.return_value.first.return_value = None
+
+        repo = RoleRepository()
+        result = repo.update_role(uuid4(), "new", None)
+
+        assert result is None
+        mock_db.commit.assert_not_called()

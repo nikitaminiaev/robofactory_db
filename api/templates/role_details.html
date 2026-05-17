@@ -1,0 +1,221 @@
+{% extends "base.html" %}
+
+{% block title %}Role details{% endblock %}
+
+{% block extra_head %}
+<style>
+    .role-page-layout { display: grid; gap: 18px; }
+    .role-card {
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 16px;
+        background: #fff;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    }
+    .role-card__header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 12px;
+    }
+    .role-card__header h2 { margin: 0; }
+    .role-actions { display: flex; gap: 8px; align-items: center; }
+    .role-detail-table th { width: 180px; }
+    .role-edit-form {
+        display: none;
+        gap: 12px;
+        margin-top: 12px;
+    }
+    .role-edit-form.active { display: grid; }
+    .role-edit-form textarea {
+        min-height: 90px;
+        resize: vertical;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-family: inherit;
+        font-size: 14px;
+    }
+    .role-edit-form input {
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+    }
+    .role-muted { color: #777; font-size: 13px; }
+    .role-inline-arrow { color: #777; text-align: center; }
+</style>
+{% endblock %}
+
+{% block breadcrumb %}
+<nav class="breadcrumb">
+    <a href="/">Home</a>
+    <span class="breadcrumb-separator">›</span>
+    <a href="/roles">Search Roles</a>
+    <span class="breadcrumb-separator">›</span>
+    <span class="breadcrumb-current" id="breadcrumb-role-name">Загрузка...</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="role-page-layout">
+    <h1 id="role-title">Role details</h1>
+    <div id="role-details"></div>
+</div>
+
+<script>
+function getRoleId() {
+    return window.location.pathname.split('/').pop();
+}
+
+function escapeRoleDetailsHtml(value) {
+    if (!value) return '';
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function renderRoleStreams(streamUsages, roleId) {
+    if (!streamUsages || streamUsages.length === 0) {
+        return '<div class="info-message">Нет потоков, где участвует эта роль.</div>';
+    }
+
+    const rows = streamUsages.map(usage => {
+        const sourceRole = usage.source_role_id === roleId
+            ? `<strong>${escapeRoleDetailsHtml(usage.source_role_name)}</strong>`
+            : `<a href="/roles/${usage.source_role_id}">${escapeRoleDetailsHtml(usage.source_role_name)}</a>`;
+        const targetRole = usage.target_role_id === roleId
+            ? `<strong>${escapeRoleDetailsHtml(usage.target_role_name)}</strong>`
+            : `<a href="/roles/${usage.target_role_id}">${escapeRoleDetailsHtml(usage.target_role_name)}</a>`;
+
+        return `
+            <tr>
+                <td><a href="/basic_object/${usage.module_id}">${escapeRoleDetailsHtml(usage.module_name)}</a></td>
+                <td>${sourceRole}</td>
+                <td class="role-inline-arrow">→</td>
+                <td>${targetRole}</td>
+                <td>
+                    <strong>${escapeRoleDetailsHtml(usage.stream_name)}</strong>
+                    ${usage.stream_description ? `<div class="role-muted">${escapeRoleDetailsHtml(usage.stream_description)}</div>` : ''}
+                </td>
+            </tr>
+        `;
+    }).join('');
+
+    return `
+        <table>
+            <thead>
+                <tr>
+                    <th>Module</th>
+                    <th>From role</th>
+                    <th></th>
+                    <th>To role</th>
+                    <th>Stream</th>
+                </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+        </table>
+    `;
+}
+
+function renderRoleDetails(role) {
+    const roleId = getRoleId();
+    return `
+        <section class="role-card">
+            <div class="role-card__header">
+                <h2>${escapeRoleDetailsHtml(role.name)}</h2>
+                <div class="role-actions">
+                    <button type="button" id="role-edit-btn" onclick="toggleRoleEdit(true)">Edit</button>
+                    <button type="button" id="role-save-btn" onclick="saveRole()" style="display:none;">Save</button>
+                    <button type="button" id="role-cancel-btn" onclick="toggleRoleEdit(false)" style="display:none;">Cancel</button>
+                </div>
+            </div>
+            <table class="role-detail-table">
+                <tbody>
+                    <tr><th>ID</th><td>${escapeRoleDetailsHtml(role.id)}</td></tr>
+                    <tr><th>Name</th><td id="role-name-field">${escapeRoleDetailsHtml(role.name)}</td></tr>
+                    <tr><th>Description</th><td id="role-description-field">${escapeRoleDetailsHtml(role.description || '-')}</td></tr>
+                    <tr><th>Created</th><td>${role.created_ts ? new Date(role.created_ts).toLocaleString() : '-'}</td></tr>
+                </tbody>
+            </table>
+            <div id="role-edit-form" class="role-edit-form">
+                <div class="form-group">
+                    <label for="role-name-input">Name</label>
+                    <input id="role-name-input" type="text" value="${escapeRoleDetailsHtml(role.name)}">
+                </div>
+                <div class="form-group">
+                    <label for="role-description-input">Description</label>
+                    <textarea id="role-description-input">${escapeRoleDetailsHtml(role.description || '')}</textarea>
+                </div>
+            </div>
+        </section>
+
+        <section class="role-card">
+            <h2>Streams</h2>
+            ${renderRoleStreams(role.stream_usages, roleId)}
+        </section>
+    `;
+}
+
+function toggleRoleEdit(enable) {
+    const form = document.getElementById('role-edit-form');
+    document.getElementById('role-edit-btn').style.display = enable ? 'none' : 'inline-block';
+    document.getElementById('role-save-btn').style.display = enable ? 'inline-block' : 'none';
+    document.getElementById('role-cancel-btn').style.display = enable ? 'inline-block' : 'none';
+    form.classList.toggle('active', enable);
+}
+
+async function saveRole() {
+    const name = document.getElementById('role-name-input').value.trim();
+    const description = document.getElementById('role-description-input').value.trim() || null;
+
+    if (!name) {
+        alert('Название роли не может быть пустым');
+        return;
+    }
+
+    const saveBtn = document.getElementById('role-save-btn');
+    saveBtn.disabled = true;
+
+    try {
+        const response = await fetch(`/api/roles/${getRoleId()}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, description }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || response.status);
+        await loadRoleDetails();
+    } catch (error) {
+        alert(`Ошибка сохранения роли: ${error.message}`);
+    } finally {
+        saveBtn.disabled = false;
+    }
+}
+
+async function loadRoleDetails() {
+    const container = document.getElementById('role-details');
+    container.innerHTML = '<div class="info-message">Загрузка...</div>';
+
+    try {
+        const response = await fetch(`/api/roles/${getRoleId()}`);
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || response.status);
+
+        window.currentRoleData = data;
+        document.getElementById('role-title').textContent = `Role: ${data.name}`;
+        document.getElementById('breadcrumb-role-name').textContent = data.name;
+        container.innerHTML = renderRoleDetails(data);
+    } catch (error) {
+        container.innerHTML = `<div class="error-message">Ошибка загрузки роли: ${escapeRoleDetailsHtml(error.message)}</div>`;
+    }
+}
+
+document.addEventListener('DOMContentLoaded', loadRoleDetails);
+</script>
+{% endblock %}

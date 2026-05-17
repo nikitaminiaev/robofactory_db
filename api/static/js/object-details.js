@@ -736,7 +736,7 @@ function renderExternalRolesTable(data, loadObjectNames) {
                     data-parent-id="${edge.parent_id}"
                 >${window.objectNamesCache[edge.parent_id] || edge.parent_id}</a>
             </td>
-            <td>${edge.role_name ? escapeHtml(edge.role_name) : '—'}</td>
+            <td>${edge.role_name ? renderRoleLink(edge.role_id, edge.role_name) : '—'}</td>
             <td>${edge.role_description ? escapeHtml(edge.role_description) : '—'}</td>
         </tr>
     `).join('');
@@ -808,7 +808,7 @@ function renderStreamsMatrix(data) {
     });
     const headerCells = roles.map(role => `
         <th class="streams-matrix__th" title="${escapeHtml(role.description || '')}">
-            <span class="streams-matrix__target-label">→ ${escapeHtml(role.name)}</span>
+            <span class="streams-matrix__target-label">→ ${renderRoleLink(role.id, role.name)}</span>
         </th>
     `).join('');
 
@@ -817,7 +817,7 @@ function renderStreamsMatrix(data) {
         return `
             <tr>
                 <th class="streams-matrix__role" title="${escapeHtml(sourceRole.description || '')}">
-                    <span class="streams-matrix__source-label">${escapeHtml(sourceRole.name)} →</span>
+                    <span class="streams-matrix__source-label">${renderRoleLink(sourceRole.id, sourceRole.name)} →</span>
                 </th>
                 ${cells.join('')}
             </tr>
@@ -890,9 +890,9 @@ function renderExternalStreamsTable(data) {
                     ${escapeHtml(stream.parent_module_name || stream.parent_module_id)}
                 </a>
             </td>
-            <td>${escapeHtml(stream.source_role_name || stream.source_role_id)}</td>
+            <td>${renderRoleLink(stream.source_role_id, stream.source_role_name || stream.source_role_id)}</td>
             <td class="external-streams__direction">→</td>
-            <td>${escapeHtml(stream.target_role_name || stream.target_role_id)}</td>
+            <td>${renderRoleLink(stream.target_role_id, stream.target_role_name || stream.target_role_id)}</td>
             <td>
                 <strong>${escapeHtml(stream.name)}</strong>
                 ${stream.description ? `<small>${escapeHtml(stream.description)}</small>` : ''}
@@ -2120,6 +2120,11 @@ function escapeHtml(str) {
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+function renderRoleLink(roleId, roleName) {
+    if (!roleId) return escapeHtml(roleName || '—');
+    return `<a href="/roles/${roleId}" class="role-link">${escapeHtml(roleName || roleId)}</a>`;
+}
+
 function rolesMatrixEnableEdit(parentId) {
     const data = window.currentObjectData;
     window.selectedExistingRole = null;
@@ -2170,7 +2175,7 @@ function buildRolesMatrixTable(data, editMode, parentId) {
         return `<th class="roles-matrix__th${collapsedClass}" data-role-col="${role.id}" title="${escapeHtml(role.description || '')}">
             <div class="roles-matrix__th-inner">
                 ${collapseBtn}
-                <span class="roles-matrix__col-label">${escapeHtml(role.name)}</span>
+                <span class="roles-matrix__col-label">${renderRoleLink(role.id, role.name)}</span>
                 ${deleteBtn}
             </div>
         </th>`;

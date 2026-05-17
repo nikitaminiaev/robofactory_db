@@ -16,6 +16,11 @@ class RoleAssignRequest(BaseModel):
     description: Optional[str] = None
 
 
+class RoleUpdateRequest(BaseModel):
+    name: str
+    description: Optional[str] = None
+
+
 class RoleResponse(BaseModel):
     id: str
     name: str
@@ -57,6 +62,43 @@ async def search_roles(
     role_repo: RoleRepository = Depends(),
 ):
     return role_repo.search_roles(query=query, limit=limit)
+
+
+@router.get("/roles/{role_id}")
+async def get_role_details(
+    role_id: str,
+    role_repo: RoleRepository = Depends(),
+):
+    try:
+        role_uuid = UUID(role_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Неверный формат role_id")
+
+    role_details = role_repo.get_role_details(role_uuid)
+    if not role_details:
+        raise HTTPException(status_code=404, detail=f"Роль с ID '{role_id}' не найдена")
+    return role_details
+
+
+@router.patch("/roles/{role_id}")
+async def update_role(
+    role_id: str,
+    body: RoleUpdateRequest,
+    role_repo: RoleRepository = Depends(),
+):
+    try:
+        role_uuid = UUID(role_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Неверный формат role_id")
+
+    name = body.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Название роли не может быть пустым")
+
+    role = role_repo.update_role(role_uuid, name, body.description)
+    if not role:
+        raise HTTPException(status_code=404, detail=f"Роль с ID '{role_id}' не найдена")
+    return role
 
 
 @router.post("/modules/{module_id}/roles", status_code=201)

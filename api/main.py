@@ -69,6 +69,16 @@ async def basic_object_details(request: Request, id: str):
     return templates.TemplateResponse("basic_object_details.html", {"request": request, "id": id})
 
 
+@app.get("/roles")
+async def roles_page(request: Request):
+    return templates.TemplateResponse("role_search.html", {"request": request})
+
+
+@app.get("/roles/{role_id}")
+async def role_details_page(request: Request, role_id: str):
+    return templates.TemplateResponse("role_details.html", {"request": request, "role_id": role_id})
+
+
 @app.get("/git_history/{module_id}")
 async def git_history_page(request: Request, module_id: str):
     return templates.TemplateResponse("git_history.html", {"request": request, "module_id": module_id})

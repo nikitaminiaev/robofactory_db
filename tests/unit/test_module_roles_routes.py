@@ -111,6 +111,123 @@ class TestModuleRolesRoutes:
         finally:
             app.dependency_overrides.clear()
 
+    def test_get_role_details_success(self, app, client):
+        from routes.module_roles import RoleRepository
+
+        role_id = uuid4()
+        role_details = {
+            "id": str(role_id),
+            "name": "controller",
+            "description": "Main controller",
+            "created_ts": None,
+            "stream_usages": [],
+        }
+        mock_role_instance = MagicMock()
+        mock_role_instance.get_role_details.return_value = role_details
+
+        def override_role_repo():
+            return mock_role_instance
+
+        app.dependency_overrides[RoleRepository] = override_role_repo
+        try:
+            response = client.get(f"/api/roles/{role_id}")
+            assert response.status_code == 200
+            assert response.json() == role_details
+            mock_role_instance.get_role_details.assert_called_once_with(role_id)
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_get_role_details_invalid_uuid(self, client):
+        response = client.get("/api/roles/invalid-uuid")
+
+        assert response.status_code == 400
+
+    def test_get_role_details_not_found(self, app, client):
+        from routes.module_roles import RoleRepository
+
+        mock_role_instance = MagicMock()
+        mock_role_instance.get_role_details.return_value = None
+
+        def override_role_repo():
+            return mock_role_instance
+
+        app.dependency_overrides[RoleRepository] = override_role_repo
+        try:
+            response = client.get(f"/api/roles/{uuid4()}")
+            assert response.status_code == 404
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_update_role_success(self, app, client):
+        from routes.module_roles import RoleRepository
+
+        role_id = uuid4()
+        updated_role = {
+            "id": str(role_id),
+            "name": "updated",
+            "description": "Updated description",
+            "created_ts": None,
+        }
+        mock_role_instance = MagicMock()
+        mock_role_instance.update_role.return_value = updated_role
+
+        def override_role_repo():
+            return mock_role_instance
+
+        app.dependency_overrides[RoleRepository] = override_role_repo
+        try:
+            response = client.patch(
+                f"/api/roles/{role_id}",
+                json={"name": " updated ", "description": "Updated description"},
+            )
+            assert response.status_code == 200
+            assert response.json() == updated_role
+            mock_role_instance.update_role.assert_called_once_with(
+                role_id,
+                "updated",
+                "Updated description",
+            )
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_update_role_empty_name(self, app, client):
+        from routes.module_roles import RoleRepository
+
+        mock_role_instance = MagicMock()
+
+        def override_role_repo():
+            return mock_role_instance
+
+        app.dependency_overrides[RoleRepository] = override_role_repo
+        try:
+            response = client.patch(
+                f"/api/roles/{uuid4()}",
+                json={"name": "   ", "description": None},
+            )
+            assert response.status_code == 400
+            mock_role_instance.update_role.assert_not_called()
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_update_role_not_found(self, app, client):
+        from routes.module_roles import RoleRepository
+
+        mock_role_instance = MagicMock()
+        mock_role_instance.update_role.return_value = None
+
+        def override_role_repo():
+            return mock_role_instance
+
+        app.dependency_overrides[RoleRepository] = override_role_repo
+        try:
+            response = client.patch(
+                f"/api/roles/{uuid4()}",
+                json={"name": "missing", "description": None},
+            )
+            assert response.status_code == 404
+        finally:
+            app.dependency_overrides.clear()
+
     def test_add_role_by_role_id_success(self, app, client):
         from routes.module_roles import RoleRepository
 

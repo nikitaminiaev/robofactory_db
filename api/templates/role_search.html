@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+
+{% block title %}Search Roles{% endblock %}
+
+{% block breadcrumb %}
+<nav class="breadcrumb">
+    <a href="/">Home</a>
+    <span class="breadcrumb-separator">›</span>
+    <span class="breadcrumb-current">Search Roles</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<h1>Search Roles</h1>
+
+<form id="roleSearchForm" class="search-form-grid">
+    <div class="form-group">
+        <label for="role-query">Role Name:</label>
+        <input type="text" id="role-query" name="query" placeholder="Search by role name..." autocomplete="off">
+    </div>
+    <div class="form-actions">
+        <button type="submit">Search</button>
+    </div>
+</form>
+
+<div id="role-search-result"></div>
+
+<script>
+function escapeRoleHtml(value) {
+    if (!value) return '';
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function renderRolesSearchTable(roles) {
+    if (!roles || roles.length === 0) {
+        return '<div class="info-message">Роли по заданным критериям не найдены</div>';
+    }
+
+    const rows = roles.map(role => `
+        <tr>
+            <td><a href="/roles/${role.id}">${escapeRoleHtml(role.name)}</a></td>
+            <td>${role.description ? escapeRoleHtml(role.description) : '-'}</td>
+        </tr>
+    `).join('');
+
+    return `
+        <h2>Search Results:</h2>
+        <table class="modules-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Description</th>
+                </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+        </table>
+    `;
+}
+
+async function loadRoles(query = '') {
+    const params = new URLSearchParams({ limit: '50' });
+    if (query) params.set('query', query);
+
+    const result = document.getElementById('role-search-result');
+    result.innerHTML = '<div class="info-message">Загрузка...</div>';
+
+    try {
+        const response = await fetch(`/api/roles?${params.toString()}`);
+        if (!response.ok) throw new Error(await response.text());
+        const roles = await response.json();
+        result.innerHTML = renderRolesSearchTable(roles);
+    } catch (error) {
+        result.innerHTML = `<div class="error-message">Ошибка загрузки ролей: ${escapeRoleHtml(error.message)}</div>`;
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    const form = document.getElementById('roleSearchForm');
+    const input = document.getElementById('role-query');
+
+    form.addEventListener('submit', function (event) {
+        event.preventDefault();
+        loadRoles(input.value.trim());
+    });
+
+    loadRoles();
+});
+</script>
+{% endblock %}
