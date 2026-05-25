@@ -39,6 +39,8 @@ module_role_stream = Table(
     Column('source_role_id', UUID(as_uuid=True), ForeignKey('module_roles.id', ondelete='CASCADE'), primary_key=True),
     Column('target_role_id', UUID(as_uuid=True), ForeignKey('module_roles.id', ondelete='CASCADE'), primary_key=True),
     Column('stream_id', UUID(as_uuid=True), ForeignKey('streams.id', ondelete='CASCADE'), primary_key=True),
+    Column('source_port_id', UUID(as_uuid=True), ForeignKey('role_ports.id', ondelete='SET NULL'), nullable=True),
+    Column('target_port_id', UUID(as_uuid=True), ForeignKey('role_ports.id', ondelete='SET NULL'), nullable=True),
 )
 
 # Связь модулей и платформ

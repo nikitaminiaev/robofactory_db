@@ -158,6 +158,124 @@ class TestModuleRolesRoutes:
         finally:
             app.dependency_overrides.clear()
 
+    def test_create_role_port_success(self, app, client):
+        from routes.module_roles import RoleRepository
+
+        role_id = uuid4()
+        port_id = uuid4()
+        created_port = {
+            "id": str(port_id),
+            "role_id": str(role_id),
+            "parent_id": None,
+            "name": "input",
+            "direction": "input",
+            "description": "Input port",
+            "ttx": None,
+        }
+        mock_role_instance = MagicMock()
+        mock_role_instance.create_role_port.return_value = created_port
+
+        def override_role_repo():
+            return mock_role_instance
+
+        app.dependency_overrides[RoleRepository] = override_role_repo
+        try:
+            response = client.post(
+                f"/api/roles/{role_id}/ports",
+                json={"name": "input", "direction": "input", "description": "Input port"},
+            )
+            assert response.status_code == 201
+            assert response.json() == created_port
+            mock_role_instance.create_role_port.assert_called_once_with(
+                role_id,
+                "input",
+                "input",
+                "Input port",
+                None,
+                None,
+            )
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_create_role_port_invalid_direction(self, app, client):
+        from routes.module_roles import RoleRepository
+
+        mock_role_instance = MagicMock()
+        mock_role_instance.create_role_port.side_effect = ValueError("Неверное направление порта")
+
+        def override_role_repo():
+            return mock_role_instance
+
+        app.dependency_overrides[RoleRepository] = override_role_repo
+        try:
+            response = client.post(
+                f"/api/roles/{uuid4()}/ports",
+                json={"name": "input", "direction": "sideways"},
+            )
+            assert response.status_code == 400
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_update_role_port_success(self, app, client):
+        from routes.module_roles import RoleRepository
+
+        role_id = uuid4()
+        port_id = uuid4()
+        updated_port = {
+            "id": str(port_id),
+            "role_id": str(role_id),
+            "parent_id": None,
+            "name": "output",
+            "direction": "output",
+            "description": None,
+            "ttx": None,
+        }
+        mock_role_instance = MagicMock()
+        mock_role_instance.update_role_port.return_value = updated_port
+
+        def override_role_repo():
+            return mock_role_instance
+
+        app.dependency_overrides[RoleRepository] = override_role_repo
+        try:
+            response = client.patch(
+                f"/api/roles/{role_id}/ports/{port_id}",
+                json={"name": "output", "direction": "output"},
+            )
+            assert response.status_code == 200
+            assert response.json() == updated_port
+            mock_role_instance.update_role_port.assert_called_once_with(
+                role_id,
+                port_id,
+                "output",
+                "output",
+                None,
+                None,
+                None,
+            )
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_delete_role_port_success(self, app, client):
+        from routes.module_roles import RoleRepository
+
+        role_id = uuid4()
+        port_id = uuid4()
+        mock_role_instance = MagicMock()
+        mock_role_instance.delete_role_port.return_value = True
+
+        def override_role_repo():
+            return mock_role_instance
+
+        app.dependency_overrides[RoleRepository] = override_role_repo
+        try:
+            response = client.delete(f"/api/roles/{role_id}/ports/{port_id}")
+            assert response.status_code == 200
+            assert response.json() == {"message": "Порт успешно удален"}
+            mock_role_instance.delete_role_port.assert_called_once_with(role_id, port_id)
+        finally:
+            app.dependency_overrides.clear()
+
     def test_update_role_success(self, app, client):
         from routes.module_roles import RoleRepository
 

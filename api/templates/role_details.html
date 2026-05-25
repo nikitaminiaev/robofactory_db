@@ -46,6 +46,27 @@
     }
     .role-muted { color: #777; font-size: 13px; }
     .role-inline-arrow { color: #777; text-align: center; }
+    .role-port-form {
+        display: grid;
+        gap: 10px;
+        margin: 12px 0;
+        padding: 12px;
+        border: 1px solid #eee;
+        border-radius: 6px;
+        background: #fafafa;
+    }
+    .role-port-form[hidden] { display: none; }
+    .role-port-form input,
+    .role-port-form select,
+    .role-port-form textarea {
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-family: inherit;
+        font-size: 14px;
+    }
+    .role-port-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .role-port-tree-prefix { color: #777; }
 </style>
 {% endblock %}
 
@@ -92,13 +113,19 @@ function renderRoleStreams(streamUsages, roleId) {
         const targetRole = usage.target_role_id === roleId
             ? `<strong>${escapeRoleDetailsHtml(usage.target_role_name)}</strong>`
             : `<a href="/roles/${usage.target_role_id}">${escapeRoleDetailsHtml(usage.target_role_name)}</a>`;
+        const sourcePort = usage.source_port_name
+            ? `<div class="role-muted">port: ${escapeRoleDetailsHtml(usage.source_port_name)}</div>`
+            : '';
+        const targetPort = usage.target_port_name
+            ? `<div class="role-muted">port: ${escapeRoleDetailsHtml(usage.target_port_name)}</div>`
+            : '';
 
         return `
             <tr>
                 <td><a href="/basic_object/${usage.module_id}">${escapeRoleDetailsHtml(usage.module_name)}</a></td>
-                <td>${sourceRole}</td>
+                <td>${sourceRole}${sourcePort}</td>
                 <td class="role-inline-arrow">→</td>
-                <td>${targetRole}</td>
+                <td>${targetRole}${targetPort}</td>
                 <td>
                     <strong>${escapeRoleDetailsHtml(usage.stream_name)}</strong>
                     ${usage.stream_description ? `<div class="role-muted">${escapeRoleDetailsHtml(usage.stream_description)}</div>` : ''}
@@ -116,6 +143,98 @@ function renderRoleStreams(streamUsages, roleId) {
                     <th></th>
                     <th>To role</th>
                     <th>Stream</th>
+                </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+        </table>
+    `;
+}
+
+function getRolePorts() {
+    return window.currentRoleData?.ports || [];
+}
+
+function renderPortParentOptions(selectedParentId = null, editingPortId = null) {
+    const options = ['<option value="">Без родителя</option>'];
+    getRolePorts()
+        .filter(port => port.id !== editingPortId)
+        .forEach(port => {
+            const selected = port.id === selectedParentId ? ' selected' : '';
+            options.push(`<option value="${port.id}"${selected}>${escapeRoleDetailsHtml(port.name)}</option>`);
+        });
+    return options.join('');
+}
+
+function renderPortLabel(port) {
+    const prefix = port.parent_id ? '<span class="role-port-tree-prefix">↳ </span>' : '';
+    return `${prefix}<strong>${escapeRoleDetailsHtml(port.name)}</strong>`;
+}
+
+function renderRolePorts(ports) {
+    const form = `
+        <div id="role-port-form" class="role-port-form" hidden>
+            <input type="hidden" id="role-port-id">
+            <div class="form-group">
+                <label for="role-port-name">Name</label>
+                <input id="role-port-name" type="text" placeholder="port name">
+            </div>
+            <div class="form-group">
+                <label for="role-port-direction">Direction</label>
+                <select id="role-port-direction">
+                    <option value="bidirectional">bidirectional</option>
+                    <option value="input">input</option>
+                    <option value="output">output</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="role-port-parent">Parent port</label>
+                <select id="role-port-parent">${renderPortParentOptions()}</select>
+            </div>
+            <div class="form-group">
+                <label for="role-port-description">Description</label>
+                <textarea id="role-port-description"></textarea>
+            </div>
+            <div class="form-group">
+                <label for="role-port-ttx">TTX</label>
+                <textarea id="role-port-ttx"></textarea>
+            </div>
+            <div class="role-port-actions">
+                <button type="button" onclick="saveRolePort()">Save port</button>
+                <button type="button" onclick="hideRolePortForm()">Cancel</button>
+            </div>
+        </div>
+    `;
+
+    if (!ports || ports.length === 0) {
+        return `
+            ${form}
+            <div class="info-message">У роли пока нет портов.</div>
+        `;
+    }
+
+    const rows = ports.map(port => `
+        <tr>
+            <td>${renderPortLabel(port)}</td>
+            <td>${escapeRoleDetailsHtml(port.direction)}</td>
+            <td>${escapeRoleDetailsHtml(port.description || '-')}</td>
+            <td>${escapeRoleDetailsHtml(port.ttx || '-')}</td>
+            <td class="role-actions">
+                <button type="button" onclick="editRolePort('${port.id}')">Edit</button>
+                <button type="button" class="danger-btn" onclick="deleteRolePort('${port.id}')">Delete</button>
+            </td>
+        </tr>
+    `).join('');
+
+    return `
+        ${form}
+        <table>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Direction</th>
+                    <th>Description</th>
+                    <th>TTX</th>
+                    <th>Actions</th>
                 </tr>
             </thead>
             <tbody>${rows}</tbody>
@@ -157,10 +276,94 @@ function renderRoleDetails(role) {
         </section>
 
         <section class="role-card">
+            <div class="role-card__header">
+                <h2>Ports</h2>
+                <button type="button" onclick="showRolePortForm()">Add port</button>
+            </div>
+            ${renderRolePorts(role.ports || [])}
+        </section>
+
+        <section class="role-card">
             <h2>Streams</h2>
             ${renderRoleStreams(role.stream_usages, roleId)}
         </section>
     `;
+}
+
+function showRolePortForm(port = null) {
+    const form = document.getElementById('role-port-form');
+    if (!form) return;
+
+    document.getElementById('role-port-id').value = port?.id || '';
+    document.getElementById('role-port-name').value = port?.name || '';
+    document.getElementById('role-port-direction').value = port?.direction || 'bidirectional';
+    document.getElementById('role-port-parent').innerHTML = renderPortParentOptions(port?.parent_id || null, port?.id || null);
+    document.getElementById('role-port-description').value = port?.description || '';
+    document.getElementById('role-port-ttx').value = port?.ttx || '';
+    form.hidden = false;
+}
+
+function hideRolePortForm() {
+    const form = document.getElementById('role-port-form');
+    if (!form) return;
+    form.hidden = true;
+}
+
+function editRolePort(portId) {
+    const port = getRolePorts().find(item => item.id === portId);
+    if (!port) {
+        alert('Порт не найден');
+        return;
+    }
+    showRolePortForm(port);
+}
+
+async function saveRolePort() {
+    const portId = document.getElementById('role-port-id').value;
+    const name = document.getElementById('role-port-name').value.trim();
+    const direction = document.getElementById('role-port-direction').value;
+    const parentId = document.getElementById('role-port-parent').value || null;
+    const description = document.getElementById('role-port-description').value.trim() || null;
+    const ttx = document.getElementById('role-port-ttx').value.trim() || null;
+
+    if (!name) {
+        alert('Название порта не может быть пустым');
+        return;
+    }
+
+    const url = portId
+        ? `/api/roles/${getRoleId()}/ports/${portId}`
+        : `/api/roles/${getRoleId()}/ports`;
+    const method = portId ? 'PATCH' : 'POST';
+
+    try {
+        const response = await fetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, direction, parent_id: parentId, description, ttx }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || response.status);
+        await loadRoleDetails();
+    } catch (error) {
+        alert(`Ошибка сохранения порта: ${error.message}`);
+    }
+}
+
+async function deleteRolePort(portId) {
+    const port = getRolePorts().find(item => item.id === portId);
+    if (!confirm(`Удалить порт "${port?.name || portId}"? Потоки останутся у роли без этого порта.`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/roles/${getRoleId()}/ports/${portId}`, { method: 'DELETE' });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || response.status);
+        await loadRoleDetails();
+    } catch (error) {
+        alert(`Ошибка удаления порта: ${error.message}`);
+    }
 }
 
 function toggleRoleEdit(enable) {

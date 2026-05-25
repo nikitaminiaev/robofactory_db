@@ -3,6 +3,7 @@ from types import SimpleNamespace
 from uuid import UUID, uuid4
 from unittest.mock import MagicMock, patch
 from repository.role_repository import RoleRepository
+from models import ModuleRole, RolePort
 from models.associations import module_role_assignment
 
 
@@ -294,7 +295,17 @@ class TestRoleRepositoryDetails:
         mock_role.name = "controller"
         mock_role.description = "Main controller"
         mock_role.created_ts = None
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_role
+        def query_side_effect(model):
+            query = MagicMock()
+            if model is ModuleRole:
+                query.filter.return_value.first.return_value = mock_role
+                return query
+            if model is RolePort:
+                query.filter.return_value.order_by.return_value.all.return_value = []
+                return query
+            raise AssertionError(f"Unexpected model {model}")
+
+        mock_db.query.side_effect = query_side_effect
         mock_db.execute.return_value.fetchall.return_value = []
 
         repo = RoleRepository()
@@ -302,6 +313,7 @@ class TestRoleRepositoryDetails:
 
         assert result["id"] == str(role_id)
         assert result["name"] == "controller"
+        assert result["ports"] == []
         assert result["stream_usages"] == []
 
     @patch('repository.base_repository.Db_session')
@@ -385,6 +397,10 @@ class TestRoleRepositoryDetails:
                 source_role_name="Source",
                 target_role_id=target_role_id,
                 target_role_name="Target",
+                source_port_id=None,
+                source_port_name=None,
+                target_port_id=None,
+                target_port_name=None,
                 stream_id=stream_id,
                 stream_name="Command",
                 stream_description="Command stream",
@@ -402,11 +418,87 @@ class TestRoleRepositoryDetails:
                 "source_role_name": "Source",
                 "target_role_id": str(target_role_id),
                 "target_role_name": "Target",
+                "source_port_id": None,
+                "source_port_name": None,
+                "target_port_id": None,
+                "target_port_name": None,
                 "stream_id": str(stream_id),
                 "stream_name": "Command",
                 "stream_description": "Command stream",
             },
         ]
+
+    @patch('repository.base_repository.Db_session')
+    def test_get_role_ports(self, mock_db_session_class):
+        mock_db_session_instance = MagicMock()
+        mock_db_session_class.return_value = mock_db_session_instance
+        mock_db = MagicMock()
+        mock_db_session_instance.session.return_value.__enter__.return_value = mock_db
+        role_id = uuid4()
+        port_id = uuid4()
+        mock_port = SimpleNamespace(
+            id=port_id,
+            role_id=role_id,
+            parent_id=None,
+            name="input",
+            direction="input",
+            description="Input port",
+            ttx=None,
+            created_ts=None,
+            updated_ts=None,
+        )
+        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [mock_port]
+
+        repo = RoleRepository()
+        result = repo.get_role_ports(mock_db, role_id)
+
+        assert result == [
+            {
+                "id": str(port_id),
+                "role_id": str(role_id),
+                "parent_id": None,
+                "name": "input",
+                "direction": "input",
+                "description": "Input port",
+                "ttx": None,
+                "created_ts": None,
+                "updated_ts": None,
+            }
+        ]
+
+    @patch('repository.base_repository.Db_session')
+    def test_create_role_port_success(self, mock_db_session_class):
+        mock_db_session_instance = MagicMock()
+        mock_db_session_class.return_value = mock_db_session_instance
+        mock_db = MagicMock()
+        mock_db_session_instance.session.return_value.__enter__.return_value = mock_db
+        role_id = uuid4()
+        role = SimpleNamespace(id=role_id)
+
+        def query_side_effect(model):
+            query = MagicMock()
+            if model is ModuleRole:
+                query.filter.return_value.first.return_value = role
+                return query
+            if model is RolePort:
+                query.filter.return_value.first.return_value = None
+                return query
+            raise AssertionError(f"Unexpected model {model}")
+
+        mock_db.query.side_effect = query_side_effect
+        repo = RoleRepository()
+        result = repo.create_role_port(role_id, "input", "input", "Input", None)
+
+        assert result["name"] == "input"
+        assert result["direction"] == "input"
+        mock_db.add.assert_called_once()
+        mock_db.commit.assert_called_once()
+
+    def test_normalize_port_direction_rejects_unknown_value(self):
+        repo = RoleRepository()
+
+        with pytest.raises(ValueError, match="Неверное направление"):
+            repo._normalize_port_direction("sideways")
 
     @patch('repository.base_repository.Db_session')
     def test_update_role_success(self, mock_db_session_class):

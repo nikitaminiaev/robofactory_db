@@ -16,3 +16,4 @@ class ModuleRole(Base):
     created_ts = Column(DateTime(timezone=True), server_default=func.now())
 
     modules = relationship("Module", secondary=module_role_assignment, back_populates="roles")
+    ports = relationship("RolePort", back_populates="role", cascade="all, delete-orphan")

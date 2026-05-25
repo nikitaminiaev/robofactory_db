@@ -13,6 +13,8 @@ router = APIRouter()
 class RoleStreamRequest(BaseModel):
     source_role_id: str
     target_role_id: str
+    source_port_id: Optional[str] = None
+    target_port_id: Optional[str] = None
     name: str
     description: Optional[str] = None
 
@@ -23,6 +25,10 @@ class RoleStreamResponse(BaseModel):
     description: Optional[str] = None
     source_role_id: str
     target_role_id: str
+    source_port_id: Optional[str] = None
+    source_port_name: Optional[str] = None
+    target_port_id: Optional[str] = None
+    target_port_name: Optional[str] = None
 
 
 def _parse_uuid(value: str, field_name: str) -> UUID:
@@ -30,6 +36,12 @@ def _parse_uuid(value: str, field_name: str) -> UUID:
         return UUID(value)
     except ValueError:
         raise HTTPException(status_code=400, detail=f"Неверный формат {field_name}")
+
+
+def _parse_optional_uuid(value: Optional[str], field_name: str) -> Optional[UUID]:
+    if not value:
+        return None
+    return _parse_uuid(value, field_name)
 
 
 @router.get("/modules/{module_id}/role-streams", response_model=list[RoleStreamResponse])
@@ -59,6 +71,8 @@ async def upsert_module_role_stream(
     module_uuid = _parse_uuid(module_id, "module_id")
     source_role_uuid = _parse_uuid(body.source_role_id, "source_role_id")
     target_role_uuid = _parse_uuid(body.target_role_id, "target_role_id")
+    source_port_uuid = _parse_optional_uuid(body.source_port_id, "source_port_id")
+    target_port_uuid = _parse_optional_uuid(body.target_port_id, "target_port_id")
     name = body.name.strip()
 
     if source_role_uuid == target_role_uuid:
@@ -73,6 +87,8 @@ async def upsert_module_role_stream(
             target_role_uuid,
             name,
             body.description,
+            source_port_uuid,
+            target_port_uuid,
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))

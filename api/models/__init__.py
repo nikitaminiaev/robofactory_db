@@ -16,4 +16,5 @@ from .associations import parent_child_module
 from .associations import module_role_assignment
 from .associations import parent_child_module_role_assignment
 from .module_role import ModuleRole
+from .role_port import RolePort
 

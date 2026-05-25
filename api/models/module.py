@@ -152,7 +152,23 @@ class Module(Base):
                     "created_ts": self.versions[0].created_ts.isoformat() if self.versions[0].created_ts else None
                 } if self.versions else None,
             "roles": [
-                {"id": str(role.id), "name": role.name, "description": role.description}
+                {
+                    "id": str(role.id),
+                    "name": role.name,
+                    "description": role.description,
+                    "ports": [
+                        {
+                            "id": str(port.id),
+                            "role_id": str(port.role_id),
+                            "parent_id": str(port.parent_id) if port.parent_id else None,
+                            "name": port.name,
+                            "direction": port.direction,
+                            "description": port.description,
+                            "ttx": port.ttx,
+                        }
+                        for port in role.ports
+                    ],
+                }
                 for role in self.roles
             ],
         }

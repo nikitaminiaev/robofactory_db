@@ -854,10 +854,10 @@ function renderStreamMatrixCell(sourceRole, targetRole, streamsByPair) {
     const label = streams.length === 0
         ? '+'
         : streams.length === 1
-            ? `→ ${escapeHtml(streams[0].name)}`
+            ? `→ ${escapeHtml(streams[0].name)}${renderStreamPortsSuffix(streams[0])}`
             : `→ ${streams.length} streams`;
     const title = streams.length > 0
-        ? `Edit streams: ${streams.map(stream => stream.name).join(', ')}`
+        ? `Edit streams: ${streams.map(stream => `${stream.name}${formatStreamPortsText(stream)}`).join(', ')}`
         : 'Create stream';
 
     return `
@@ -870,6 +870,19 @@ function renderStreamMatrixCell(sourceRole, targetRole, streamsByPair) {
             >${label}</button>
         </td>
     `;
+}
+
+function formatStreamPortsText(stream) {
+    const sourcePort = stream.source_port_name || 'role';
+    const targetPort = stream.target_port_name || 'role';
+    if (!stream.source_port_name && !stream.target_port_name) return '';
+    return ` (${sourcePort} → ${targetPort})`;
+}
+
+function renderStreamPortsSuffix(stream) {
+    const text = formatStreamPortsText(stream);
+    if (!text) return '';
+    return `<small>${escapeHtml(text)}</small>`;
 }
 
 function renderExternalStreamsTable(data) {
@@ -895,6 +908,7 @@ function renderExternalStreamsTable(data) {
             <td>${renderRoleLink(stream.target_role_id, stream.target_role_name || stream.target_role_id)}</td>
             <td>
                 <strong>${escapeHtml(stream.name)}</strong>
+                ${formatStreamPortsText(stream) ? `<small>${escapeHtml(formatStreamPortsText(stream))}</small>` : ''}
                 ${stream.description ? `<small>${escapeHtml(stream.description)}</small>` : ''}
             </td>
         </tr>
@@ -937,6 +951,14 @@ function renderStreamModal() {
                     </div>
                     <div class="stream-create-divider">Или создать новый поток</div>
                     <div class="form-group">
+                        <label for="stream-source-port">Порт источника:</label>
+                        <select id="stream-source-port"></select>
+                    </div>
+                    <div class="form-group">
+                        <label for="stream-target-port">Порт приёмника:</label>
+                        <select id="stream-target-port"></select>
+                    </div>
+                    <div class="form-group">
                         <label for="stream-name">Название потока:</label>
                         <input type="text" id="stream-name" required>
                     </div>
@@ -968,6 +990,21 @@ function getRoleById(roleId) {
     return roles.find(role => role.id === roleId);
 }
 
+function getPortsByRoleId(roleId) {
+    const role = getRoleById(roleId);
+    return role?.ports || [];
+}
+
+function renderPortOptions(roleId, selectedPortId = null) {
+    const options = ['<option value="">Вся роль без порта</option>'];
+    getPortsByRoleId(roleId).forEach(port => {
+        const selected = port.id === selectedPortId ? ' selected' : '';
+        const direction = port.direction ? ` (${port.direction})` : '';
+        options.push(`<option value="${port.id}"${selected}>${escapeHtml(port.name)}${escapeHtml(direction)}</option>`);
+    });
+    return options.join('');
+}
+
 function showStreamModal(sourceRoleId, targetRoleId) {
     const modal = document.getElementById('stream-modal');
     if (!modal) return;
@@ -983,6 +1020,8 @@ function showStreamModal(sourceRoleId, targetRoleId) {
     document.getElementById('stream-target-role-id').value = targetRoleId;
     document.getElementById('stream-name').value = '';
     document.getElementById('stream-description').value = '';
+    document.getElementById('stream-source-port').innerHTML = renderPortOptions(sourceRoleId);
+    document.getElementById('stream-target-port').innerHTML = renderPortOptions(targetRoleId);
     document.getElementById('stream-delete-btn').style.display = streams.length > 0 ? 'inline-block' : 'none';
     renderStreamExistingList(streams);
     resetStreamSearchSelection();
@@ -1004,6 +1043,7 @@ function renderStreamExistingList(streams) {
             <div class="stream-existing-list__item">
                 <div>
                     <strong>${escapeHtml(stream.name)}</strong>
+                    ${formatStreamPortsText(stream) ? `<small>${escapeHtml(formatStreamPortsText(stream))}</small>` : ''}
                     ${stream.description ? `<small>${escapeHtml(stream.description)}</small>` : ''}
                 </div>
                 <button type="button" class="stream-existing-list__delete" onclick="deleteSingleRoleStream('${stream.id}')">Удалить</button>
@@ -1080,6 +1120,8 @@ async function saveRoleStream() {
     const moduleId = window.currentObjectData?.id;
     const sourceRoleId = document.getElementById('stream-source-role-id')?.value;
     const targetRoleId = document.getElementById('stream-target-role-id')?.value;
+    const sourcePortId = document.getElementById('stream-source-port')?.value || null;
+    const targetPortId = document.getElementById('stream-target-port')?.value || null;
     const name = document.getElementById('stream-name')?.value.trim();
     const description = document.getElementById('stream-description')?.value.trim() || null;
 
@@ -1099,6 +1141,8 @@ async function saveRoleStream() {
             body: JSON.stringify({
                 source_role_id: sourceRoleId,
                 target_role_id: targetRoleId,
+                source_port_id: sourcePortId,
+                target_port_id: targetPortId,
                 name,
                 description,
             }),

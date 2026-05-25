@@ -5,7 +5,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import aliased
 
 from . import BaseRepository
-from models import Module, ModuleRole, Stream
+from models import Module, ModuleRole, RolePort, Stream
 from models.associations import (
     module_role_assignment,
     module_role_stream,
@@ -29,16 +29,24 @@ class StreamRepository(BaseRepository):
         ]
 
     def get_module_role_streams(self, module_id: UUID) -> list[dict]:
+        source_port = aliased(RolePort)
+        target_port = aliased(RolePort)
         with self.db_session.session() as db:
             rows = db.execute(
                 select(
                     module_role_stream.c.source_role_id,
                     module_role_stream.c.target_role_id,
+                    module_role_stream.c.source_port_id,
+                    source_port.name.label("source_port_name"),
+                    module_role_stream.c.target_port_id,
+                    target_port.name.label("target_port_name"),
                     Stream.id,
                     Stream.name,
                     Stream.description,
                 )
                 .join(Stream, Stream.id == module_role_stream.c.stream_id)
+                .outerjoin(source_port, source_port.id == module_role_stream.c.source_port_id)
+                .outerjoin(target_port, target_port.id == module_role_stream.c.target_port_id)
                 .where(module_role_stream.c.module_id == module_id)
                 .order_by(module_role_stream.c.source_role_id, module_role_stream.c.target_role_id)
             ).fetchall()
@@ -50,6 +58,10 @@ class StreamRepository(BaseRepository):
                 "description": row.description,
                 "source_role_id": str(row.source_role_id),
                 "target_role_id": str(row.target_role_id),
+                "source_port_id": str(row.source_port_id) if row.source_port_id else None,
+                "source_port_name": row.source_port_name,
+                "target_port_id": str(row.target_port_id) if row.target_port_id else None,
+                "target_port_name": row.target_port_name,
             }
             for row in rows
         ]
@@ -70,6 +82,8 @@ class StreamRepository(BaseRepository):
         source_role = aliased(ModuleRole)
         target_role = aliased(ModuleRole)
         external_role = aliased(ModuleRole)
+        source_port = aliased(RolePort)
+        target_port = aliased(RolePort)
 
         with self.db_session.session() as db:
             rows = db.execute(
@@ -81,6 +95,10 @@ class StreamRepository(BaseRepository):
                     source_role.name.label("source_role_name"),
                     module_role_stream.c.target_role_id,
                     target_role.name.label("target_role_name"),
+                    module_role_stream.c.source_port_id,
+                    source_port.name.label("source_port_name"),
+                    module_role_stream.c.target_port_id,
+                    target_port.name.label("target_port_name"),
                     Stream.id,
                     Stream.name,
                     Stream.description,
@@ -94,6 +112,8 @@ class StreamRepository(BaseRepository):
                 .join(Stream, Stream.id == module_role_stream.c.stream_id)
                 .join(source_role, source_role.id == module_role_stream.c.source_role_id)
                 .join(target_role, target_role.id == module_role_stream.c.target_role_id)
+                .outerjoin(source_port, source_port.id == module_role_stream.c.source_port_id)
+                .outerjoin(target_port, target_port.id == module_role_stream.c.target_port_id)
                 .join(external_role, external_role.id == external_roles.c.external_role_id)
                 .where(
                     or_(
@@ -132,6 +152,10 @@ class StreamRepository(BaseRepository):
                 "source_role_name": row.source_role_name,
                 "target_role_id": str(row.target_role_id),
                 "target_role_name": row.target_role_name,
+                "source_port_id": str(row.source_port_id) if row.source_port_id else None,
+                "source_port_name": row.source_port_name,
+                "target_port_id": str(row.target_port_id) if row.target_port_id else None,
+                "target_port_name": row.target_port_name,
                 "external_roles": [external_role_data],
             }
 
@@ -144,6 +168,8 @@ class StreamRepository(BaseRepository):
         target_role_id: UUID,
         name: str,
         description: Optional[str],
+        source_port_id: Optional[UUID] = None,
+        target_port_id: Optional[UUID] = None,
     ) -> dict:
         with self.db_session.session() as db:
             module = db.query(Module).filter(Module.id == module_id).first()
@@ -151,6 +177,8 @@ class StreamRepository(BaseRepository):
                 raise ValueError(f"Модуль с ID '{module_id}' не найден")
 
             self._ensure_roles_belong_to_module(db, module_id, source_role_id, target_role_id)
+            source_port = self._ensure_port_belongs_to_role(db, source_port_id, source_role_id, "source_port_id")
+            target_port = self._ensure_port_belongs_to_role(db, target_port_id, target_role_id, "target_port_id")
             stream = db.query(Stream).filter(Stream.name == name).first()
             if not stream:
                 stream = Stream(name=name, description=description)
@@ -176,6 +204,22 @@ class StreamRepository(BaseRepository):
                         source_role_id=source_role_id,
                         target_role_id=target_role_id,
                         stream_id=stream_obj.id,
+                        source_port_id=source_port_id,
+                        target_port_id=target_port_id,
+                    )
+                )
+            else:
+                db.execute(
+                    module_role_stream.update()
+                    .where(
+                        module_role_stream.c.module_id == module_id,
+                        module_role_stream.c.source_role_id == source_role_id,
+                        module_role_stream.c.target_role_id == target_role_id,
+                        module_role_stream.c.stream_id == stream_obj.id,
+                    )
+                    .values(
+                        source_port_id=source_port_id,
+                        target_port_id=target_port_id,
                     )
                 )
 
@@ -190,6 +234,10 @@ class StreamRepository(BaseRepository):
                 "description": stream_obj.description,
                 "source_role_id": str(source_role_id),
                 "target_role_id": str(target_role_id),
+                "source_port_id": str(source_port_id) if source_port_id else None,
+                "source_port_name": cast(Any, source_port).name if source_port else None,
+                "target_port_id": str(target_port_id) if target_port_id else None,
+                "target_port_name": cast(Any, target_port).name if target_port else None,
             }
 
     def delete_module_role_stream(
@@ -234,6 +282,22 @@ class StreamRepository(BaseRepository):
         if source_role_id in role_ids and target_role_id in role_ids:
             return
         raise ValueError("Обе роли должны быть назначены текущему модулю")
+
+    def _ensure_port_belongs_to_role(
+        self,
+        db,
+        port_id: Optional[UUID],
+        role_id: UUID,
+        field_name: str,
+    ) -> Optional[RolePort]:
+        if port_id is None:
+            return None
+        port = db.query(RolePort).filter(RolePort.id == port_id).first()
+        if not port:
+            raise ValueError(f"Порт {field_name} не найден")
+        if cast(Any, port).role_id == role_id:
+            return port
+        raise ValueError(f"Порт {field_name} не принадлежит указанной роли")
 
     def _ensure_module_stream(self, db, module_id: UUID, stream_id: UUID) -> None:
         existing = db.execute(

@@ -2,6 +2,9 @@ from types import SimpleNamespace
 from uuid import UUID
 from unittest.mock import MagicMock, patch
 
+import pytest
+
+from models import Module, RolePort, Stream
 from repository.stream_repository import StreamRepository
 
 
@@ -18,6 +21,10 @@ class TestStreamRepository:
             SimpleNamespace(
                 source_role_id=source_role_id,
                 target_role_id=target_role_id,
+                source_port_id=None,
+                source_port_name=None,
+                target_port_id=None,
+                target_port_name=None,
                 id=stream_id,
                 name='power',
                 description='Power stream',
@@ -38,6 +45,10 @@ class TestStreamRepository:
                 'description': 'Power stream',
                 'source_role_id': str(source_role_id),
                 'target_role_id': str(target_role_id),
+                'source_port_id': None,
+                'source_port_name': None,
+                'target_port_id': None,
+                'target_port_name': None,
             }
         ]
         sql = str(mock_db.execute.call_args.args[0])
@@ -61,6 +72,10 @@ class TestStreamRepository:
                 source_role_name='External input',
                 target_role_id=internal_parent_role_id,
                 target_role_name='Controller',
+                source_port_id=None,
+                source_port_name=None,
+                target_port_id=None,
+                target_port_name=None,
                 id=stream_id,
                 name='commands',
                 description='Command stream',
@@ -86,6 +101,10 @@ class TestStreamRepository:
                 'source_role_name': 'External input',
                 'target_role_id': str(internal_parent_role_id),
                 'target_role_name': 'Controller',
+                'source_port_id': None,
+                'source_port_name': None,
+                'target_port_id': None,
+                'target_port_name': None,
                 'external_roles': [
                     {'id': str(external_role_id), 'name': 'External input'},
                 ],
@@ -116,6 +135,10 @@ class TestStreamRepository:
                 source_role_name='Source role',
                 target_role_id=target_role_id,
                 target_role_name='Target role',
+                source_port_id=None,
+                source_port_name=None,
+                target_port_id=None,
+                target_port_name=None,
                 id=stream_id,
                 name='shared',
                 description=None,
@@ -129,6 +152,10 @@ class TestStreamRepository:
                 source_role_name='Source role',
                 target_role_id=target_role_id,
                 target_role_name='Target role',
+                source_port_id=None,
+                source_port_name=None,
+                target_port_id=None,
+                target_port_name=None,
                 id=stream_id,
                 name='shared',
                 description=None,
@@ -148,3 +175,62 @@ class TestStreamRepository:
             {'id': str(source_role_id), 'name': 'Source role'},
             {'id': str(target_role_id), 'name': 'Target role'},
         ]
+
+    @patch('repository.base_repository.Db_session')
+    def test_upsert_module_role_stream_allows_empty_ports(self, mock_db_session_class):
+        module_id = UUID('11111111-1111-1111-1111-111111111111')
+        source_role_id = UUID('22222222-2222-2222-2222-222222222222')
+        target_role_id = UUID('33333333-3333-3333-3333-333333333333')
+        stream_id = UUID('44444444-4444-4444-4444-444444444444')
+
+        mock_db = MagicMock()
+        mock_db.execute.return_value.fetchall.return_value = [
+            SimpleNamespace(role_id=source_role_id),
+            SimpleNamespace(role_id=target_role_id),
+        ]
+        mock_db.execute.return_value.first.return_value = None
+
+        def query_side_effect(model):
+            query = MagicMock()
+            if model is Module:
+                query.filter.return_value.first.return_value = SimpleNamespace(id=module_id)
+                return query
+            if model is Stream:
+                query.filter.return_value.first.return_value = SimpleNamespace(
+                    id=stream_id,
+                    name='power',
+                    description='Power stream',
+                )
+                return query
+            raise AssertionError(f'Unexpected model {model}')
+
+        mock_db.query.side_effect = query_side_effect
+        mock_db_session_instance = MagicMock()
+        mock_db_session_instance.session.return_value.__enter__.return_value = mock_db
+        mock_db_session_class.return_value = mock_db_session_instance
+
+        repo = StreamRepository()
+        result = repo.upsert_module_role_stream(
+            module_id,
+            source_role_id,
+            target_role_id,
+            'power',
+            None,
+        )
+
+        assert result['source_port_id'] is None
+        assert result['target_port_id'] is None
+        mock_db.commit.assert_called_once()
+
+    def test_ensure_port_belongs_to_role_rejects_foreign_port(self):
+        repo = StreamRepository()
+        role_id = UUID('22222222-2222-2222-2222-222222222222')
+        port_id = UUID('55555555-5555-5555-5555-555555555555')
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.first.return_value = SimpleNamespace(
+            id=port_id,
+            role_id=UUID('33333333-3333-3333-3333-333333333333'),
+        )
+
+        with pytest.raises(ValueError, match='не принадлежит'):
+            repo._ensure_port_belongs_to_role(mock_db, port_id, role_id, 'source_port_id')

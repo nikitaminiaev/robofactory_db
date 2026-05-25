@@ -5,7 +5,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, aliased
 
 from . import BaseRepository
-from models import ModuleRole, Module, Stream
+from models import ModuleRole, Module, RolePort, Stream
 from models.associations import (
     module_role_assignment,
     module_role_stream,
@@ -15,6 +15,8 @@ from models.associations import (
 
 
 class RoleRepository(BaseRepository):
+    VALID_PORT_DIRECTIONS = {"input", "output", "bidirectional"}
+
     def get_role_by_name(self, db: Session, name: str) -> Optional[ModuleRole]:
         return db.query(ModuleRole).filter(ModuleRole.name == name).first()
 
@@ -105,8 +107,132 @@ class RoleRepository(BaseRepository):
                 "name": role_obj.name,
                 "description": role_obj.description,
                 "created_ts": role_obj.created_ts.isoformat() if role_obj.created_ts else None,
+                "ports": self.get_role_ports(db, role_id),
                 "stream_usages": self.get_role_stream_usages(db, role_id),
             }
+
+    def _port_to_dict(self, port: RolePort) -> dict:
+        port_obj = cast(Any, port)
+        return {
+            "id": str(port_obj.id),
+            "role_id": str(port_obj.role_id),
+            "parent_id": str(port_obj.parent_id) if port_obj.parent_id else None,
+            "name": port_obj.name,
+            "direction": port_obj.direction,
+            "description": port_obj.description,
+            "ttx": port_obj.ttx,
+            "created_ts": port_obj.created_ts.isoformat() if port_obj.created_ts else None,
+            "updated_ts": port_obj.updated_ts.isoformat() if port_obj.updated_ts else None,
+        }
+
+    def get_role_ports(self, db: Session, role_id: UUID) -> List[dict]:
+        ports = (
+            db.query(RolePort)
+            .filter(RolePort.role_id == role_id)
+            .order_by(RolePort.name)
+            .all()
+        )
+        return [self._port_to_dict(port) for port in ports]
+
+    def get_role_port_by_id(self, db: Session, role_id: UUID, port_id: UUID) -> Optional[RolePort]:
+        return (
+            db.query(RolePort)
+            .filter(RolePort.id == port_id, RolePort.role_id == role_id)
+            .first()
+        )
+
+    def _normalize_port_direction(self, direction: Optional[str]) -> str:
+        normalized = (direction or "bidirectional").strip()
+        if normalized in self.VALID_PORT_DIRECTIONS:
+            return normalized
+        raise ValueError("Неверное направление порта")
+
+    def _ensure_parent_port(
+        self,
+        db: Session,
+        role_id: UUID,
+        parent_id: Optional[UUID],
+        port_id: Optional[UUID] = None,
+    ) -> None:
+        if parent_id is None:
+            return
+        if port_id is not None and parent_id == port_id:
+            raise ValueError("Порт не может быть родителем самого себя")
+        parent = self.get_role_port_by_id(db, role_id, parent_id)
+        if parent:
+            return
+        raise ValueError("Родительский порт не найден у этой роли")
+
+    def create_role_port(
+        self,
+        role_id: UUID,
+        name: str,
+        direction: Optional[str] = None,
+        description: Optional[str] = None,
+        ttx: Optional[str] = None,
+        parent_id: Optional[UUID] = None,
+    ) -> Optional[dict]:
+        with self.db_session.session() as db:
+            role = self.get_role_by_id(db, role_id)
+            if not role:
+                return None
+
+            name = name.strip()
+            if not name:
+                raise ValueError("Название порта не может быть пустым")
+
+            self._ensure_parent_port(db, role_id, parent_id)
+            port = RolePort(
+                role_id=role_id,
+                parent_id=parent_id,
+                name=name,
+                direction=self._normalize_port_direction(direction),
+                description=description,
+                ttx=ttx,
+            )
+            db.add(port)
+            db.commit()
+            db.refresh(port)
+            return self._port_to_dict(port)
+
+    def update_role_port(
+        self,
+        role_id: UUID,
+        port_id: UUID,
+        name: str,
+        direction: Optional[str] = None,
+        description: Optional[str] = None,
+        ttx: Optional[str] = None,
+        parent_id: Optional[UUID] = None,
+    ) -> Optional[dict]:
+        with self.db_session.session() as db:
+            port = self.get_role_port_by_id(db, role_id, port_id)
+            if not port:
+                return None
+
+            name = name.strip()
+            if not name:
+                raise ValueError("Название порта не может быть пустым")
+
+            self._ensure_parent_port(db, role_id, parent_id, port_id)
+            port_obj = cast(Any, port)
+            port_obj.name = name
+            port_obj.direction = self._normalize_port_direction(direction)
+            port_obj.description = description
+            port_obj.ttx = ttx
+            port_obj.parent_id = parent_id
+            db.commit()
+            db.refresh(port)
+            return self._port_to_dict(port)
+
+    def delete_role_port(self, role_id: UUID, port_id: UUID) -> bool:
+        with self.db_session.session() as db:
+            port = self.get_role_port_by_id(db, role_id, port_id)
+            if not port:
+                return False
+            db.delete(port)
+            db.commit()
+            return True
 
     def get_role_modules(self, db: Session, role_id: UUID) -> List[dict]:
         rows = db.execute(
@@ -160,6 +286,8 @@ class RoleRepository(BaseRepository):
     def get_role_stream_usages(self, db: Session, role_id: UUID) -> List[dict]:
         source_role = aliased(ModuleRole)
         target_role = aliased(ModuleRole)
+        source_port = aliased(RolePort)
+        target_port = aliased(RolePort)
         rows = db.execute(
             select(
                 Module.id.label("module_id"),
@@ -168,6 +296,10 @@ class RoleRepository(BaseRepository):
                 source_role.name.label("source_role_name"),
                 module_role_stream.c.target_role_id,
                 target_role.name.label("target_role_name"),
+                module_role_stream.c.source_port_id,
+                source_port.name.label("source_port_name"),
+                module_role_stream.c.target_port_id,
+                target_port.name.label("target_port_name"),
                 Stream.id.label("stream_id"),
                 Stream.name.label("stream_name"),
                 Stream.description.label("stream_description"),
@@ -175,6 +307,8 @@ class RoleRepository(BaseRepository):
             .join(Module, Module.id == module_role_stream.c.module_id)
             .join(source_role, source_role.id == module_role_stream.c.source_role_id)
             .join(target_role, target_role.id == module_role_stream.c.target_role_id)
+            .outerjoin(source_port, source_port.id == module_role_stream.c.source_port_id)
+            .outerjoin(target_port, target_port.id == module_role_stream.c.target_port_id)
             .join(Stream, Stream.id == module_role_stream.c.stream_id)
             .where(
                 or_(
@@ -193,6 +327,10 @@ class RoleRepository(BaseRepository):
                 "source_role_name": row.source_role_name,
                 "target_role_id": str(row.target_role_id),
                 "target_role_name": row.target_role_name,
+                "source_port_id": str(row.source_port_id) if row.source_port_id else None,
+                "source_port_name": row.source_port_name,
+                "target_port_id": str(row.target_port_id) if row.target_port_id else None,
+                "target_port_name": row.target_port_name,
                 "stream_id": str(row.stream_id),
                 "stream_name": row.stream_name,
                 "stream_description": row.stream_description,
