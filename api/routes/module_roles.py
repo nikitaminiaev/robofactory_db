@@ -10,6 +10,11 @@ from repository.module_repository import ModuleRepository
 router = APIRouter()
 
 
+class RoleCreateRequest(BaseModel):
+    name: str
+    description: Optional[str] = None
+
+
 class RoleAssignRequest(BaseModel):
     role_id: Optional[str] = None
     name: Optional[str] = None
@@ -57,6 +62,19 @@ def _parse_optional_uuid(value: Optional[str], field_name: str) -> Optional[UUID
     return _parse_uuid(value, field_name)
 
 
+@router.post("/roles", status_code=201)
+async def create_role(
+    body: RoleCreateRequest,
+    role_repo: RoleRepository = Depends(),
+):
+    name = body.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Название роли не может быть пустым")
+
+    role = role_repo.create_role_standalone(name, body.description)
+    return role
+
+
 @router.get("/modules/{module_id}/roles")
 async def get_module_roles(
     module_id: str,
@@ -76,10 +94,12 @@ async def get_module_roles(
 @router.get("/roles")
 async def search_roles(
     query: Optional[str] = None,
+    module_id: Optional[str] = None,
     limit: int = 20,
     role_repo: RoleRepository = Depends(),
 ):
-    return role_repo.search_roles(query=query, limit=limit)
+    module_uuid = _parse_optional_uuid(module_id, "module_id")
+    return role_repo.search_roles(query=query, module_id=module_uuid, limit=limit)
 
 
 @router.get("/roles/{role_id}")
@@ -248,3 +268,28 @@ async def remove_role_from_module(
 
     role_repo.unassign_role(module_uuid, role_uuid)
     return {"message": "Роль успешно удалена из модуля"}
+
+
+@router.patch("/modules/{module_id}/roles/{role_id}")
+async def update_module_role(
+    module_id: str,
+    role_id: str,
+    body: RoleUpdateRequest,
+    role_repo: RoleRepository = Depends(),
+    module_repo: ModuleRepository = Depends(),
+):
+    module_uuid = _parse_uuid(module_id, "module_id")
+    role_uuid = _parse_uuid(role_id, "role_id")
+
+    module = module_repo.get_module_by_id(module_uuid)
+    if not module:
+        raise HTTPException(status_code=404, detail=f"Модуль с ID '{module_id}' не найден")
+
+    name = body.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Название роли не может быть пустым")
+
+    role = role_repo.update_role(role_uuid, name, body.description)
+    if not role:
+        raise HTTPException(status_code=404, detail=f"Роль с ID '{role_id}' не найдена")
+    return role

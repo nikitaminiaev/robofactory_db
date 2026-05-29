@@ -936,42 +936,25 @@ function renderExternalStreamsTable(data) {
 function renderStreamModal() {
     return `
         <div id="stream-modal" class="modal" style="display: none;">
-            <div class="modal-content">
+            <div class="modal-content modal-content--streams">
                 <h3 id="stream-modal-title">Stream</h3>
                 <input type="hidden" id="stream-source-role-id">
                 <input type="hidden" id="stream-target-role-id">
+                <div id="visual-stream-editor"></div>
                 <div id="stream-existing-list" class="stream-existing-list"></div>
-                <form id="stream-form">
-                    <div class="form-group stream-search-block">
-                        <label for="stream-search">Выбрать существующий поток:</label>
-                        <div class="stream-search-wrap">
-                            <input type="text" id="stream-search" placeholder="Поиск потока..." oninput="searchStreamsForModal(this.value)">
-                            <div id="stream-search-results" class="stream-search-results" style="display: none;"></div>
-                        </div>
-                    </div>
-                    <div class="stream-create-divider">Или создать новый поток</div>
-                    <div class="form-group">
-                        <label for="stream-source-port">Порт источника:</label>
-                        <select id="stream-source-port"></select>
-                    </div>
-                    <div class="form-group">
-                        <label for="stream-target-port">Порт приёмника:</label>
-                        <select id="stream-target-port"></select>
-                    </div>
-                    <div class="form-group">
-                        <label for="stream-name">Название потока:</label>
-                        <input type="text" id="stream-name" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="stream-description">Описание:</label>
-                        <textarea id="stream-description"></textarea>
-                    </div>
-                    <div class="modal-actions">
-                        <button type="button" id="stream-delete-btn" class="danger-btn" onclick="deleteRoleStream()">Удалить</button>
-                        <button type="button" onclick="saveRoleStream()">Сохранить</button>
-                        <button type="button" onclick="hideStreamModal()">Отмена</button>
-                    </div>
-                </form>
+                <div style="display:none;">
+                    <select id="stream-source-port"></select>
+                    <select id="stream-target-port"></select>
+                    <input type="text" id="stream-name">
+                    <textarea id="stream-description"></textarea>
+                    <input type="text" id="stream-search">
+                    <div id="stream-search-results"></div>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" id="stream-delete-btn" class="danger-btn" onclick="deleteRoleStream()">Удалить все потоки</button>
+                    <button type="button" onclick="saveRoleStream()" style="display:none;">Сохранить</button>
+                    <button type="button" onclick="hideStreamModal()">Закрыть</button>
+                </div>
             </div>
         </div>
     `;
@@ -1023,6 +1006,12 @@ function showStreamModal(sourceRoleId, targetRoleId) {
     document.getElementById('stream-source-port').innerHTML = renderPortOptions(sourceRoleId);
     document.getElementById('stream-target-port').innerHTML = renderPortOptions(targetRoleId);
     document.getElementById('stream-delete-btn').style.display = streams.length > 0 ? 'inline-block' : 'none';
+    window.editingStreamId = null;
+    window.selectedSourcePortId = null;
+
+    if (resizeObserver) resizeObserver.disconnect();
+
+    renderVisualStreamEditor(sourceRole, targetRole, streams);
     renderStreamExistingList(streams);
     resetStreamSearchSelection();
 
@@ -1046,16 +1035,57 @@ function renderStreamExistingList(streams) {
                     ${formatStreamPortsText(stream) ? `<small>${escapeHtml(formatStreamPortsText(stream))}</small>` : ''}
                     ${stream.description ? `<small>${escapeHtml(stream.description)}</small>` : ''}
                 </div>
-                <button type="button" class="stream-existing-list__delete" onclick="deleteSingleRoleStream('${stream.id}')">Удалить</button>
+                <div class="stream-existing-list__actions">
+                    <button type="button" class="stream-existing-list__edit" onclick="editRoleStream('${stream.id}', event)">✎</button>
+                    <button type="button" class="stream-existing-list__delete" onclick="deleteSingleRoleStream('${stream.id}')">Удалить</button>
+                </div>
             </div>
         `).join('')}
     `;
 }
 
+function editRoleStream(streamId, event) {
+    const sourceRoleId = document.getElementById('stream-source-role-id').value;
+    const targetRoleId = document.getElementById('stream-target-role-id').value;
+    const streams = getRoleStreams(sourceRoleId, targetRoleId);
+    const stream = streams.find(s => s.id === streamId);
+    if (!stream) return;
+
+    window.editingStreamId = streamId;
+    document.getElementById('stream-name').value = stream.name;
+    document.getElementById('stream-description').value = stream.description || '';
+    document.getElementById('stream-source-port').innerHTML = renderPortOptions(sourceRoleId, stream.source_port_id);
+    document.getElementById('stream-target-port').innerHTML = renderPortOptions(targetRoleId, stream.target_port_id);
+    if (window.selectedExistingStream === null) {
+        document.getElementById('stream-search').value = stream.name;
+        window.selectedExistingStream = { name: stream.name, description: stream.description || '' };
+    }
+
+    const btnEl = event?.currentTarget || event?.target;
+    if (btnEl) {
+        const rect = btnEl.getBoundingClientRect();
+        const containerEl = document.getElementById('viz-stream-popover');
+        if (containerEl) {
+            const parentRect = containerEl.parentElement.getBoundingClientRect();
+            showStreamPopover(
+                rect.left - parentRect.left + rect.width / 2,
+                rect.top - parentRect.top - 10,
+                'edit',
+                stream
+            );
+        }
+    }
+}
+
 function hideStreamModal() {
     const modal = document.getElementById('stream-modal');
     if (!modal) return;
+    if (resizeObserver) resizeObserver.disconnect();
+    window.editingStreamId = null;
+    window.selectedSourcePortId = null;
     modal.style.display = 'none';
+    document.getElementById('stream-name').value = '';
+    document.getElementById('stream-description').value = '';
     resetStreamSearchSelection();
 }
 
@@ -1116,12 +1146,12 @@ function resetStreamSearchSelection() {
     }
 }
 
-async function saveRoleStream() {
+async function saveRoleStream(sourcePortOverride, targetPortOverride) {
     const moduleId = window.currentObjectData?.id;
     const sourceRoleId = document.getElementById('stream-source-role-id')?.value;
     const targetRoleId = document.getElementById('stream-target-role-id')?.value;
-    const sourcePortId = document.getElementById('stream-source-port')?.value || null;
-    const targetPortId = document.getElementById('stream-target-port')?.value || null;
+    const sourcePortId = sourcePortOverride ?? (document.getElementById('stream-source-port')?.value || null);
+    const targetPortId = targetPortOverride ?? (document.getElementById('stream-target-port')?.value || null);
     const name = document.getElementById('stream-name')?.value.trim();
     const description = document.getElementById('stream-description')?.value.trim() || null;
 
@@ -1135,17 +1165,22 @@ async function saveRoleStream() {
     }
 
     try {
+        const body = {
+            source_role_id: sourceRoleId,
+            target_role_id: targetRoleId,
+            source_port_id: sourcePortId,
+            target_port_id: targetPortId,
+            name,
+            description,
+        };
+        if (window.editingStreamId) {
+            body.stream_id = window.editingStreamId;
+        }
+
         const res = await fetch(`/api/modules/${moduleId}/role-streams`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                source_role_id: sourceRoleId,
-                target_role_id: targetRoleId,
-                source_port_id: sourcePortId,
-                target_port_id: targetPortId,
-                name,
-                description,
-            }),
+            body: JSON.stringify(body),
         });
         if (!res.ok) throw new Error(await res.text());
 
@@ -1153,7 +1188,7 @@ async function saveRoleStream() {
         upsertRoleStreamInCurrentData(savedStream);
         rerenderStreamsMatrix();
         hideStreamModal();
-        showToast('Stream добавлен', 'success');
+        showToast(window.editingStreamId ? 'Stream обновлён' : 'Stream добавлен', 'success');
     } catch (err) {
         showToast('Ошибка: ' + err.message, 'error');
     }
@@ -1204,6 +1239,8 @@ async function deleteSingleRoleStream(streamId) {
         rerenderStreamsMatrix();
         const streams = getRoleStreams(sourceRoleId, targetRoleId);
         renderStreamExistingList(streams);
+        drawStreamLines(streams);
+        hideStreamPopover();
         document.getElementById('stream-delete-btn').style.display = streams.length > 0 ? 'inline-block' : 'none';
         showToast('Stream удален из ячейки', 'success');
     } catch (err) {
@@ -1235,6 +1272,512 @@ function rerenderStreamsMatrix() {
     const section = document.getElementById('streams-matrix-section');
     if (!section || !window.currentObjectData) return;
     section.outerHTML = renderStreamsMatrix(window.currentObjectData);
+}
+
+// ===== Visual Stream Editor =====
+
+function renderVisualStreamEditor(sourceRole, targetRole, streams) {
+    const container = document.getElementById('visual-stream-editor');
+    if (!container) return;
+
+    container.innerHTML = `
+        <div class="viz-stream-container" id="viz-stream-container">
+            <div class="viz-role-block viz-role-block--source" data-role-id="${sourceRole.id}">
+                <div class="viz-role-block__header">${escapeHtml(sourceRole.name)}</div>
+                <div class="viz-role-block__ports">
+                    ${renderPortsForEditor(sourceRole, 'source')}
+                </div>
+            </div>
+            <div class="viz-stream-canvas" id="viz-stream-canvas">
+                <svg width="100%" height="100%" style="display:block;">
+                    <defs>
+                        <marker id="viz-arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                            <polygon points="0 0, 10 3.5, 0 7" fill="#27ae60" />
+                        </marker>
+                        <marker id="viz-arrowhead-selected" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                            <polygon points="0 0, 10 3.5, 0 7" fill="#e67e22" />
+                        </marker>
+                    </defs>
+                    <g id="viz-stream-lines" style="pointer-events:auto;"></g>
+                    <g id="viz-temp-line" style="pointer-events:none;"></g>
+                </svg>
+            </div>
+            <div class="viz-role-block viz-role-block--target" data-role-id="${targetRole.id}">
+                <div class="viz-role-block__header">${escapeHtml(targetRole.name)}</div>
+                <div class="viz-role-block__ports">
+                    ${renderPortsForEditor(targetRole, 'target')}
+                </div>
+            </div>
+            <div id="viz-stream-hint" class="viz-stream-hint"></div>
+        </div>
+        <div id="viz-stream-popover" class="viz-stream-popover" style="display:none;"></div>
+    `;
+
+    requestAnimationFrame(() => {
+        setupStreamEditor(sourceRole, targetRole, streams);
+    });
+}
+
+function renderPortsForEditor(role, side) {
+    const ports = role.ports || [];
+
+    const matchingPorts = ports.filter(port => {
+        const dir = port.direction || 'bidirectional';
+        return dir === 'bidirectional' || (side === 'source' ? dir === 'output' : dir === 'input');
+    });
+
+    let html = '';
+
+    const roleLabel = side === 'source' ? `${escapeHtml(role.name)} (как источник)` : `${escapeHtml(role.name)} (как приёмник)`;
+    html += `
+        <div class="viz-port viz-port--role" data-port-id="__role__" data-role-id="${role.id}" data-side="${side}">
+            <span class="viz-port__dot"></span>
+            <span class="viz-port__label"><em>${roleLabel}</em></span>
+        </div>
+    `;
+
+    matchingPorts.forEach(port => {
+        const dirClass = port.direction ? `viz-port--${port.direction}` : 'viz-port--bidirectional';
+        const dirLabel = port.direction === 'input' ? '← вход' : port.direction === 'output' ? 'выход →' : '↔';
+        if (side === 'source') {
+            html += `
+                <div class="viz-port ${dirClass}" data-port-id="${port.id}" data-role-id="${role.id}" data-side="source">
+                    <span class="viz-port__label">${escapeHtml(port.name)} <small>${dirLabel}</small></span>
+                    <span class="viz-port__dot"></span>
+                </div>
+            `;
+        } else {
+            html += `
+                <div class="viz-port ${dirClass}" data-port-id="${port.id}" data-role-id="${role.id}" data-side="target">
+                    <span class="viz-port__dot"></span>
+                    <span class="viz-port__label">${escapeHtml(port.name)} <small>${dirLabel}</small></span>
+                </div>
+            `;
+        }
+    });
+
+    return html;
+}
+
+function setupStreamEditor(sourceRole, targetRole, streams) {
+    drawStreamLines(streams);
+    setupPortClickHandlers(sourceRole, targetRole, streams);
+    setupStreamResizeObserver(streams);
+    setupLineClickHandlers(streams);
+
+    const container = document.getElementById('viz-stream-container');
+    if (container) {
+        container.addEventListener('click', function (e) {
+            if (e.target === this || e.target.closest('.viz-stream-canvas')) {
+                hideStreamPopover();
+            }
+        });
+    }
+}
+
+function getEditorCoords(roleId, portId, side) {
+    const svg = document.getElementById('viz-stream-canvas');
+    const container = document.getElementById('viz-stream-container');
+    if (!svg || !container) return null;
+
+    const svgRect = svg.getBoundingClientRect();
+
+    if (portId) {
+        const portEl = document.querySelector(`.viz-port[data-port-id="${portId}"]`);
+        if (!portEl) return null;
+        const dot = portEl.querySelector('.viz-port__dot');
+        const el = dot || portEl;
+        const elRect = el.getBoundingClientRect();
+        return {
+            x: elRect.left - svgRect.left + elRect.width / 2,
+            y: elRect.top - svgRect.top + elRect.height / 2,
+        };
+    }
+
+    const roleBlock = document.querySelector(`.viz-role-block[data-role-id="${roleId}"]`);
+    if (!roleBlock) return null;
+    const blockRect = roleBlock.getBoundingClientRect();
+    const x = side === 'source' ? blockRect.right - svgRect.left : blockRect.left - svgRect.left;
+    return {
+        x: x,
+        y: blockRect.top - svgRect.top + blockRect.height / 2,
+    };
+}
+
+function drawStreamLines(streams) {
+    const group = document.getElementById('viz-stream-lines');
+    if (!group) return;
+
+    group.innerHTML = '';
+
+    streams.forEach(stream => {
+        const from = getEditorCoords(stream.source_role_id, stream.source_port_id, 'source');
+        const to = getEditorCoords(stream.target_role_id, stream.target_port_id, 'target');
+        if (!from || !to) return;
+
+        const dx = Math.abs(to.x - from.x) * 0.4;
+        const d = `M ${from.x} ${from.y} C ${from.x + dx} ${from.y}, ${to.x - dx} ${to.y}, ${to.x} ${to.y}`;
+
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', d);
+        path.setAttribute('class', 'viz-stream-line');
+        path.setAttribute('data-stream-id', stream.id);
+        path.setAttribute('fill', 'none');
+        path.setAttribute('stroke', '#27ae60');
+        path.setAttribute('stroke-width', '2.5');
+        path.setAttribute('marker-end', 'url(#viz-arrowhead)');
+        path.setAttribute('title', stream.name);
+        group.appendChild(path);
+
+        if (stream.name) {
+            const cx = (from.x + to.x) / 2;
+            const cy = (from.y + to.y) / 2;
+            const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            text.setAttribute('x', cx);
+            text.setAttribute('y', cy - 6);
+            text.setAttribute('class', 'viz-stream-label');
+            text.setAttribute('text-anchor', 'middle');
+            text.setAttribute('fill', '#1f7f46');
+            text.setAttribute('font-size', '11');
+            text.setAttribute('pointer-events', 'none');
+            text.textContent = stream.name;
+            group.appendChild(text);
+        }
+    });
+}
+
+function getPortDisplayName(roleId, portId) {
+    if (!portId || portId === '__role__') return 'вся роль';
+    const role = getRoleById(roleId);
+    const port = role?.ports?.find(p => p.id === portId);
+    return port?.name || '(порт удалён)';
+}
+
+function setupLineClickHandlers(streams) {
+    const group = document.getElementById('viz-stream-lines');
+    if (!group) return;
+
+    group.addEventListener('click', function (e) {
+        const line = e.target.closest('.viz-stream-line');
+        if (!line) return;
+
+        const streamId = line.getAttribute('data-stream-id');
+        const sourceRoleId = document.getElementById('stream-source-role-id').value;
+        const targetRoleId = document.getElementById('stream-target-role-id').value;
+        const allStreams = getRoleStreams(sourceRoleId, targetRoleId);
+        const stream = allStreams.find(s => s.id === streamId);
+        if (!stream) return;
+
+        document.querySelectorAll('.viz-stream-line').forEach(l => {
+            l.setAttribute('stroke', '#27ae60');
+            l.setAttribute('marker-end', 'url(#viz-arrowhead)');
+            l.classList.remove('viz-stream-line--selected');
+        });
+        line.setAttribute('stroke', '#e67e22');
+        line.setAttribute('marker-end', 'url(#viz-arrowhead-selected)');
+        line.classList.add('viz-stream-line--selected');
+
+        window.editingStreamId = streamId;
+        document.getElementById('stream-name').value = stream.name;
+        document.getElementById('stream-description').value = stream.description || '';
+        document.getElementById('stream-source-port').innerHTML = renderPortOptions(
+            document.getElementById('stream-source-role-id').value,
+            stream.source_port_id
+        );
+        document.getElementById('stream-target-port').innerHTML = renderPortOptions(
+            document.getElementById('stream-target-role-id').value,
+            stream.target_port_id
+        );
+        clearPortSelection();
+
+        const hint = document.getElementById('viz-stream-hint');
+        if (hint) hint.textContent = 'Кликните на другой порт, чтобы перенаправить поток';
+
+        const rect = line.getBoundingClientRect();
+        const containerRect = document.getElementById('viz-stream-popover').parentElement.getBoundingClientRect();
+        showStreamPopover(rect.left - containerRect.left + rect.width / 2, rect.top - containerRect.top - 10, 'edit', stream);
+    });
+}
+
+function clearPortSelection() {
+    document.querySelectorAll('.viz-port--selected').forEach(el => el.classList.remove('viz-port--selected'));
+    window.selectedSourcePortId = null;
+    const hint = document.getElementById('viz-stream-hint');
+    if (hint) hint.textContent = '';
+}
+
+let resizeObserver = null;
+
+function setupStreamResizeObserver(streams) {
+    if (resizeObserver) resizeObserver.disconnect();
+    const container = document.getElementById('viz-stream-container');
+    if (!container) return;
+    resizeObserver = new ResizeObserver(() => {
+        drawStreamLines(streams);
+    });
+    resizeObserver.observe(container);
+}
+
+function setupPortClickHandlers(sourceRole, targetRole, streams) {
+    document.querySelectorAll('.viz-port[data-side="source"]').forEach(port => {
+        port.addEventListener('click', function (e) {
+            e.stopPropagation();
+            const portId = this.getAttribute('data-port-id');
+
+            if (window.editingStreamId) {
+                applyPortUpdate('source', portId);
+                return;
+            }
+
+            hideStreamPopover();
+            document.querySelectorAll('.viz-port--selected').forEach(el => el.classList.remove('viz-port--selected'));
+            this.classList.add('viz-port--selected');
+            window.selectedSourcePortId = portId;
+            const hint = document.getElementById('viz-stream-hint');
+            if (hint) hint.textContent = 'Выберите порт-приёмник справа';
+        });
+    });
+
+    document.querySelectorAll('.viz-port[data-side="target"]').forEach(port => {
+        port.addEventListener('click', function (e) {
+            e.stopPropagation();
+
+            if (window.editingStreamId) {
+                const portId = this.getAttribute('data-port-id');
+                applyPortUpdate('target', portId);
+                return;
+            }
+
+            const sourcePortId = window.selectedSourcePortId;
+            if (!sourcePortId) {
+                const hint = document.getElementById('viz-stream-hint');
+                if (hint) hint.textContent = 'Сначала выберите порт-источник слева';
+                return;
+            }
+
+            const targetPortId = this.getAttribute('data-port-id');
+            clearPortSelection();
+
+            const rect = this.querySelector('.viz-port__dot')?.getBoundingClientRect() || this.getBoundingClientRect();
+            const containerRect = document.getElementById('viz-stream-popover').parentElement.getBoundingClientRect();
+            showStreamPopover(
+                rect.left - containerRect.left + rect.width / 2,
+                rect.top - containerRect.top - 10,
+                'create',
+                { source_port_id: sourcePortId, target_port_id: targetPortId }
+            );
+        });
+    });
+}
+
+async function applyPortUpdate(side, portId) {
+    const streamId = window.editingStreamId;
+    if (!streamId) return;
+
+    const moduleId = window.currentObjectData?.id;
+    const sourceRoleId = document.getElementById('stream-source-role-id').value;
+    const targetRoleId = document.getElementById('stream-target-role-id').value;
+    const allStreams = getRoleStreams(sourceRoleId, targetRoleId);
+    const stream = allStreams.find(s => s.id === streamId);
+    if (!stream) return;
+
+    const newSourcePortId = side === 'source' ? portId : stream.source_port_id;
+    const newTargetPortId = side === 'target' ? portId : stream.target_port_id;
+
+    try {
+        const res = await fetch(`/api/modules/${moduleId}/role-streams`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                source_role_id: sourceRoleId,
+                target_role_id: targetRoleId,
+                source_port_id: newSourcePortId === '__role__' ? null : newSourcePortId,
+                target_port_id: newTargetPortId === '__role__' ? null : newTargetPortId,
+                name: stream.name,
+                description: stream.description || null,
+                stream_id: streamId,
+            }),
+        });
+        if (!res.ok) throw new Error(await res.text());
+
+        const savedStream = await res.json();
+        upsertRoleStreamInCurrentData(savedStream);
+        rerenderStreamsMatrix();
+
+        const updatedStreams = getRoleStreams(sourceRoleId, targetRoleId);
+        drawStreamLines(updatedStreams);
+
+        document.getElementById('stream-source-port').innerHTML = renderPortOptions(sourceRoleId, savedStream.source_port_id);
+        document.getElementById('stream-target-port').innerHTML = renderPortOptions(targetRoleId, savedStream.target_port_id);
+
+        const popover = document.getElementById('viz-stream-popover');
+        if (popover && popover.style.display === 'block') {
+            const rect = popover.getBoundingClientRect();
+            const parentRect = popover.parentElement.getBoundingClientRect();
+            showStreamPopover(
+                Math.max(4, Math.min(rect.left - parentRect.left, parentRect.width - 240)),
+                Math.max(4, rect.top - parentRect.top),
+                'edit',
+                savedStream
+            );
+        }
+        const hint = document.getElementById('viz-stream-hint');
+        if (hint) hint.textContent = 'Порт обновлён';
+
+        showToast('Порт обновлён', 'success');
+    } catch (err) {
+        showToast('Ошибка: ' + err.message, 'error');
+    }
+}
+
+function showStreamPopover(x, y, mode, data) {
+    const popover = document.getElementById('viz-stream-popover');
+    if (!popover) return;
+
+    if (mode === 'create') {
+        popover.innerHTML = `
+            <div class="viz-popover-form">
+                <label>Выбрать существующий поток:</label>
+                <input type="text" id="viz-search-stream" placeholder="Поиск потока..." class="viz-popover-input" oninput="searchExistingStreams(this.value)">
+                <div id="viz-search-results" class="viz-search-results" style="display:none;"></div>
+                <div class="viz-popover-divider">Или создать новый</div>
+                <label>Название нового потока:</label>
+                <input type="text" id="viz-new-stream-name" placeholder="Введите название..." class="viz-popover-input" onkeydown="if(event.key==='Enter')createStreamFromPopover('${data.source_port_id}', '${data.target_port_id}')">
+                <div class="viz-popover-actions">
+                    <button type="button" class="viz-popover-btn viz-popover-btn--primary" onclick="createStreamFromPopover('${data.source_port_id}', '${data.target_port_id}')">Создать</button>
+                    <button type="button" class="viz-popover-btn" onclick="hideStreamPopover()">Отмена</button>
+                </div>
+            </div>
+        `;
+        const parentRect = popover.parentElement.getBoundingClientRect();
+        popover.style.left = Math.max(4, Math.min(x, parentRect.width - 250)) + 'px';
+        popover.style.top = Math.max(4, y) + 'px';
+        popover.style.display = 'block';
+        setTimeout(() => {
+            const input = document.getElementById('viz-search-stream');
+            if (input) input.focus();
+        }, 100);
+    } else if (mode === 'edit') {
+        const srcRoleId = document.getElementById('stream-source-role-id').value;
+        const tgtRoleId = document.getElementById('stream-target-role-id').value;
+        const srcPortName = getPortDisplayName(srcRoleId, data.source_port_id);
+        const tgtPortName = getPortDisplayName(tgtRoleId, data.target_port_id);
+        popover.innerHTML = `
+            <div class="viz-popover-form">
+                <label>Название потока:</label>
+                <input type="text" id="viz-edit-stream-name" value="${escapeHtml(data.name)}" class="viz-popover-input" onkeydown="if(event.key==='Enter')updateStreamFromPopover()">
+                <label>Описание:</label>
+                <textarea id="viz-edit-stream-desc" class="viz-popover-textarea">${escapeHtml(data.description || '')}</textarea>
+                <div class="viz-popover-ports">
+                    <div class="viz-popover-port-row">
+                        <span class="viz-popover-port-label">Источник:</span>
+                        <span class="viz-popover-port-name">${escapeHtml(srcPortName)}</span>
+                    </div>
+                    <div class="viz-popover-port-row">
+                        <span class="viz-popover-port-label">Приёмник:</span>
+                        <span class="viz-popover-port-name">${escapeHtml(tgtPortName)}</span>
+                    </div>
+                </div>
+                <div class="viz-popover-note">Кликните на другой порт на схеме, чтобы перенаправить поток</div>
+                <div class="viz-popover-actions">
+                    <button type="button" class="viz-popover-btn viz-popover-btn--primary" onclick="updateStreamFromPopover()">Сохранить</button>
+                    <button type="button" class="viz-popover-btn viz-popover-btn--danger" onclick="deleteSingleRoleStream('${data.id}')">Удалить</button>
+                    <button type="button" class="viz-popover-btn" onclick="hideStreamPopover()">Отмена</button>
+                </div>
+            </div>
+        `;
+        const parentRect = popover.parentElement.getBoundingClientRect();
+        popover.style.left = Math.max(4, Math.min(x, parentRect.width - 240)) + 'px';
+        popover.style.top = Math.max(4, y) + 'px';
+        popover.style.display = 'block';
+        setTimeout(() => {
+            const input = document.getElementById('viz-edit-stream-name');
+            if (input) input.focus();
+        }, 100);
+    }
+}
+
+function hideStreamPopover() {
+    const popover = document.getElementById('viz-stream-popover');
+    if (popover) popover.style.display = 'none';
+    clearPortSelection();
+    document.querySelectorAll('.viz-stream-line--selected').forEach(l => {
+        l.setAttribute('stroke', '#27ae60');
+        l.setAttribute('marker-end', 'url(#viz-arrowhead)');
+        l.classList.remove('viz-stream-line--selected');
+    });
+    window.editingStreamId = null;
+}
+
+async function searchExistingStreams(query) {
+    const resultsDiv = document.getElementById('viz-search-results');
+    if (!resultsDiv) return;
+    if (!query || query.trim().length < 1) {
+        resultsDiv.innerHTML = '';
+        resultsDiv.style.display = 'none';
+        return;
+    }
+    try {
+        const res = await fetch(`/api/streams?query=${encodeURIComponent(query.trim())}&limit=10`);
+        if (!res.ok) throw new Error(await res.text());
+        const streams = await res.json();
+        if (streams.length === 0) {
+            resultsDiv.innerHTML = '<div class="viz-search-empty">Совпадений нет</div>';
+        } else {
+            resultsDiv.innerHTML = streams.map(s => `
+                <button type="button" class="viz-search-item" onclick="selectExistingStream(decodeURIComponent('${encodeURIComponent(s.name)}'), decodeURIComponent('${encodeURIComponent(s.description || '')}'))">
+                    <span>${escapeHtml(s.name)}</span>
+                    ${s.description ? `<small>${escapeHtml(s.description)}</small>` : ''}
+                </button>
+            `).join('');
+        }
+        resultsDiv.style.display = 'block';
+    } catch (err) {
+        resultsDiv.style.display = 'none';
+    }
+}
+
+function selectExistingStream(name, description) {
+    const nameInput = document.getElementById('viz-new-stream-name');
+    const searchInput = document.getElementById('viz-search-stream');
+    if (nameInput) nameInput.value = name;
+    if (searchInput) searchInput.value = name;
+    const resultsDiv = document.getElementById('viz-search-results');
+    if (resultsDiv) resultsDiv.style.display = 'none';
+}
+
+function createStreamFromPopover(sourcePortId, targetPortId) {
+    const name = document.getElementById('viz-new-stream-name')?.value.trim();
+    if (!name) {
+        showToast('Введите название потока', 'error');
+        return;
+    }
+
+    document.getElementById('stream-name').value = name;
+    document.getElementById('stream-description').value = '';
+    window.editingStreamId = null;
+
+    const srcPort = sourcePortId === '__role__' || !sourcePortId ? null : sourcePortId;
+    const tgtPort = targetPortId === '__role__' || !targetPortId ? null : targetPortId;
+
+    hideStreamPopover();
+    saveRoleStream(srcPort, tgtPort);
+}
+
+function updateStreamFromPopover() {
+    const name = document.getElementById('viz-edit-stream-name')?.value.trim();
+    if (!name) {
+        showToast('Введите название потока', 'error');
+        return;
+    }
+
+    document.getElementById('stream-name').value = name;
+    document.getElementById('stream-description').value = document.getElementById('viz-edit-stream-desc')?.value.trim() || '';
+
+    const sid = window.editingStreamId;
+    hideStreamPopover();
+    window.editingStreamId = sid;
+    saveRoleStream();
 }
 
 function toggleEditMode(enable = true) {
@@ -2212,14 +2755,18 @@ function buildRolesMatrixTable(data, editMode, parentId) {
         const collapseIcon = isCollapsed ? '›' : '‹';
         const collapseTitle = isCollapsed ? 'Развернуть' : 'Свернуть';
         const collapseBtn = `<button class="roles-matrix__collapse-btn" onclick="rolesMatrixToggleColumn('${role.id}')" title="${collapseTitle}">${collapseIcon}</button>`;
+        const editBtn = editMode
+            ? `<button class="roles-matrix__edit-role-btn" onclick="rolesMatrixInlineEdit(event, '${parentId}', '${role.id}', '${escapeHtml(role.name)}', '${escapeHtml(role.description || '')}')" title="Редактировать роль">✎</button>`
+            : '';
         const deleteBtn = editMode
-            ? `<button class="roles-matrix__delete-role-btn roles-matrix__col-label" onclick="rolesMatrixDeleteColumn('${parentId}', '${role.id}', '${escapeHtml(role.name)}')" title="Удалить роль из модуля">×</button>`
+            ? `<button class="roles-matrix__delete-role-btn" onclick="rolesMatrixDeleteColumn('${parentId}', '${role.id}', '${escapeHtml(role.name)}')" title="Удалить роль из модуля">×</button>`
             : '';
         const collapsedClass = isCollapsed ? ' roles-matrix__col--collapsed' : '';
         return `<th class="roles-matrix__th${collapsedClass}" data-role-col="${role.id}" title="${escapeHtml(role.description || '')}">
-            <div class="roles-matrix__th-inner">
+            <div class="roles-matrix__th-inner" id="role-header-${role.id}">
                 ${collapseBtn}
                 <span class="roles-matrix__col-label">${renderRoleLink(role.id, role.name)}</span>
+                ${editBtn}
                 ${deleteBtn}
             </div>
         </th>`;
@@ -2557,6 +3104,68 @@ async function rolesMatrixDeleteColumn(parentId, roleId, roleName) {
         showToast('Роль удалена', 'success');
     } catch (err) {
         showToast('Ошибка: ' + err.message, 'error');
+    }
+}
+
+function rolesMatrixInlineEdit(event, parentId, roleId, roleName, roleDesc) {
+    event.stopPropagation();
+    const headerDiv = document.getElementById(`role-header-${roleId}`);
+    if (!headerDiv) return;
+
+    const nameEscaped = escapeHtml(roleName);
+    const descEscaped = escapeHtml(roleDesc || '');
+    headerDiv.innerHTML = `
+        <input type="text" id="role-edit-name-${roleId}" value="${nameEscaped}" class="roles-matrix__inline-input" placeholder="Название">
+        <input type="text" id="role-edit-desc-${roleId}" value="${descEscaped}" class="roles-matrix__inline-input" placeholder="Описание">
+        <button class="roles-matrix__inline-btn roles-matrix__inline-btn--save" onclick="rolesMatrixSaveInline('${parentId}','${roleId}')" title="Сохранить">✓</button>
+        <button class="roles-matrix__inline-btn roles-matrix__inline-btn--cancel" onclick="rolesMatrixCancelInline(event, '${parentId}','${roleId}')" title="Отмена">✗</button>
+    `;
+}
+
+async function rolesMatrixSaveInline(parentId, roleId) {
+    const nameInput = document.getElementById(`role-edit-name-${roleId}`);
+    const descInput = document.getElementById(`role-edit-desc-${roleId}`);
+    const name = (nameInput?.value || '').trim();
+    const description = (descInput?.value || '').trim() || null;
+
+    if (!name) {
+        showToast('Название роли не может быть пустым', 'error');
+        return;
+    }
+
+    try {
+        const res = await fetch(`/api/modules/${parentId}/roles/${roleId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, description }),
+        });
+        if (!res.ok) throw new Error(await res.text());
+
+        const roles = window.currentObjectData.roles || [];
+        const role = roles.find(r => r.id === roleId);
+        if (role) {
+            role.name = name;
+            role.description = description;
+        }
+
+        const isEditMode = document.getElementById('roles-matrix-done-btn')?.style.display !== 'none';
+        const wrapper = document.getElementById('roles-matrix-table-wrapper');
+        if (wrapper && parentId) {
+            wrapper.innerHTML = buildRolesMatrixTable(window.currentObjectData, isEditMode, parentId);
+        }
+        rerenderStreamsMatrix();
+        showToast('Роль обновлена', 'success');
+    } catch (err) {
+        showToast('Ошибка: ' + err.message, 'error');
+    }
+}
+
+function rolesMatrixCancelInline(event, parentId, roleId) {
+    event.stopPropagation();
+    const isEditMode = document.getElementById('roles-matrix-done-btn')?.style.display !== 'none';
+    const wrapper = document.getElementById('roles-matrix-table-wrapper');
+    if (wrapper && parentId) {
+        wrapper.innerHTML = buildRolesMatrixTable(window.currentObjectData, isEditMode, parentId);
     }
 }
 

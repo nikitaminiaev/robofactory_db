@@ -26,17 +26,33 @@ class RoleRepository(BaseRepository):
     def get_all_roles(self, db: Session) -> List[ModuleRole]:
         return db.query(ModuleRole).order_by(ModuleRole.name).all()
 
-    def search_roles(self, query: Optional[str] = None, limit: int = 20) -> List[dict]:
+    def search_roles(self, query: Optional[str] = None, module_id: Optional[UUID] = None, limit: int = 20) -> List[dict]:
         with self.db_session.session() as db:
             stmt = db.query(ModuleRole).order_by(ModuleRole.name)
+
+            if module_id:
+                stmt = stmt.join(
+                    module_role_assignment,
+                    module_role_assignment.c.role_id == ModuleRole.id,
+                ).filter(module_role_assignment.c.module_id == module_id)
+
             if query:
                 stmt = stmt.filter(ModuleRole.name.ilike(f"%{query}%"))
+
             roles = stmt.limit(limit).all()
 
-        return [
-            {"id": str(role.id), "name": role.name, "description": role.description}
-            for role in roles
-        ]
+        result = []
+        with self.db_session.session() as db:
+            for role in roles:
+                modules = self.get_role_modules(db, role.id)
+                result.append({
+                    "id": str(role.id),
+                    "name": role.name,
+                    "description": role.description,
+                    "modules": modules,
+                })
+
+        return result
 
     def create_role(self, db: Session, name: str, description: Optional[str] = None) -> ModuleRole:
         role = ModuleRole(name=name, description=description)
@@ -107,6 +123,7 @@ class RoleRepository(BaseRepository):
                 "name": role_obj.name,
                 "description": role_obj.description,
                 "created_ts": role_obj.created_ts.isoformat() if role_obj.created_ts else None,
+                "modules": self.get_role_modules(db, role_id),
                 "ports": self.get_role_ports(db, role_id),
                 "stream_usages": self.get_role_stream_usages(db, role_id),
             }
@@ -413,3 +430,15 @@ class RoleRepository(BaseRepository):
             db.commit()
             db.refresh(role)
             return role
+
+    def create_role_standalone(self, name: str, description: Optional[str] = None) -> dict:
+        with self.db_session.session() as db:
+            role = self.create_role(db, name, description)
+            db.commit()
+            db.refresh(role)
+            return {
+                "id": str(role.id),
+                "name": role.name,
+                "description": role.description,
+                "created_ts": role.created_ts.isoformat() if role.created_ts else None,
+            }

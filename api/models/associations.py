@@ -1,4 +1,4 @@
-from sqlalchemy import Column, ForeignKey, Table, UUID, JSON, text
+from sqlalchemy import Column, ForeignKey, Index, Table, UUID, JSON, text
 from .base import Base
 
 module_role_assignment = Table(
@@ -18,19 +18,23 @@ parent_child_module = Table(
     Column('child_id', UUID(as_uuid=True), ForeignKey('modules.id'), nullable=False),
     Column('coordinates', JSON, nullable=True),
     Column('role_id', UUID(as_uuid=True), ForeignKey('module_roles.id'), nullable=True),
+    Index('ix_parent_child_module_parent_id', 'parent_id'),
+    Index('ix_parent_child_module_child_id', 'child_id'),
 )
 
 parent_child_module_role_assignment = Table(
     'parent_child_module_role_assignment', Base.metadata,
     Column('parent_child_module_id', UUID(as_uuid=True), ForeignKey('parent_child_module.id', ondelete='CASCADE'), primary_key=True),
     Column('role_id', UUID(as_uuid=True), ForeignKey('module_roles.id', ondelete='CASCADE'), primary_key=True),
+    Index('ix_parent_child_module_role_assignment_role_id', 'role_id'),
 )
 
 # Связь модулей и потоков
 module_stream = Table(
     'module_stream', Base.metadata,
     Column('module_id', UUID(as_uuid=True), ForeignKey('modules.id'), primary_key=True),
-    Column('stream_id', UUID(as_uuid=True), ForeignKey('streams.id'), primary_key=True)
+    Column('stream_id', UUID(as_uuid=True), ForeignKey('streams.id'), primary_key=True),
+    Index('ix_module_stream_stream_id', 'stream_id'),
 )
 
 module_role_stream = Table(
@@ -41,6 +45,7 @@ module_role_stream = Table(
     Column('stream_id', UUID(as_uuid=True), ForeignKey('streams.id', ondelete='CASCADE'), primary_key=True),
     Column('source_port_id', UUID(as_uuid=True), ForeignKey('role_ports.id', ondelete='SET NULL'), nullable=True),
     Column('target_port_id', UUID(as_uuid=True), ForeignKey('role_ports.id', ondelete='SET NULL'), nullable=True),
+    Index('ix_module_role_stream_stream_id', 'stream_id'),
 )
 
 # Связь модулей и платформ

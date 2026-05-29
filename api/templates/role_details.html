@@ -244,6 +244,10 @@ function renderRolePorts(ports) {
 
 function renderRoleDetails(role) {
     const roleId = getRoleId();
+    const modulesHtml = (Array.isArray(role.modules) && role.modules.length > 0)
+        ? role.modules.map(m => `<li><a href="/basic_object/${m.id}">${escapeRoleDetailsHtml(m.name)}</a></li>`).join('')
+        : '<li>Нет связанных модулей</li>';
+
     return `
         <section class="role-card">
             <div class="role-card__header">
@@ -273,6 +277,11 @@ function renderRoleDetails(role) {
                     <textarea id="role-description-input">${escapeRoleDetailsHtml(role.description || '')}</textarea>
                 </div>
             </div>
+        </section>
+
+        <section class="role-card">
+            <h2>Modules</h2>
+            <ul>${modulesHtml}</ul>
         </section>
 
         <section class="role-card">

@@ -170,6 +170,7 @@ class StreamRepository(BaseRepository):
         description: Optional[str],
         source_port_id: Optional[UUID] = None,
         target_port_id: Optional[UUID] = None,
+        stream_id: Optional[UUID] = None,
     ) -> dict:
         with self.db_session.session() as db:
             module = db.query(Module).filter(Module.id == module_id).first()
@@ -179,36 +180,16 @@ class StreamRepository(BaseRepository):
             self._ensure_roles_belong_to_module(db, module_id, source_role_id, target_role_id)
             source_port = self._ensure_port_belongs_to_role(db, source_port_id, source_role_id, "source_port_id")
             target_port = self._ensure_port_belongs_to_role(db, target_port_id, target_role_id, "target_port_id")
-            stream = db.query(Stream).filter(Stream.name == name).first()
-            if not stream:
-                stream = Stream(name=name, description=description)
-                db.add(stream)
-                db.flush()
-            elif description is not None:
-                cast(Any, stream).description = description
 
-            stream_obj = cast(Any, stream)
-            existing = db.execute(
-                select(module_role_stream.c.stream_id).where(
-                    module_role_stream.c.module_id == module_id,
-                    module_role_stream.c.source_role_id == source_role_id,
-                    module_role_stream.c.target_role_id == target_role_id,
-                    module_role_stream.c.stream_id == stream_obj.id,
-                )
-            ).first()
+            if stream_id is not None:
+                stream = db.query(Stream).filter(Stream.id == stream_id).first()
+                if not stream:
+                    raise ValueError(f"Stream с ID '{stream_id}' не найден")
+                cast(Any, stream).name = name
+                if description is not None:
+                    cast(Any, stream).description = description
 
-            if not existing:
-                db.execute(
-                    module_role_stream.insert().values(
-                        module_id=module_id,
-                        source_role_id=source_role_id,
-                        target_role_id=target_role_id,
-                        stream_id=stream_obj.id,
-                        source_port_id=source_port_id,
-                        target_port_id=target_port_id,
-                    )
-                )
-            else:
+                stream_obj = cast(Any, stream)
                 db.execute(
                     module_role_stream.update()
                     .where(
@@ -222,8 +203,52 @@ class StreamRepository(BaseRepository):
                         target_port_id=target_port_id,
                     )
                 )
+            else:
+                stream = db.query(Stream).filter(Stream.name == name).first()
+                if not stream:
+                    stream = Stream(name=name, description=description)
+                    db.add(stream)
+                    db.flush()
+                elif description is not None:
+                    cast(Any, stream).description = description
 
-            self._ensure_module_stream(db, module_id, stream_obj.id)
+                stream_obj = cast(Any, stream)
+                existing = db.execute(
+                    select(module_role_stream.c.stream_id).where(
+                        module_role_stream.c.module_id == module_id,
+                        module_role_stream.c.source_role_id == source_role_id,
+                        module_role_stream.c.target_role_id == target_role_id,
+                        module_role_stream.c.stream_id == stream_obj.id,
+                    )
+                ).first()
+
+                if not existing:
+                    db.execute(
+                        module_role_stream.insert().values(
+                            module_id=module_id,
+                            source_role_id=source_role_id,
+                            target_role_id=target_role_id,
+                            stream_id=stream_obj.id,
+                            source_port_id=source_port_id,
+                            target_port_id=target_port_id,
+                        )
+                    )
+                else:
+                    db.execute(
+                        module_role_stream.update()
+                        .where(
+                            module_role_stream.c.module_id == module_id,
+                            module_role_stream.c.source_role_id == source_role_id,
+                            module_role_stream.c.target_role_id == target_role_id,
+                            module_role_stream.c.stream_id == stream_obj.id,
+                        )
+                        .values(
+                            source_port_id=source_port_id,
+                            target_port_id=target_port_id,
+                        )
+                    )
+
+                self._ensure_module_stream(db, module_id, stream_obj.id)
 
             db.commit()
             db.refresh(stream)

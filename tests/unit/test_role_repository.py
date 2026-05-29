@@ -280,6 +280,37 @@ class TestRoleRepositoryModuleAssignment:
         assert result == existing_role
         mock_db.add.assert_not_called()
 
+    @patch('repository.base_repository.Db_session')
+    def test_create_role_standalone(self, mock_db_session_class):
+        mock_db_session_instance = MagicMock()
+        mock_db_session_class.return_value = mock_db_session_instance
+        mock_db = MagicMock()
+        mock_db_session_instance.session.return_value.__enter__.return_value = mock_db
+
+        mock_role = MagicMock()
+        mock_role.id = uuid4()
+        mock_role.name = "standalone"
+        mock_role.description = "Standalone desc"
+        mock_role.created_ts = None
+
+        def mock_add(obj):
+            obj.name = "standalone"
+            obj.description = "Standalone desc"
+            obj.id = mock_role.id
+            obj.created_ts = None
+            return obj
+
+        mock_db.add.side_effect = mock_add
+
+        repo = RoleRepository()
+        result = repo.create_role_standalone("standalone", "Standalone desc")
+
+        assert result["name"] == "standalone"
+        assert result["description"] == "Standalone desc"
+        mock_db.add.assert_called_once()
+        mock_db.commit.assert_called_once()
+        mock_db.refresh.assert_called_once()
+
 
 class TestRoleRepositoryDetails:
     @patch('repository.base_repository.Db_session')
@@ -313,6 +344,7 @@ class TestRoleRepositoryDetails:
 
         assert result["id"] == str(role_id)
         assert result["name"] == "controller"
+        assert result["modules"] == []
         assert result["ports"] == []
         assert result["stream_usages"] == []
 

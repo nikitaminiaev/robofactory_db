@@ -30,7 +30,7 @@ class ModuleRepository(BaseRepository):
                 selectinload(Module.streams),
                 selectinload(Module.platforms),
                 selectinload(Module.versions),
-                selectinload(Module.roles),
+                selectinload(Module.roles).selectinload(ModuleRole.ports),
             ).order_by(
                 Module.id
             )
@@ -51,7 +51,7 @@ class ModuleRepository(BaseRepository):
                 selectinload(Module.streams),
                 selectinload(Module.platforms),
                 selectinload(Module.versions),
-                selectinload(Module.roles),
+                selectinload(Module.roles).selectinload(ModuleRole.ports),
             )
             
             if top_level_ids is None:
@@ -86,7 +86,7 @@ class ModuleRepository(BaseRepository):
                 selectinload(Module.streams),
                 selectinload(Module.platforms),
                 selectinload(Module.versions),
-                selectinload(Module.roles),
+                selectinload(Module.roles).selectinload(ModuleRole.ports),
             )
             
             if name:
@@ -117,7 +117,7 @@ class ModuleRepository(BaseRepository):
                 selectinload(Module.streams),
                 selectinload(Module.platforms),
                 selectinload(Module.versions),
-                selectinload(Module.roles),
+                selectinload(Module.roles).selectinload(ModuleRole.ports),
             ).filter_by(id=id).first()
             print(f"DEBUG get_module_with_relations_by_id: module found = {module is not None}")
             if module:
@@ -304,7 +304,7 @@ class ModuleRepository(BaseRepository):
                 selectinload(Module.streams),
                 selectinload(Module.platforms),
                 selectinload(Module.versions),
-                selectinload(Module.roles),
+                selectinload(Module.roles).selectinload(ModuleRole.ports),
             )
             
             query = query.join(
@@ -327,7 +327,7 @@ class ModuleRepository(BaseRepository):
                 selectinload(Module.streams),
                 selectinload(Module.platforms),
                 selectinload(Module.versions),
-                selectinload(Module.roles),
+                selectinload(Module.roles).selectinload(ModuleRole.ports),
             )
             
             query = query.join(
@@ -558,7 +558,7 @@ class ModuleRepository(BaseRepository):
                 selectinload(Module.platforms),
                 selectinload(Module.boundaries),
                 selectinload(Module.versions),
-                selectinload(Module.roles),
+                selectinload(Module.roles).selectinload(ModuleRole.ports),
             ).filter_by(id=new_module.id).first()
 
             return new_module

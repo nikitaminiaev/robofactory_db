@@ -17,6 +17,7 @@ class RoleStreamRequest(BaseModel):
     target_port_id: Optional[str] = None
     name: str
     description: Optional[str] = None
+    stream_id: Optional[str] = None  # for editing existing stream
 
 
 class RoleStreamResponse(BaseModel):
@@ -73,6 +74,7 @@ async def upsert_module_role_stream(
     target_role_uuid = _parse_uuid(body.target_role_id, "target_role_id")
     source_port_uuid = _parse_optional_uuid(body.source_port_id, "source_port_id")
     target_port_uuid = _parse_optional_uuid(body.target_port_id, "target_port_id")
+    stream_uuid = _parse_optional_uuid(body.stream_id, "stream_id")
     name = body.name.strip()
 
     if source_role_uuid == target_role_uuid:
@@ -89,6 +91,7 @@ async def upsert_module_role_stream(
             body.description,
             source_port_uuid,
             target_port_uuid,
+            stream_uuid,
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))

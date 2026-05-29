@@ -41,12 +41,21 @@ function renderRolesSearchTable(roles) {
         return '<div class="info-message">Роли по заданным критериям не найдены</div>';
     }
 
-    const rows = roles.map(role => `
-        <tr>
-            <td><a href="/roles/${role.id}">${escapeRoleHtml(role.name)}</a></td>
-            <td>${role.description ? escapeRoleHtml(role.description) : '-'}</td>
-        </tr>
-    `).join('');
+    const rows = roles.map(role => {
+        let modulesCell = '-';
+        if (Array.isArray(role.modules) && role.modules.length > 0) {
+            modulesCell = role.modules.map(m =>
+                `<a href="/basic_object/${m.id}">${escapeRoleHtml(m.name)}</a>`
+            ).join(', ');
+        }
+        return `
+            <tr>
+                <td><a href="/roles/${role.id}">${escapeRoleHtml(role.name)}</a></td>
+                <td>${role.description ? escapeRoleHtml(role.description) : '-'}</td>
+                <td>${modulesCell}</td>
+            </tr>
+        `;
+    }).join('');
 
     return `
         <h2>Search Results:</h2>
@@ -55,6 +64,7 @@ function renderRolesSearchTable(roles) {
                 <tr>
                     <th>Name</th>
                     <th>Description</th>
+                    <th>Modules</th>
                 </tr>
             </thead>
             <tbody>${rows}</tbody>
