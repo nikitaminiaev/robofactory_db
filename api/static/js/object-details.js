@@ -286,7 +286,13 @@ function renderObjectFullDetails(data) {
         </div>
         <div class="module-tab-panel active" data-module-tab-panel="overview">
         <table class="detail-table">
-            <tr><th>ID</th><td>${data.id} <button class="load-freecad-btn" data-id="${data.id}" style="display: none;">Load FreeCad</button></td></tr>
+            <tr><th>ID</th><td>${data.id} ${
+                data.bounding_contour && data.bounding_contour.brep_files
+                && (typeof data.bounding_contour.brep_files === 'object' && Object.keys(data.bounding_contour.brep_files).length > 0
+                    || typeof data.bounding_contour.brep_files === 'string' && data.bounding_contour.brep_files.trim() !== '')
+                ? `<button class="load-freecad-btn" data-id="${data.id}" style="display: none;">Load FreeCad</button>`
+                : `<button class="create-cad-btn" data-id="${data.id}" data-name="${data.name}" style="display: none;">Create CAD</button>`
+            }</td></tr>
             <tr><th>Name</th><td id="field-name">${data.name}</td></tr>
             <tr><th>Author</th><td id="field-author">${data.author}</td></tr>
             <tr><th>Description</th><td id="field-description">${data.description || '-'}</td></tr>
@@ -411,6 +417,7 @@ function renderObjectFullDetails(data) {
                         <tr>
                             <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">Name</th>
                             <th style="padding: 8px; text-align: center; border-bottom: 1px solid #ddd; width: 80px;">Depth</th>
+                            <th style="padding: 8px; text-align: center; border-bottom: 1px solid #ddd; width: 140px;">Actions</th>
                         </tr>
                     </thead>
                     <tbody>`;
@@ -425,6 +432,11 @@ function renderObjectFullDetails(data) {
                 const childName = window.objectNamesCache[childId] || childId;
                 const countBadge = count > 1 ? ` <span class="child-count-badge expand-badge" data-group="${groupIndex}" style="cursor:pointer;" title="Нажмите для раскрытия">&times;${count}</span>` : '';
                 
+                const hasBrep = group[0] && group[0].has_brep;
+                const actionBtn = hasBrep
+                    ? `<button class="load-freecad-btn" data-id="${childId}" style="display:none;">Load FreeCad</button>`
+                    : `<button class="create-cad-btn" data-id="${childId}" data-name="${childName}" style="display:none;">Create CAD</button>`;
+
                 tableHtml += `<tr class="child-group-row" data-group-index="${groupIndex}" data-child-id="${childId}">
                     <td style="padding: 8px; border-bottom: 1px solid #eee;">
                         <a href="/basic_object/${childId}" class="child-link" data-group="${groupIndex}">${childName}</a>${countBadge}
@@ -437,6 +449,7 @@ function renderObjectFullDetails(data) {
                             min="0" max="10" value="1" 
                             style="width: 50px; padding: 4px; text-align: center;">` : '<span style="color:#999;">-</span>'}
                     </td>
+                    <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: center;">${actionBtn}</td>
                 </tr>`;
                 
                 // Сохраняем данные в глобальный массив
@@ -452,6 +465,11 @@ function renderObjectFullDetails(data) {
                 if (count > 1) {
                     group.forEach((childData, subIndex) => {
                         const pcmId = childData.parent_child_module_id;
+                        const hasBrepExpanded = childData.has_brep;
+                        const actionBtnExpanded = hasBrepExpanded
+                            ? `<button class="load-freecad-btn" data-id="${childId}" style="display:none;">Load FreeCad</button>`
+                            : `<button class="create-cad-btn" data-id="${childId}" data-name="${childName}" style="display:none;">Create CAD</button>`;
+
                         tableHtml += `<tr class="child-expanded-row" data-parent-group="${groupIndex}" data-child-id="${childId}" data-pcm-id="${pcmId || ''}" style="display: none;">
                             <td style="padding: 8px; border-bottom: 1px solid #eee; padding-left: 20px; color: #666;">
                                 <span class="child-link-expanded" data-group="${groupIndex}" data-sub="${subIndex}">${childName}</span>
@@ -465,12 +483,16 @@ function renderObjectFullDetails(data) {
                                     min="0" max="10" value="1" 
                                     style="width: 50px; padding: 4px; text-align: center;">
                             </td>
+                            <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: center;">${actionBtnExpanded}</td>
                         </tr>`;
                     });
                 }
             });
             
             tableHtml += '</tbody></table>';
+            tableHtml += `<div style="margin-top: 8px;">
+                <button onclick="showCreateChildModal()" style="padding: 6px 14px; cursor: pointer; font-size: 13px;">+ New Module</button>
+            </div>`;
             
             // Загружаем имена
             const childIds = Object.keys(groupedChildren);
@@ -694,6 +716,27 @@ function renderObjectFullDetails(data) {
                     <div class="modal-actions">
                         <button type="button" onclick="submitEditVersion()">Сохранить</button>
                         <button type="button" onclick="hideEditVersionModal()">Отмена</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <div id="create-child-modal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <h3>Создать дочерний модуль</h3>
+                <form id="create-child-form">
+                    <div class="form-group">
+                        <label for="create-child-name">Название модуля:</label>
+                        <input type="text" id="create-child-name" required placeholder="Введите название">
+                    </div>
+                    <div class="form-group">
+                        <label for="create-child-role">Роль (опционально):</label>
+                        <select id="create-child-role" style="width: 100%; padding: 6px;">
+                            <option value="">— без роли —</option>
+                        </select>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" onclick="submitCreateChildModule()">Создать</button>
+                        <button type="button" onclick="hideCreateChildModal()">Отмена</button>
                     </div>
                 </form>
             </div>
@@ -2380,6 +2423,86 @@ async function confirmDeleteModule() {
         }, 1000);
     } catch (error) {
         showToast('Error: ' + error.message, 'error');
+    }
+}
+
+async function loadRolesForSelect(selectId, moduleId) {
+    try {
+        const url = moduleId ? `/api/modules/${moduleId}/roles` : '/api/roles?limit=100';
+        const response = await fetch(url);
+        if (!response.ok) return;
+        const roles = await response.json();
+        const select = document.getElementById(selectId);
+        if (!select) return;
+        roles.forEach(role => {
+            const opt = document.createElement('option');
+            opt.value = role.name;
+            opt.textContent = role.name + (role.description ? ` (${role.description})` : '');
+            select.appendChild(opt);
+        });
+    } catch (e) {
+        console.error('Error loading roles:', e);
+    }
+}
+
+function showCreateChildModal() {
+    const modal = document.getElementById('create-child-modal');
+    if (!modal) return;
+    document.getElementById('create-child-name').value = '';
+    const currentId = window.currentObjectData?.id;
+    document.getElementById('create-child-role').innerHTML = '<option value="">— без роли —</option>';
+    if (currentId) {
+        loadRolesForSelect('create-child-role', currentId);
+    }
+    modal.style.display = 'flex';
+}
+
+function hideCreateChildModal() {
+    const modal = document.getElementById('create-child-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+async function submitCreateChildModule() {
+    const name = document.getElementById('create-child-name').value.trim();
+    if (!name) {
+        showToast('Введите название модуля', 'error');
+        return;
+    }
+    const role = document.getElementById('create-child-role').value;
+    const currentId = window.currentObjectData?.id;
+    if (!currentId) {
+        showToast('ID текущего модуля не найден', 'error');
+        return;
+    }
+
+    const payload = {
+        name: name,
+        author: window.currentObjectData.author || 'unknown',
+        is_assembly: false,
+        is_shell: false,
+        parent_id: currentId,
+        coordinates: {x: 0, y: 0, z: 0, angle: 0, axis: {x: 0, y: 0, z: 1}}
+    };
+    if (role) {
+        payload.role = role;
+    }
+
+    try {
+        const response = await fetch('/api/basic_object/', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.detail || 'Ошибка создания модуля');
+        }
+        const result = await response.json();
+        showToast(`Дочерний модуль "${name}" создан`, 'success');
+        hideCreateChildModal();
+        loadModuleInfo();
+    } catch (e) {
+        showToast('Ошибка: ' + e.message, 'error');
     }
 }
 

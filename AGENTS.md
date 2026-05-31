@@ -128,4 +128,38 @@ Modules form a parent-child hierarchy. Services belong to Platforms and contain 
 ### Git интеграция
 
 Каждый модуль имеет собственный Git репозиторий для отслеживания BREP файлов. Коммиты создаются автоматически при изменениях.
-/media/ssd_1_9tb/PycharmProjects/robofactory_db/AGENTS.md
+
+## FreeCAD PLMplugin (смежный проект)
+
+Плагин расположен в `/media/ssd_1_9tb/PycharmProjects/freecadPlugin/PLMplugin/`. Интеграционный мост между FreeCAD и robofactory_db.
+
+### Функционал
+- **Загрузка моделей** из БД в FreeCAD: рекурсивная загрузка объектов с детьми, BREP-геометрией, координатами; создание `App::Part` с вложенными `Part::Feature`
+- **Выгрузка моделей** из FreeCAD в БД: извлечение BREP, координат, отправка POST/PATCH на API
+- **Навигация по иерархии** сборок: переход вверх/вниз по дереву parent-child
+- **WebSocket-сервер** (порт 8765): удалённое управление FreeCAD из AI-агентов — выполнение Python-кода (`freecad_executor.py`) или вызов PLM-функций (`plm_functions.py`)
+- **MCP-сервер** (порт 9877): интеграция с AI-ассистентами через Model Context Protocol — скриншоты, сравнение геометрии, выполнение скриптов
+
+### Архитектура
+- `InitGui.py` — регистрирует верстак "PLM" в FreeCAD
+- `main_window.py` — главное окно GUI (PySide2), дерево объектов, кнопки загрузки/выгрузки
+- `api_client.py` — HTTP-клиент к robofactory_db (localhost:8000)
+- `socket_client.py` + `client_panel.py` — WebSocket клиент для удалённого управления
+- `plm_functions.py` + `function_registry.py` — реестр функций, вызываемых по имени из WebSocket
+- `freecad_executor.py` — безопасное выполнение Python-кода в контексте FreeCAD
+- `cad_utils.py` — утилиты: создание деталей из BREP, извлечение BREP, скриншоты, сравнение геометрии
+- `mcp/` — MCP-сервер (FastMCP) для AI-интеграции
+- `widgets.py` — кастомный QTreeWidget с ленивой загрузкой детей
+
+### API эндпоинты robofactory_db, используемые плагином
+| Метод | Эндпоинт | Назначение |
+|-------|----------|------------|
+| GET | `/api/basic_objects/count` | Количество объектов |
+| GET | `/api/basic_object?name=` | Поиск по имени |
+| GET | `/api/basic_objects/top_level` | Корневые объекты |
+| GET | `/api/basic_object/{id}` | Объект по ID (с детьми) |
+| GET | `/api/basic_object/{id}/parent_ids` | ID родителей |
+| GET | `/api/basic_objects/{id}/children` | Дети объекта |
+| POST | `/api/basic_object/` | Создание объекта |
+| PATCH | `/api/basic_object/{id}` | Обновление (BREP, имя, координаты) |
+| PATCH | `/api/parent_child_module/{record_id}` | Обновление координат parent-child |

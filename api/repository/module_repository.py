@@ -7,7 +7,7 @@ from sqlalchemy import func, select
 
 from . import BaseRepository
 from .bounding_contour_repository import BoundingContourRepository
-from models import Module, ModuleBoundary, ModuleRole
+from models import Module, ModuleBoundary, ModuleRole, BoundingContour
 from models.associations import (
     parent_child_module,
     module_role_assignment,
@@ -223,6 +223,19 @@ class ModuleRepository(BaseRepository):
                 link_id = str(role_row.parent_child_module_id)
                 role_map.setdefault(link_id, []).append(str(role_row.role_id))
 
+            child_ids = [row.child_id for row in rows]
+            brep_map: dict[str, bool] = {}
+            if child_ids:
+                bc_rows = db.execute(
+                    select(BoundingContour.module_id, BoundingContour.brep_files)
+                    .where(BoundingContour.module_id.in_(child_ids))
+                ).fetchall()
+                for bc in bc_rows:
+                    has = bc.brep_files is not None and (
+                        (isinstance(bc.brep_files, dict) and len(bc.brep_files) > 0)
+                    )
+                    brep_map[str(bc.module_id)] = has
+
             return [
                 {
                     "parent_child_module_id": str(row.id),
@@ -230,6 +243,7 @@ class ModuleRepository(BaseRepository):
                     "coordinates": row.coordinates,
                     "role_id": str(row.role_id) if row.role_id else None,
                     "role_ids": role_map.get(str(row.id), []),
+                    "has_brep": brep_map.get(str(row.child_id), False),
                 }
                 for row in rows
             ]

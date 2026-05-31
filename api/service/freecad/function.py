@@ -18,6 +18,16 @@ def save_position(module_id: str) -> str:
     })
 
 
+def create_empty_part(module_id: str, module_name: str) -> str:
+    return json.dumps({
+        "function_call": "create_empty_part_in_new_doc",
+        "arguments": {
+            "module_id": module_id,
+            "module_name": module_name
+        }
+    })
+
+
 def create_part_from_brep(brep_string: str, label: str, coordinates: dict = None, id: str = '', parent_child_module_id: str = None):
     pcm_id = f"'{parent_child_module_id}'" if parent_child_module_id else "''"
     return f"""

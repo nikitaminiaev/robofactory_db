@@ -103,6 +103,27 @@ function updateFreeCadButtonsVisibility() {
         }
     });
 
+    // Create CAD кнопки
+    document.querySelectorAll('.create-cad-btn').forEach(button => {
+        if (connected) {
+            button.style.display = 'inline-block';
+            applyFreeCadButtonStyle(button);
+
+            if (!button.hasAttribute('data-initialized')) {
+                button.setAttribute('data-initialized', 'true');
+
+                button.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const moduleId = this.getAttribute('data-id');
+                    const moduleName = this.getAttribute('data-name') || moduleId;
+                    createCadForModule(moduleId, moduleName);
+                });
+            }
+        } else {
+            button.style.display = 'none';
+        }
+    });
+
     // Кнопки действий FreeCAD на странице деталей (Save, To Supersystem, To Subsystem)
     document.querySelectorAll('.freecad-action-btn').forEach(el => {
         el.style.display = connected ? 'inline-block' : 'none';
@@ -390,6 +411,26 @@ function showNotification(message, type = 'info') {
             }, 500);
         }
     }, 1000);
+}
+
+function createCadForModule(moduleId, moduleName) {
+    if (!serverRunning || connectedClientsCount === 0) {
+        showNotification('FreeCAD не подключён', 'error');
+        return;
+    }
+
+    showNotification(`Отправка команды Create CAD для модуля "${moduleName}"...`, 'info');
+
+    fetch(`/api/basic_object/${moduleId}/create_cad`, { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                showNotification(`CAD документ создаётся для "${moduleName}"`, 'success');
+            } else {
+                showNotification(data.detail || 'Ошибка при создании CAD', 'error');
+            }
+        })
+        .catch(err => showNotification(`Ошибка сети: ${err.message}`, 'error'));
 }
 
 function saveBrepToFreeCad(moduleId) {
