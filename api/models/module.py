@@ -10,6 +10,7 @@ from sqlalchemy import Enum as SQLAlchemyEnum
 
 from .base import Base
 from .bounding_contour import BoundingContour
+from .interface_object import InterfaceObject
 from .associations import parent_child_module, module_stream, module_platform, module_boundary, module_role_assignment
 
 
@@ -36,6 +37,11 @@ class Module(Base):
     service_id = Column(UUID(as_uuid=True), ForeignKey('services.id'), nullable=True)
     service: Mapped["Service"] = relationship(back_populates="modules")
     interface_object_id: Mapped[UUID] = mapped_column(ForeignKey("interface_objects.id"), nullable=True)
+    interfaces = relationship(
+        "InterfaceObject",
+        back_populates="module",
+        foreign_keys=[InterfaceObject.module_id],
+    )
     bounding_contour: Mapped["BoundingContour"] = relationship(back_populates="module", uselist=False)
 
     # Связь parent-child с координатами
@@ -108,6 +114,26 @@ class Module(Base):
 
         return instance
 
+    def _get_interfaces_dict(self) -> list:
+        try:
+            ifaces = self.interfaces
+        except Exception:
+            return []
+        return [
+            {
+                "id": str(iface.id),
+                "name": iface.name,
+                "direction": iface.direction,
+                "physical_form": iface.physical_form,
+                "parameters": iface.parameters,
+                "is_mandatory": iface.is_mandatory,
+                "is_service": iface.is_service,
+                "description": iface.description,
+                "ttx": iface.ttx,
+            }
+            for iface in (ifaces or [])
+        ]
+
     def __repr__(self) -> str:
         return str(self)
 
@@ -151,6 +177,7 @@ class Module(Base):
                     "is_released": self.versions[0].is_released,
                     "created_ts": self.versions[0].created_ts.isoformat() if self.versions[0].created_ts else None
                 } if self.versions else None,
+            "interfaces": self._get_interfaces_dict(),
             "roles": [
                 {
                     "id": str(role.id),

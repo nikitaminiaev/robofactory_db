@@ -1,4 +1,4 @@
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any
 from pydantic import BaseModel
 from .bounding_contour_dto import BoundingContourDTO
 
@@ -9,6 +9,7 @@ class ParentEdgeRoleDTO(BaseModel):
     role_id: Optional[str] = None
     role_name: Optional[str] = None
     role_description: Optional[str] = None
+    ports: List[Dict[str, Any]] = []
 
 
 class BasicObjectDTO(BaseModel):
@@ -34,6 +35,8 @@ class BasicObjectDTO(BaseModel):
     children_roles: Dict[str, List[str]] = {}
     role_streams: List[Dict] = []
     external_role_streams: List[Dict] = []
+    interfaces: List[Dict] = []
+    interface_mappings: List[Dict] = []
     created_ts: Optional[str] = None
     updated_ts: Optional[str] = None
 

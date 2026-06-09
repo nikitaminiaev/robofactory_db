@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from repository.module_repository import ModuleRepository
 from repository.stream_repository import StreamRepository
+from repository.interface_repository import InterfaceRepository, InterfaceMappingRepository
 from schemas import BasicObjectDTO
 from schemas.basic_object_dto import ParentEdgeRoleDTO
 
@@ -34,6 +35,8 @@ async def get_basic_object_by_id(
     id: UUID,
     repo: ModuleRepository = Depends(),
     stream_repo: StreamRepository = Depends(),
+    interface_repo: InterfaceRepository = Depends(),
+    mapping_repo: InterfaceMappingRepository = Depends(),
 ):
     basic_object = repo.get_module_with_relations_by_id(id)
     if not basic_object:
@@ -48,6 +51,9 @@ async def get_basic_object_by_id(
     result.parent_edges = [ParentEdgeRoleDTO(**edge) for edge in parent_edges]
     result.role_streams = stream_repo.get_module_role_streams(id)
     result.external_role_streams = stream_repo.get_external_role_streams(id)
+
+    result.interfaces = interface_repo.get_module_interfaces(id)
+    result.interface_mappings = mapping_repo.get_module_mappings(id)
 
     if result.bounding_contour:
         if hasattr(result.bounding_contour.brep_files, 'get'):

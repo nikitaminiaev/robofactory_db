@@ -124,6 +124,7 @@ class RoleRepository(BaseRepository):
                 "description": role_obj.description,
                 "created_ts": role_obj.created_ts.isoformat() if role_obj.created_ts else None,
                 "modules": self.get_role_modules(db, role_id),
+                "module_usages": self.get_role_port_usages(db, role_id),
                 "ports": self.get_role_ports(db, role_id),
                 "stream_usages": self.get_role_stream_usages(db, role_id),
             }

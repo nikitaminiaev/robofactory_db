@@ -7,7 +7,7 @@ from sqlalchemy import func, select
 
 from . import BaseRepository
 from .bounding_contour_repository import BoundingContourRepository
-from models import Module, ModuleBoundary, ModuleRole, BoundingContour
+from models import Module, ModuleBoundary, ModuleRole, BoundingContour, RolePort
 from models.associations import (
     parent_child_module,
     module_role_assignment,
@@ -117,6 +117,7 @@ class ModuleRepository(BaseRepository):
                 selectinload(Module.streams),
                 selectinload(Module.platforms),
                 selectinload(Module.versions),
+                selectinload(Module.interfaces),
                 selectinload(Module.roles).selectinload(ModuleRole.ports),
             ).filter_by(id=id).first()
             print(f"DEBUG get_module_with_relations_by_id: module found = {module is not None}")
@@ -272,14 +273,40 @@ class ModuleRepository(BaseRepository):
             ).fetchall()
 
         result = []
+        role_ids = {row.role_id for row in rows if row.role_id}
+        ports_by_role_id: dict[str, list[dict]] = {}
+        if role_ids:
+            with self.db_session.session() as db:
+                ports = (
+                    db.query(RolePort)
+                    .filter(RolePort.role_id.in_(role_ids))
+                    .order_by(RolePort.name)
+                    .all()
+                )
+            for port in ports:
+                role_id = str(port.role_id)
+                ports_by_role_id.setdefault(role_id, []).append(
+                    {
+                        "id": str(port.id),
+                        "role_id": role_id,
+                        "parent_id": str(port.parent_id) if port.parent_id else None,
+                        "name": port.name,
+                        "direction": port.direction,
+                        "description": port.description,
+                        "ttx": port.ttx,
+                    }
+                )
+
         for row in rows:
+            role_id = str(row.role_id) if row.role_id else None
             result.append(
                 {
                     "parent_child_module_id": str(row.id),
                     "parent_id": str(row.parent_id),
-                    "role_id": str(row.role_id) if row.role_id else None,
+                    "role_id": role_id,
                     "role_name": row.name,
                     "role_description": row.description,
+                    "ports": ports_by_role_id.get(role_id, []) if role_id else [],
                 }
             )
         return result

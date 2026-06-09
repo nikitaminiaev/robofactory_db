@@ -296,6 +296,11 @@ function renderRoleDetails(role) {
             <h2>Streams</h2>
             ${renderRoleStreams(role.stream_usages, roleId)}
         </section>
+
+        <section class="role-card">
+            <h2>Linked Interfaces</h2>
+            <div id="role-linked-interfaces">Загрузка...</div>
+        </section>
     `;
 }
 
@@ -448,8 +453,132 @@ async function loadRoleDetails() {
         document.getElementById('role-title').textContent = `Role: ${data.name}`;
         document.getElementById('breadcrumb-role-name').textContent = data.name;
         container.innerHTML = renderRoleDetails(data);
+        loadRoleLinkedInterfaces(data);
     } catch (error) {
         container.innerHTML = `<div class="error-message">Ошибка загрузки роли: ${escapeRoleDetailsHtml(error.message)}</div>`;
+    }
+}
+
+async function loadRoleLinkedInterfaces(role) {
+    const container = document.getElementById('role-linked-interfaces');
+    const ports = role.ports || [];
+    const moduleUsages = role.module_usages || [];
+    if (!container || ports.length === 0) {
+        if (container) container.innerHTML = '<div class="info-message">У этой роли нет портов.</div>';
+        return;
+    }
+    if (moduleUsages.length === 0) {
+        container.innerHTML = '<div class="info-message">Ни один модуль пока не играет эту роль в родительском модуле.</div>';
+        return;
+    }
+
+    try {
+        const usagesByChildId = {};
+        moduleUsages.forEach(usage => {
+            if (!usagesByChildId[usage.child_id]) {
+                usagesByChildId[usage.child_id] = {
+                    module: { id: usage.child_id, name: usage.child_name },
+                    parents: [],
+                };
+            }
+            usagesByChildId[usage.child_id].parents.push(usage.parent_name || usage.parent_id);
+        });
+
+        const moduleData = await Promise.all(Object.values(usagesByChildId).map(async usage => {
+            const module = usage.module;
+            const [ifacesRes, mappingsRes] = await Promise.all([
+                fetch(`/api/modules/${module.id}/interfaces`),
+                fetch(`/api/modules/${module.id}/interface-mappings`),
+            ]);
+            return {
+                module,
+                parents: usage.parents,
+                interfaces: ifacesRes.ok ? await ifacesRes.json() : [],
+                mappings: mappingsRes.ok ? await mappingsRes.json() : [],
+            };
+        }));
+
+        const rows = [];
+        moduleData.forEach(({ module, parents, interfaces, mappings }) => {
+            ports.forEach(port => {
+                const portMappings = mappings.filter(m => m.role_port_id === port.id);
+                const mappedInterfaceIds = new Set(portMappings.map(m => m.interface_id));
+                const linkedHtml = portMappings.length > 0
+                    ? portMappings.map(m => `
+                        <div style="display:flex;gap:6px;align-items:center;margin:2px 0;">
+                            <span>${escapeRoleDetailsHtml(m.interface_name || m.interface_id)}</span>
+                            <button type="button" class="danger-btn" onclick="unlinkRolePortInterface('${module.id}', '${m.id}')">Unlink</button>
+                        </div>
+                    `).join('')
+                    : '<span class="role-muted">Не связан</span>';
+                const available = interfaces.filter(iface => !mappedInterfaceIds.has(iface.id));
+                const actionHtml = available.length > 0
+                    ? `<select id="link-select-${module.id}-${port.id}">
+                            ${available.map(iface => `<option value="${iface.id}">${escapeRoleDetailsHtml(iface.name)}</option>`).join('')}
+                       </select>
+                       <button type="button" onclick="linkRolePortInterface('${module.id}', '${port.id}')">Link</button>`
+                    : '<span class="role-muted">Нет доступных интерфейсов</span>';
+                rows.push(`
+                <tr>
+                    <td>
+                        <a href="/basic_object/${module.id}">${escapeRoleDetailsHtml(module.name || module.id)}</a>
+                        <div class="role-muted">parents: ${escapeRoleDetailsHtml([...new Set(parents)].join(', '))}</div>
+                    </td>
+                    <td><strong>${escapeRoleDetailsHtml(port.name)}</strong></td>
+                    <td>${escapeRoleDetailsHtml(port.direction || '—')}</td>
+                    <td>${linkedHtml}</td>
+                    <td>${actionHtml}</td>
+                </tr>
+                `);
+            });
+        });
+
+        container.innerHTML = `
+            <table class="detail-table">
+                <thead>
+                    <tr>
+                        <th>Module</th>
+                        <th>Port</th>
+                        <th>Direction</th>
+                        <th>Linked interfaces</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>${rows.join('')}</tbody>
+            </table>
+        `;
+    } catch (error) {
+        container.innerHTML = `<div class="error-message">Ошибка загрузки: ${error.message}</div>`;
+    }
+}
+
+async function linkRolePortInterface(moduleId, portId) {
+    const select = document.getElementById(`link-select-${moduleId}-${portId}`);
+    const interfaceId = select?.value;
+    if (!interfaceId) return;
+
+    try {
+        const response = await fetch(`/api/modules/${moduleId}/interface-mappings`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ role_port_id: portId, interface_id: interfaceId }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || response.status);
+        await loadRoleDetails();
+    } catch (error) {
+        alert(`Ошибка привязки интерфейса: ${error.message}`);
+    }
+}
+
+async function unlinkRolePortInterface(moduleId, mappingId) {
+    try {
+        const response = await fetch(`/api/modules/${moduleId}/interface-mappings/${mappingId}`, { method: 'DELETE' });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || response.status);
+        await loadRoleDetails();
+    } catch (error) {
+        alert(`Ошибка отвязки интерфейса: ${error.message}`);
     }
 }
 

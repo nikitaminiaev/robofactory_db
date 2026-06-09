@@ -283,6 +283,7 @@ function renderObjectFullDetails(data) {
             <button class="module-tab-btn active" type="button" data-module-tab="overview">Overview</button>
             <button class="module-tab-btn" type="button" data-module-tab="roles">Roles</button>
             <button class="module-tab-btn" type="button" data-module-tab="scad">SCAD & Chat</button>
+            <button class="module-tab-btn" type="button" data-module-tab="interfaces">Interfaces</button>
         </div>
         <div class="module-tab-panel active" data-module-tab-panel="overview">
         <table class="detail-table">
@@ -364,6 +365,23 @@ function renderObjectFullDetails(data) {
                         && data.bounding_contour.brep_files.trim() !== '') ? 'Available' : 'None'}</td></tr>
             </table>`;
     }
+
+    // Interface summary widget
+    const ifaces = data.interfaces || [];
+    const ifaceMappings = data.interface_mappings || [];
+    const mandatoryCount = ifaces.filter(i => i.is_mandatory).length;
+    const serviceCount = ifaces.filter(i => i.is_service).length;
+    const mappedPortIds = new Set(ifaceMappings.map(m => m.role_port_id));
+    const allRolePorts = getExternalInterfacePorts(data);
+    const mappedCount = allRolePorts.filter(p => mappedPortIds.has(p.id)).length;
+    detailsHtml += `
+        <div style="margin-top:16px;">
+            <h2>Interfaces <span style="font-size:13px;font-weight:400;color:#666;">(overview)</span></h2>
+            <table class="detail-table">
+                <tr><th>Total</th><td>${ifaces.length} interfaces (${mandatoryCount} mandatory, ${serviceCount} service)</td></tr>
+                <tr><th>Port Coverage</th><td>${mappedCount}/${allRolePorts.length} role ports covered by interfaces</td></tr>
+            </table>
+        </div>`;
 
     // Функция для загрузки имен объектов по ID
     const loadObjectNames = async (ids) => {
@@ -637,6 +655,9 @@ function renderObjectFullDetails(data) {
     detailsHtml += renderRolesTab(data, loadObjectNames);
     detailsHtml += `<div class="module-tab-panel" data-module-tab-panel="scad">
         <div id="module-scad-tab-slot" style="display:grid; gap:16px;"></div>
+    </div>`;
+    detailsHtml += `<div class="module-tab-panel" data-module-tab-panel="interfaces">
+        ${renderInterfacesTab(data)}
     </div>`;
     detailsHtml += `
         <div id="copy-modal" class="modal" style="display: none;">
@@ -3308,4 +3329,484 @@ function rolesMatrixHideAddForm() {
     document.getElementById('roles-matrix-add-form').style.display = 'none';
     document.getElementById('roles-matrix-new-name').value = '';
     document.getElementById('roles-matrix-new-desc').value = '';
+}
+
+// =====================================================================
+// Interfaces Tab
+// =====================================================================
+
+let editingInterfaceId = null;
+
+function renderInterfacesTab(data) {
+    const ifaces = data.interfaces || [];
+    const ifaceMappings = data.interface_mappings || [];
+    const roles = getExternalInterfaceRoles(data);
+
+    return `
+        <div style="display:grid; gap:16px;">
+            ${renderInterfacesListSection(ifaces, ifaceMappings, roles)}
+            ${renderPortMappingSection(roles, ifaces, ifaceMappings, data.id, data.external_role_streams || [])}
+        </div>
+    `;
+}
+
+function getExternalInterfaceRoles(data) {
+    const rolesById = {};
+    (data.parent_edges || []).forEach(edge => {
+        if (!edge.role_id) return;
+        if (!rolesById[edge.role_id]) {
+            rolesById[edge.role_id] = {
+                id: edge.role_id,
+                name: edge.role_name || edge.role_id,
+                description: edge.role_description || '',
+                parentIds: new Set(),
+                ports: edge.ports || [],
+            };
+        }
+        rolesById[edge.role_id].parentIds.add(edge.parent_id);
+        if ((rolesById[edge.role_id].ports || []).length === 0 && Array.isArray(edge.ports)) {
+            rolesById[edge.role_id].ports = edge.ports;
+        }
+    });
+    return Object.values(rolesById).map(role => ({
+        ...role,
+        parentIds: Array.from(role.parentIds),
+    }));
+}
+
+function getExternalInterfacePorts(data) {
+    return getExternalInterfaceRoles(data)
+        .flatMap(role => (role.ports || []).map(port => ({ ...port, roleName: role.name, roleId: role.id })));
+}
+
+function renderInterfacesListSection(ifaces, mappings = [], roles = []) {
+    const portsById = {};
+    roles.forEach(role => {
+        (role.ports || []).forEach(port => {
+            portsById[port.id] = { ...port, roleName: role.name };
+        });
+    });
+    const mappingsByInterfaceId = {};
+    mappings.forEach(mapping => {
+        if (!mappingsByInterfaceId[mapping.interface_id]) {
+            mappingsByInterfaceId[mapping.interface_id] = [];
+        }
+        mappingsByInterfaceId[mapping.interface_id].push(mapping);
+    });
+
+    const rows = ifaces.map(iface => {
+        const paramsStr = iface.parameters
+            ? Object.entries(iface.parameters).map(([k, v]) => `${k}: ${v}`).join(', ')
+            : '—';
+        const mandatoryLabel = iface.is_mandatory
+            ? '<span style="color:#e74c3c;font-weight:600;">Mandatory</span>'
+            : '<span style="color:#888;">Optional</span>';
+        const serviceLabel = iface.is_service
+            ? ' <span style="color:#3498db;">[Service]</span>'
+            : '';
+        const linkedPorts = (mappingsByInterfaceId[iface.id] || [])
+            .map(mapping => {
+                const port = portsById[mapping.role_port_id];
+                if (!port) return null;
+                return `${escapeHtml(port.roleName)} → ${escapeHtml(port.name)}`;
+            })
+            .filter(Boolean)
+            .join('<br>');
+        return `
+            <tr>
+                <td><strong>${escapeHtml(iface.name)}</strong></td>
+                <td>${iface.direction}</td>
+                <td>${escapeHtml(iface.physical_form || '—')}</td>
+                <td style="font-size:12px;">${escapeHtml(paramsStr)}</td>
+                <td style="font-size:12px;">${linkedPorts || '—'}</td>
+                <td style="white-space:nowrap;">${mandatoryLabel}${serviceLabel}</td>
+                <td>
+                    <button class="btn-small" onclick="editInterface('${iface.id}')">✎</button>
+                    <button class="btn-small" style="background:#e74c3c;" onclick="deleteInterface('${iface.id}')">×</button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+
+    const emptyRow = ifaces.length === 0
+        ? '<tr><td colspan="7" style="color:#aaa;text-align:center;">Нет структурных интерфейсов</td></tr>'
+        : '';
+
+    return `
+        <div class="section-card">
+            <div style="display:flex;align-items:center;justify-content:space-between;">
+                <h2 style="margin:0;">Structural Interfaces</h2>
+                <div>
+                    <button id="show-add-interface-btn" class="btn" onclick="showAddInterfaceForm()">+ Add Interface</button>
+                    <button id="hide-add-interface-btn" class="btn btn-secondary" onclick="hideAddInterfaceForm()" style="display:none;">Cancel</button>
+                </div>
+            </div>
+
+            <div id="interface-form-container" style="display:none; margin-top:12px; padding:12px; border:1px solid #ddd; border-radius:6px; background:#fafafa;">
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                    <div>
+                        <label>Name</label>
+                        <input id="iface-name" type="text" placeholder="e.g. Клеммник питания" style="width:100%;padding:6px;">
+                    </div>
+                    <div>
+                        <label>Direction</label>
+                        <select id="iface-direction" style="width:100%;padding:6px;">
+                            <option value="bidirectional">bidirectional</option>
+                            <option value="input">input</option>
+                            <option value="output">output</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Physical Form</label>
+                        <input id="iface-physical-form" type="text" placeholder="e.g. M12 4-pin" style="width:100%;padding:6px;">
+                    </div>
+                    <div>
+                        <label>Mandatory</label>
+                        <input id="iface-mandatory" type="checkbox" checked>
+                    </div>
+                    <div>
+                        <label>Service</label>
+                        <input id="iface-service" type="checkbox">
+                    </div>
+                    <div style="grid-column: span 2;">
+                        <label>Parameters (JSON)</label>
+                        <textarea id="iface-parameters" rows="3" placeholder='{"voltage": 24, "current_max": 15}' style="width:100%;padding:6px;font-family:monospace;font-size:12px;"></textarea>
+                    </div>
+                    <div style="grid-column: span 2;">
+                        <label>Description</label>
+                        <input id="iface-description" type="text" placeholder="Optional description" style="width:100%;padding:6px;">
+                    </div>
+                </div>
+                <div style="margin-top:10px;display:flex;gap:8px;">
+                    <button class="btn" onclick="saveInterface()">Save</button>
+                    <button class="btn btn-secondary" onclick="hideAddInterfaceForm()">Cancel</button>
+                </div>
+            </div>
+
+            <table class="detail-table" style="margin-top:12px;">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Direction</th>
+                        <th>Physical Form</th>
+                        <th>Parameters</th>
+                        <th>Linked Ports</th>
+                        <th>Flags</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>${rows}${emptyRow}</tbody>
+            </table>
+        </div>
+    `;
+}
+
+function renderPortMappingSection(roles, ifaces, mappings, moduleId, externalStreams = []) {
+    const allPorts = roles.flatMap(r => (r.ports || []).map(p => ({ ...p, roleName: r.name, roleId: r.id })));
+    if (allPorts.length === 0) {
+        return `
+            <div class="section-card">
+                <h2 style="margin-top:0;">Port-Interface Mapping</h2>
+                <div class="info-message">У модуля нет внешних ролей с портами. Назначьте этому модулю роль в родительском модуле.</div>
+            </div>
+        `;
+    }
+
+    const mappedByPortId = {};
+    mappings.forEach(m => {
+        if (!mappedByPortId[m.role_port_id]) {
+            mappedByPortId[m.role_port_id] = [];
+        }
+        mappedByPortId[m.role_port_id].push(m);
+    });
+
+    const rows = allPorts.map(port => {
+        const portMappings = mappedByPortId[port.id] || [];
+        const mappedIfaces = portMappings
+            .map(mapping => ({
+                mapping,
+                iface: ifaces.find(i => i.id === mapping.interface_id),
+            }))
+            .filter(item => item.iface);
+        const status = mappedIfaces.length > 0
+            ? '<span style="color:#27ae60;font-weight:600;">✅ Linked</span>'
+            : '<span style="color:#e74c3c;">❌ Not linked</span>';
+        const ifaceName = mappedIfaces.length > 0
+            ? mappedIfaces.map(item => escapeHtml(item.iface.name)).join('<br>')
+            : '—';
+        const unlinkBtns = mappedIfaces.map(item =>
+            `<button class="btn-small" style="background:#e74c3c;" onclick="unlinkInterface('${item.mapping.id}')">Unlink ${escapeHtml(item.iface.name)}</button>`
+        ).join(' ');
+        const linkBtn = `<button class="btn-small" onclick="showLinkInterfaceModal('${port.id}', '${port.roleId}')">Link</button>`;
+        const streamsHtml = renderPortMappingStreams(port, externalStreams);
+        return `
+            <tr>
+                <td>${escapeHtml(port.roleName)}</td>
+                <td><strong>${escapeHtml(port.name)}</strong> <small>(${port.direction})</small></td>
+                <td>${streamsHtml}</td>
+                <td>${ifaceName}</td>
+                <td>${status}</td>
+                <td>${linkBtn} ${unlinkBtns}</td>
+            </tr>
+        `;
+    }).join('');
+    const mappedPortIds = new Set(mappings.map(m => m.role_port_id));
+    const coveredPorts = allPorts.filter(port => mappedPortIds.has(port.id)).length;
+
+    return `
+        <div class="section-card">
+            <h2 style="margin-top:0;">Port-Interface Mapping</h2>
+            <p><strong>${coveredPorts}/${allPorts.length}</strong> role ports are linked to interfaces.</p>
+            <table class="detail-table">
+                <thead>
+                    <tr>
+                        <th>Role</th>
+                        <th>Port</th>
+                        <th>Streams</th>
+                        <th>Interface</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+            </table>
+        </div>
+    `;
+}
+
+function renderPortMappingStreams(port, externalStreams) {
+    const relatedStreams = externalStreams.filter(stream => {
+        const isSourceRole = stream.source_role_id === port.roleId;
+        const isTargetRole = stream.target_role_id === port.roleId;
+        const sourceMatches = isSourceRole && (!stream.source_port_id || stream.source_port_id === port.id);
+        const targetMatches = isTargetRole && (!stream.target_port_id || stream.target_port_id === port.id);
+        return sourceMatches || targetMatches;
+    });
+
+    if (relatedStreams.length === 0) {
+        return '—';
+    }
+
+    return relatedStreams.map(stream => {
+        const isSource = stream.source_role_id === port.roleId;
+        const currentPortId = isSource ? stream.source_port_id : stream.target_port_id;
+        const otherRole = isSource ? stream.target_role_name : stream.source_role_name;
+        const otherPort = isSource ? stream.target_port_name : stream.source_port_name;
+        const direction = isSource ? 'out' : 'in';
+        const portScope = currentPortId ? '' : ' <small>(role)</small>';
+        const otherSide = [otherRole, otherPort].filter(Boolean).join(' / ');
+        const parentName = stream.parent_module_name || stream.parent_module_id || '';
+        return `
+            <div style="font-size:12px;line-height:1.35;margin:2px 0;">
+                <strong>${escapeHtml(stream.name)}</strong> <small>${direction}</small>${portScope}
+                ${otherSide ? `<br><small>${escapeHtml(otherSide)}</small>` : ''}
+                ${parentName ? `<br><small>parent: ${escapeHtml(parentName)}</small>` : ''}
+            </div>
+        `;
+    }).join('');
+}
+
+function showAddInterfaceForm() {
+    editingInterfaceId = null;
+    document.getElementById('iface-name').value = '';
+    document.getElementById('iface-direction').value = 'bidirectional';
+    document.getElementById('iface-physical-form').value = '';
+    document.getElementById('iface-parameters').value = '';
+    document.getElementById('iface-description').value = '';
+    document.getElementById('iface-mandatory').checked = true;
+    document.getElementById('iface-service').checked = false;
+    document.getElementById('interface-form-container').style.display = 'block';
+    document.getElementById('show-add-interface-btn').style.display = 'none';
+    document.getElementById('hide-add-interface-btn').style.display = 'inline-block';
+}
+
+function hideAddInterfaceForm() {
+    document.getElementById('interface-form-container').style.display = 'none';
+    document.getElementById('show-add-interface-btn').style.display = 'inline-block';
+    document.getElementById('hide-add-interface-btn').style.display = 'none';
+    editingInterfaceId = null;
+}
+
+async function saveInterface() {
+    const moduleId = window.currentObjectData.id;
+    const name = document.getElementById('iface-name').value.trim();
+    if (!name) {
+        showToast('Введите название интерфейса', 'error');
+        return;
+    }
+
+    let parameters = null;
+    const paramsText = document.getElementById('iface-parameters').value.trim();
+    if (paramsText) {
+        try {
+            parameters = JSON.parse(paramsText);
+        } catch (e) {
+            showToast('Неверный формат JSON в параметрах', 'error');
+            return;
+        }
+    }
+
+    const body = {
+        name,
+        direction: document.getElementById('iface-direction').value,
+        physical_form: document.getElementById('iface-physical-form').value.trim() || null,
+        parameters,
+        is_mandatory: document.getElementById('iface-mandatory').checked,
+        is_service: document.getElementById('iface-service').checked,
+        description: document.getElementById('iface-description').value.trim() || null,
+    };
+
+    try {
+        const url = editingInterfaceId
+            ? `/api/modules/${moduleId}/interfaces/${editingInterfaceId}`
+            : `/api/modules/${moduleId}/interfaces`;
+        const method = editingInterfaceId ? 'PATCH' : 'POST';
+
+        const res = await fetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.detail || 'Ошибка сохранения');
+        }
+        showToast(editingInterfaceId ? 'Интерфейс обновлён' : 'Интерфейс создан', 'success');
+        hideAddInterfaceForm();
+        await refreshObjectDetails();
+    } catch (err) {
+        showToast('Ошибка: ' + err.message, 'error');
+    }
+}
+
+async function editInterface(interfaceId) {
+    const data = window.currentObjectData;
+    const iface = (data.interfaces || []).find(i => i.id === interfaceId);
+    if (!iface) return;
+
+    editingInterfaceId = interfaceId;
+    document.getElementById('iface-name').value = iface.name || '';
+    document.getElementById('iface-direction').value = iface.direction || 'bidirectional';
+    document.getElementById('iface-physical-form').value = iface.physical_form || '';
+    document.getElementById('iface-parameters').value = iface.parameters
+        ? JSON.stringify(iface.parameters, null, 2)
+        : '';
+    document.getElementById('iface-description').value = iface.description || '';
+    document.getElementById('iface-mandatory').checked = iface.is_mandatory !== false;
+    document.getElementById('iface-service').checked = !!iface.is_service;
+    document.getElementById('interface-form-container').style.display = 'block';
+    document.getElementById('show-add-interface-btn').style.display = 'none';
+    document.getElementById('hide-add-interface-btn').style.display = 'inline-block';
+}
+
+async function deleteInterface(interfaceId) {
+    if (!confirm('Удалить этот интерфейс?')) return;
+    const moduleId = window.currentObjectData.id;
+    try {
+        const res = await fetch(`/api/modules/${moduleId}/interfaces/${interfaceId}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error((await res.json()).detail || 'Ошибка удаления');
+        showToast('Интерфейс удалён', 'success');
+        await refreshObjectDetails();
+    } catch (err) {
+        showToast('Ошибка: ' + err.message, 'error');
+    }
+}
+
+// Link/Unlink interface mapping
+
+async function showLinkInterfaceModal(portId, roleId) {
+    const moduleId = window.currentObjectData.id;
+    const ifaces = window.currentObjectData.interfaces || [];
+
+    let roleName = '';
+    const externalRoles = getExternalInterfaceRoles(window.currentObjectData || {});
+    const role = externalRoles.find(r => r.id === roleId);
+    if (role) roleName = role.name;
+
+    const port = externalRoles
+        .flatMap(r => (r.ports || []))
+        .find(p => p.id === portId);
+    const portName = port ? port.name : portId;
+
+    if (ifaces.length === 0) {
+        showToast('Сначала создайте интерфейсы для модуля', 'error');
+        return;
+    }
+
+    const existingInterfaceIds = new Set(
+        (window.currentObjectData.interface_mappings || [])
+            .filter(mapping => mapping.role_port_id === portId)
+            .map(mapping => mapping.interface_id)
+    );
+    const availableIfaces = ifaces.filter(i => !existingInterfaceIds.has(i.id));
+    if (availableIfaces.length === 0) {
+        showToast('Все интерфейсы модуля уже привязаны к этому порту', 'error');
+        return;
+    }
+
+    const options = availableIfaces.map(i =>
+        `<option value="${i.id}">${escapeHtml(i.name)}</option>`
+    ).join('');
+
+    const container = document.createElement('div');
+    container.id = 'link-interface-modal';
+    container.style.cssText = `
+        position: fixed; inset: 0; background: rgba(0,0,0,0.4);
+        display: flex; align-items: center; justify-content: center; z-index: 1000;
+    `;
+    container.innerHTML = `
+        <div style="background:#fff; border-radius:8px; padding:20px; min-width:400px; box-shadow:0 4px 20px rgba(0,0,0,0.2);">
+            <h3>Link Interface to Port</h3>
+            <p><strong>Role:</strong> ${escapeHtml(roleName)}<br><strong>Port:</strong> ${escapeHtml(portName)}</p>
+            <label>Select Interface:</label>
+            <select id="link-interface-select" style="width:100%; padding:8px; margin:8px 0;">${options}</select>
+            <div style="display:flex; gap:8px; margin-top:12px;">
+                <button class="btn" onclick="confirmLinkInterface('${portId}')">Link</button>
+                <button class="btn btn-secondary" onclick="closeLinkInterfaceModal()">Cancel</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(container);
+}
+
+function closeLinkInterfaceModal() {
+    const el = document.getElementById('link-interface-modal');
+    if (el) el.remove();
+}
+
+async function confirmLinkInterface(portId) {
+    const moduleId = window.currentObjectData.id;
+    const interfaceId = document.getElementById('link-interface-select').value;
+
+    try {
+        const res = await fetch(`/api/modules/${moduleId}/interface-mappings`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ role_port_id: portId, interface_id: interfaceId }),
+        });
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.detail || 'Ошибка создания маппинга');
+        }
+        showToast('Порт привязан к интерфейсу', 'success');
+        closeLinkInterfaceModal();
+        await refreshObjectDetails();
+    } catch (err) {
+        showToast('Ошибка: ' + err.message, 'error');
+    }
+}
+
+async function unlinkInterface(mappingId) {
+    if (!confirm('Отвязать интерфейс от порта?')) return;
+    const moduleId = window.currentObjectData.id;
+    try {
+        const res = await fetch(`/api/modules/${moduleId}/interface-mappings/${mappingId}`, {
+            method: 'DELETE',
+        });
+        if (!res.ok) throw new Error((await res.json()).detail || 'Ошибка удаления маппинга');
+        showToast('Интерфейс отвязан', 'success');
+        await refreshObjectDetails();
+    } catch (err) {
+        showToast('Ошибка: ' + err.message, 'error');
+    }
 }

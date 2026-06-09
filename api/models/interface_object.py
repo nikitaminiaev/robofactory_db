@@ -1,10 +1,9 @@
 import uuid
-# from typing import List
 
-from sqlalchemy import Column, Text, JSON, DateTime, func, UUID
-# from sqlalchemy.orm import relationship, Mapped
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, String, Text, JSON, UUID
+from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
 
-# from .module import Module
 from .base import Base
 
 
@@ -13,7 +12,17 @@ class InterfaceObject(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
-    coordinates = Column(JSON, nullable=True)  # Координаты XYZ и три угла
+    name = Column(String, nullable=False, default="")
+    direction = Column(String, nullable=False, default="bidirectional")
+    physical_form = Column(String, nullable=True)
+    parameters = Column(JSON, nullable=True)
+    is_mandatory = Column(Boolean, default=True)
+    is_service = Column(Boolean, default=False)
+
+    module_id = Column(UUID(as_uuid=True), ForeignKey("modules.id", ondelete="SET NULL"), nullable=True)
+    module = relationship("Module", back_populates="interfaces", foreign_keys=[module_id])
+
+    coordinates = Column(JSON, nullable=True)
     description = Column(Text, nullable=True)
     ttx = Column(Text, nullable=True)
 
@@ -24,4 +33,4 @@ class InterfaceObject(Base):
         return str(self)
 
     def __str__(self):
-        return f"InterfaceObject(id={self.id!r})"
+        return f"InterfaceObject(id={self.id!r}, name={self.name!r})"
