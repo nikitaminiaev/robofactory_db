@@ -508,9 +508,6 @@ function renderObjectFullDetails(data) {
             });
             
             tableHtml += '</tbody></table>';
-            tableHtml += `<div style="margin-top: 8px;">
-                <button onclick="showCreateChildModal()" style="padding: 6px 14px; cursor: pointer; font-size: 13px;">+ New Module</button>
-            </div>`;
             
             // Загружаем имена
             const childIds = Object.keys(groupedChildren);
@@ -758,6 +755,21 @@ function renderObjectFullDetails(data) {
                     <div class="modal-actions">
                         <button type="button" onclick="submitCreateChildModule()">Создать</button>
                         <button type="button" onclick="hideCreateChildModal()">Отмена</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <div id="create-parent-modal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <h3>Создать родительский модуль</h3>
+                <form id="create-parent-form">
+                    <div class="form-group">
+                        <label for="create-parent-name">Название модуля:</label>
+                        <input type="text" id="create-parent-name" required placeholder="Введите название">
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" onclick="submitCreateParentModule()">Создать</button>
+                        <button type="button" onclick="hideCreateParentModal()">Отмена</button>
                     </div>
                 </form>
             </div>
@@ -1894,7 +1906,7 @@ function toggleEditMode(enable = true) {
                             <div id="parent-search-results" class="search-results-dropdown" style="display: none;"></div>
                         </div>
                         <button onclick="addNewRelationToList('parent')">Add</button>
-                        <button onclick="quickAddRelation('parent')" title="Add directly" style="background: #4CAF50;">+</button>
+                        <button onclick="showCreateParentModal()" title="Create new parent module" style="background: #4CAF50;">+ New Parent</button>
                     </div>
                 `;
                 parentsList.after(addParentSection);
@@ -1918,7 +1930,7 @@ function toggleEditMode(enable = true) {
                         <div id="parent-search-results" class="search-results-dropdown" style="display: none;"></div>
                     </div>
                     <button onclick="addNewRelationToList('parent')">Add</button>
-                    <button onclick="quickAddRelation('parent')" title="Add directly" style="background: #4CAF50;">+</button>
+                    <button onclick="showCreateParentModal()" title="Create new parent module" style="background: #4CAF50;">+ New Parent</button>
                 </div>
             `;
             container.appendChild(title);
@@ -1952,8 +1964,8 @@ function toggleEditMode(enable = true) {
                     
                     const addBtn = document.createElement('button');
                     addBtn.className = 'add-same-btn';
-                    addBtn.textContent = '+';
-                    addBtn.title = 'Add same';
+                    addBtn.textContent = '+ Same';
+                    addBtn.title = 'Add another relation to this child';
                     addBtn.style.marginLeft = '4px';
                     addBtn.style.background = '#4CAF50';
                     addBtn.style.color = 'white';
@@ -1996,6 +2008,7 @@ function toggleEditMode(enable = true) {
                             <div id="child-search-results" class="search-results-dropdown" style="display: none;"></div>
                         </div>
                         <button onclick="addNewRelationToList('child')">Add</button>
+                        <button onclick="showCreateChildModal()" title="Create new child module" style="background: #4CAF50;">+ New Child</button>
                     </div>
                 `;
                 childrenTable.after(addChildSection);
@@ -2016,7 +2029,7 @@ function toggleEditMode(enable = true) {
                         <div id="child-search-results" class="search-results-dropdown" style="display: none;"></div>
                     </div>
                     <button onclick="addNewRelationToList('child')">Add</button>
-                    <button onclick="quickAddRelation('child')" title="Add directly" style="background: #4CAF50;">+</button>
+                    <button onclick="showCreateChildModal()" title="Create new child module" style="background: #4CAF50;">+ New Child</button>
                 </div>
             `;
             container.appendChild(title);
@@ -2034,6 +2047,52 @@ function toggleEditMode(enable = true) {
 let selectedRelId = null;
 let selectedRelType = null;
 
+function getDefaultRelationCoordinates() {
+    return { x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0 };
+}
+
+function getRelationInput(type) {
+    return document.getElementById(`search-${type}-input`);
+}
+
+function resetRelationInput(type) {
+    selectedRelId = null;
+    selectedRelType = null;
+
+    const input = getRelationInput(type);
+    if (input) input.value = '';
+
+    const resultsDiv = document.getElementById(`${type}-search-results`);
+    if (resultsDiv) resultsDiv.style.display = 'none';
+}
+
+function getTypedRelationName(type) {
+    const input = getRelationInput(type);
+    return input?.value.trim() || '';
+}
+
+function ensureChildrenTable() {
+    const existingTable = document.querySelector('.children-table');
+    if (existingTable) return existingTable;
+
+    const addChildSection = document.getElementById('add-child-section');
+    if (!addChildSection) return null;
+
+    const table = document.createElement('table');
+    table.className = 'children-table';
+    table.innerHTML = `
+        <thead>
+            <tr>
+                <th style="padding: 8px; border-bottom: 2px solid #ccc; text-align: left;">Module</th>
+                <th style="padding: 8px; border-bottom: 2px solid #ccc; text-align: center; width: 80px;">Count</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    `;
+    addChildSection.before(table);
+    return table;
+}
+
 async function searchModulesForRelation(query, type) {
     const resultsDiv = document.getElementById(`${type}-search-results`);
     if (query.length < 2) {
@@ -2045,11 +2104,12 @@ async function searchModulesForRelation(query, type) {
         const response = await fetch(`/api/basic_object?name=${encodeURIComponent(query)}`);
         const modules = await response.json();
         
-        if (modules.length === 0) {
-            resultsDiv.innerHTML = '<div class="search-result-item">No results</div>';
+        const availableModules = modules.filter(m => m.id !== window.currentObjectData.id);
+        if (availableModules.length === 0) {
+            const newButtonLabel = type === 'child' ? '+ New Child' : '+ New Parent';
+            resultsDiv.innerHTML = `<div class="search-result-item">No results. Use ${newButtonLabel} to create one.</div>`;
         } else {
-            resultsDiv.innerHTML = modules
-                .filter(m => m.id !== window.currentObjectData.id) // Нельзя добавить самого себя
+            resultsDiv.innerHTML = availableModules
                 .map(m => `<div class="search-result-item" onclick="selectRelationForAdd('${m.id}', '${m.name}', '${type}')">${m.name} (${m.id})</div>`)
                 .join('');
         }
@@ -2062,7 +2122,8 @@ async function searchModulesForRelation(query, type) {
 function selectRelationForAdd(id, name, type) {
     selectedRelId = id;
     selectedRelType = type;
-    document.getElementById(`search-${type}-input`).value = name;
+    const input = getRelationInput(type);
+    if (input) input.value = name;
     document.getElementById(`${type}-search-results`).style.display = 'none';
 }
 
@@ -2084,37 +2145,19 @@ function showToast(message, type = 'success') {
 
 function addNewRelationToList(type) {
     if (!selectedRelId || selectedRelType !== type) {
-        showToast('Please select a module from the search results', 'error');
+        const newButtonLabel = type === 'child' ? '+ New Child' : '+ New Parent';
+        showToast(`Please select a module from the search results or use ${newButtonLabel}`, 'error');
         return;
     }
     
-    const name = document.getElementById(`search-${type}-input`).value;
+    const name = getRelationInput(type)?.value || '';
     
     // Координаты по умолчанию (нулевые)
-    const coords = { x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0 };
+    const coords = getDefaultRelationCoordinates();
     
     if (type === 'child') {
         // Для детей добавляем строку в таблицу
-        let table = document.querySelector('.children-table');
-        
-        // Если таблицы нет - создаём её
-        if (!table) {
-            const addChildSection = document.getElementById('add-child-section');
-            if (addChildSection) {
-                table = document.createElement('table');
-                table.className = 'children-table';
-                table.innerHTML = `
-                    <thead>
-                        <tr>
-                            <th style="padding: 8px; border-bottom: 2px solid #ccc; text-align: left;">Module</th>
-                            <th style="padding: 8px; border-bottom: 2px solid #ccc; text-align: center; width: 80px;">Count</th>
-                        </tr>
-                    </thead>
-                    <tbody></tbody>
-                `;
-                addChildSection.before(table);
-            }
-        }
+        const table = ensureChildrenTable();
         
         if (table) {
             const tbody = table.querySelector('tbody');
@@ -2167,43 +2210,91 @@ function addNewRelationToList(type) {
     }
     
     // Сброс полей
-    selectedRelId = null;
-    selectedRelType = null;
-    document.getElementById(`search-${type}-input`).value = '';
+    resetRelationInput(type);
 }
 
-async function quickAddRelation(type) {
-    if (!selectedRelId || selectedRelType !== type) {
-        showToast('Please select a module from the search results', 'error');
+async function createBasicObjectForRelation(name) {
+    const data = window.currentObjectData || {};
+    const response = await fetch('/api/basic_object/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            name,
+            author: data.author || 'unknown',
+            description: '',
+            is_assembly: false,
+            is_shell: false
+        })
+    });
+
+    if (response.ok) return response.json();
+
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to create module');
+}
+
+async function linkCreatedModuleToCurrent(type, moduleId) {
+    const data = window.currentObjectData;
+    if (!data?.id) throw new Error('Current module ID not found');
+
+    const relation = { id: moduleId, coordinates: getDefaultRelationCoordinates() };
+    const payload = type === 'child'
+        ? { added_children: [relation] }
+        : { added_parents: [relation] };
+
+    const response = await fetch(`/api/basic_object/${data.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
+
+    if (response.ok) return;
+
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to link module');
+}
+
+function appendCreatedRelationToView(type, moduleId, name) {
+    const coords = getDefaultRelationCoordinates();
+
+    if (type === 'child') {
+        const table = ensureChildrenTable();
+        if (!table) return;
+
+        const row = document.createElement('tr');
+        row.dataset.childId = moduleId;
+        row.dataset.coordinates = JSON.stringify(coords);
+        row.className = 'child-group-row';
+        row.innerHTML = `
+            <td style="padding: 8px; border-bottom: 1px solid #eee;">
+                <a href="/basic_object/${moduleId}">${name}</a>
+                <span style="font-size: 11px; color: #666; margin-left: 10px;">(Created)</span>
+                <button class="remove-btn" onclick="this.parentElement.parentElement.dataset.removed='true'; this.parentElement.parentElement.style.display='none';" style="margin-left: 8px; font-size: 11px;">Remove</button>
+            </td>
+            <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: center;">
+                <input type="number" class="child-depth-input single-depth"
+                    data-child-id="${moduleId}"
+                    data-pcm-id=""
+                    min="0" max="10" value="1"
+                    style="width: 50px; padding: 4px; text-align: center;">
+            </td>
+        `;
+        table.querySelector('tbody').appendChild(row);
         return;
     }
-    
-    const data = window.currentObjectData;
-    const payload = type === 'child' 
-        ? { added_children: [{ id: selectedRelId, coordinates: { x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0 } }] }
-        : { added_parents: [{ id: selectedRelId, coordinates: { x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0 } }] };
-    
-    try {
-        const response = await fetch(`/api/basic_object/${data.id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        
-        if (response.ok) {
-            const name = document.getElementById(`search-${type}-input`).value;
-            showToast(`${type === 'child' ? 'Child' : 'Parent'} "${name}" added successfully`, 'success');
-            selectedRelId = null;
-            selectedRelType = null;
-            document.getElementById(`search-${type}-input`).value = '';
-        } else {
-            const error = await response.json();
-            showToast(error.detail || 'Failed to add relation', 'error');
-        }
-    } catch (e) {
-        console.error('Error adding relation:', e);
-        showToast('Error adding relation', 'error');
-    }
+
+    const list = document.getElementById('parentsList');
+    if (!list) return;
+
+    const li = document.createElement('li');
+    li.dataset.id = moduleId;
+    li.dataset.coordinates = JSON.stringify(coords);
+    li.innerHTML = `
+        <a href="/basic_object/${moduleId}">${name}</a>
+        <span style="font-size: 11px; color: #666; margin-left: 10px;">(Created)</span>
+        <button class="remove-btn" onclick="this.parentElement.dataset.removed='true'; this.parentElement.style.display='none';">Remove</button>
+    `;
+    list.appendChild(li);
 }
 
 async function quickAddSameChild(childId, childName) {
@@ -2469,7 +2560,9 @@ async function loadRolesForSelect(selectId, moduleId) {
 function showCreateChildModal() {
     const modal = document.getElementById('create-child-modal');
     if (!modal) return;
-    document.getElementById('create-child-name').value = '';
+
+    document.getElementById('create-child-name').value = getTypedRelationName('child');
+
     const currentId = window.currentObjectData?.id;
     document.getElementById('create-child-role').innerHTML = '<option value="">— без роли —</option>';
     if (currentId) {
@@ -2481,6 +2574,38 @@ function showCreateChildModal() {
 function hideCreateChildModal() {
     const modal = document.getElementById('create-child-modal');
     if (modal) modal.style.display = 'none';
+}
+
+function showCreateParentModal() {
+    const modal = document.getElementById('create-parent-modal');
+    if (!modal) return;
+
+    document.getElementById('create-parent-name').value = getTypedRelationName('parent');
+    modal.style.display = 'flex';
+}
+
+function hideCreateParentModal() {
+    const modal = document.getElementById('create-parent-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+async function submitCreateParentModule() {
+    const name = document.getElementById('create-parent-name').value.trim();
+    if (!name) {
+        showToast('Введите название модуля', 'error');
+        return;
+    }
+
+    try {
+        const result = await createBasicObjectForRelation(name);
+        await linkCreatedModuleToCurrent('parent', result.id);
+        appendCreatedRelationToView('parent', result.id, name);
+        resetRelationInput('parent');
+        hideCreateParentModal();
+        showToast(`Родительский модуль "${name}" создан`, 'success');
+    } catch (e) {
+        showToast('Ошибка: ' + e.message, 'error');
+    }
 }
 
 async function submitCreateChildModule() {
@@ -2520,6 +2645,7 @@ async function submitCreateChildModule() {
         }
         const result = await response.json();
         showToast(`Дочерний модуль "${name}" создан`, 'success');
+        resetRelationInput('child');
         hideCreateChildModal();
         loadModuleInfo();
     } catch (e) {
