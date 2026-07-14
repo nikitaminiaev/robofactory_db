@@ -8,6 +8,121 @@ let currentSort = {
     direction: 'asc'
 };
 
+function ensureObjectNamesCache() {
+    if (!window.objectNamesCache) {
+        window.objectNamesCache = {};
+    }
+    if (!window.objectNamesInFlight) {
+        window.objectNamesInFlight = {};
+    }
+    return window.objectNamesCache;
+}
+
+function cacheObjectName(id, name) {
+    if (!id || !name) return;
+    ensureObjectNamesCache()[id] = name;
+}
+
+function seedObjectNamesFromDetails(data) {
+    ensureObjectNamesCache();
+    cacheObjectName(data?.id, data?.name);
+    Object.entries(data?.object_names || {}).forEach(([id, name]) => cacheObjectName(id, name));
+    (data?.external_role_streams || []).forEach(stream => {
+        cacheObjectName(stream.parent_module_id, stream.parent_module_name);
+    });
+}
+
+function getCachedObjectName(id) {
+    return ensureObjectNamesCache()[id] || id;
+}
+
+function collectObjectNameIdsFromDetails(data) {
+    const ids = new Set([...(data?.parents || []), ...(data?.children || [])]);
+    (data?.children_with_coordinates || []).forEach(item => ids.add(item.child_id));
+    (data?.parent_edges || []).forEach(edge => ids.add(edge.parent_id));
+    (data?.external_role_streams || []).forEach(stream => ids.add(stream.parent_module_id));
+    ids.delete(undefined);
+    ids.delete(null);
+    ids.delete('');
+    return [...ids];
+}
+
+function objectNamesResult(ids) {
+    const cache = ensureObjectNamesCache();
+    return ids.reduce((result, id) => {
+        result[id] = cache[id] || id;
+        return result;
+    }, {});
+}
+
+function updateObjectNameElements(ids) {
+    const cache = ensureObjectNamesCache();
+    ids.forEach(id => {
+        const name = cache[id];
+        if (!name) return;
+        document.querySelectorAll(`[data-object-name-id="${id}"]`).forEach(el => {
+            el.textContent = name;
+        });
+        document.querySelectorAll(`[data-object-name-attr-id="${id}"]`).forEach(el => {
+            el.setAttribute('data-name', name);
+        });
+    });
+}
+
+async function fetchObjectNamesBatch(ids, retriesLeft = 1) {
+    try {
+        const response = await fetch('/api/basic_objects/names', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ids }),
+        });
+        if (!response.ok) throw new Error('Failed to fetch object names');
+        return await response.json();
+    } catch (error) {
+        if (retriesLeft <= 0) throw error;
+        await new Promise(resolve => setTimeout(resolve, 250));
+        return fetchObjectNamesBatch(ids, retriesLeft - 1);
+    }
+}
+
+async function loadObjectNamesCached(ids) {
+    const uniqueIds = [...new Set((ids || []).filter(Boolean))];
+    if (uniqueIds.length === 0) return {};
+
+    const cache = ensureObjectNamesCache();
+    const missingIds = uniqueIds.filter(id => !cache[id]);
+    if (missingIds.length === 0) {
+        updateObjectNameElements(uniqueIds);
+        return objectNamesResult(uniqueIds);
+    }
+
+    const key = [...missingIds].sort().join(',');
+    if (!window.objectNamesInFlight[key]) {
+        window.objectNamesInFlight[key] = fetchObjectNamesBatch(missingIds)
+            .then(names => {
+                Object.entries(names || {}).forEach(([id, name]) => cacheObjectName(id, name));
+                return names || {};
+            })
+            .catch(error => {
+                console.error('Error loading names:', error);
+                return {};
+            })
+            .finally(() => {
+                delete window.objectNamesInFlight[key];
+            });
+    }
+
+    await window.objectNamesInFlight[key];
+    updateObjectNameElements(uniqueIds);
+    return objectNamesResult(uniqueIds);
+}
+
+function scheduleObjectNamesLoad(ids) {
+    setTimeout(() => {
+        loadObjectNamesCached(ids);
+    }, 0);
+}
+
 function renderModulesTable(modules, sortCol = null, sortDir = 'asc') {
     if (!modules || modules.length === 0) {
         return '<div class="info-message">Объекты не найдены</div>';
@@ -260,11 +375,7 @@ async function toggleChildren(moduleId, level, btn) {
 function renderObjectFullDetails(data) {
     // Сохраняем данные объекта для редактирования
     window.currentObjectData = data;
-    
-    // Глобальный кэш имен объектов
-    if (!window.objectNamesCache) {
-        window.objectNamesCache = {};
-    }
+    seedObjectNamesFromDetails(data);
 
     let detailsHtml = `<div class="detail-view" id="object-detail-container">
         <div class="action-buttons">
@@ -383,34 +494,7 @@ function renderObjectFullDetails(data) {
             </table>
         </div>`;
 
-    // Функция для загрузки имен объектов по ID
-    const loadObjectNames = async (ids) => {
-        if (!ids || ids.length === 0) return {};
-        const uncachedIds = ids.filter(id => !window.objectNamesCache[id]);
-        if (uncachedIds.length === 0) {
-            return ids.reduce((result, id) => {
-                result[id] = window.objectNamesCache[id];
-                return result;
-            }, {});
-        }
-        try {
-            const response = await fetch('/api/basic_objects/names', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ids: uncachedIds }),
-            });
-            if (!response.ok) return {};
-            const newNames = await response.json();
-            Object.entries(newNames).forEach(([id, name]) => { window.objectNamesCache[id] = name; });
-            return ids.reduce((result, id) => {
-                result[id] = window.objectNamesCache[id] || id;
-                return result;
-            }, {});
-        } catch (error) {
-            console.error('Error loading names:', error);
-            return {};
-        }
-    };
+    const loadObjectNames = loadObjectNamesCached;
 
     const renderRelatedObjectsList = (title, ids, listId, counts, childDataList = []) => {
         if (!ids || ids.length === 0) return '';
@@ -447,17 +531,18 @@ function renderObjectFullDetails(data) {
             Object.keys(groupedChildren).forEach((childId, groupIndex) => {
                 const group = groupedChildren[childId];
                 const count = group.length;
-                const childName = window.objectNamesCache[childId] || childId;
+                const childName = getCachedObjectName(childId);
+                const childNameHtml = escapeHtml(childName);
                 const countBadge = count > 1 ? ` <span class="child-count-badge expand-badge" data-group="${groupIndex}" style="cursor:pointer;" title="Нажмите для раскрытия">&times;${count}</span>` : '';
                 
                 const hasBrep = group[0] && group[0].has_brep;
                 const actionBtn = hasBrep
                     ? `<button class="load-freecad-btn" data-id="${childId}" style="display:none;">Load FreeCad</button>`
-                    : `<button class="create-cad-btn" data-id="${childId}" data-name="${childName}" style="display:none;">Create CAD</button>`;
+                    : `<button class="create-cad-btn" data-id="${childId}" data-object-name-attr-id="${childId}" data-name="${childNameHtml}" style="display:none;">Create CAD</button>`;
 
                 tableHtml += `<tr class="child-group-row" data-group-index="${groupIndex}" data-child-id="${childId}">
                     <td style="padding: 8px; border-bottom: 1px solid #eee;">
-                        <a href="/basic_object/${childId}" class="child-link" data-group="${groupIndex}">${childName}</a>${countBadge}
+                        <a href="/basic_object/${childId}" class="child-link" data-group="${groupIndex}" data-object-name-id="${childId}">${childNameHtml}</a>${countBadge}
                     </td>
                     <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: center;">
                         ${count === 1 ? `<input type="number" class="child-depth-input single-depth" 
@@ -486,11 +571,11 @@ function renderObjectFullDetails(data) {
                         const hasBrepExpanded = childData.has_brep;
                         const actionBtnExpanded = hasBrepExpanded
                             ? `<button class="load-freecad-btn" data-id="${childId}" style="display:none;">Load FreeCad</button>`
-                            : `<button class="create-cad-btn" data-id="${childId}" data-name="${childName}" style="display:none;">Create CAD</button>`;
+                            : `<button class="create-cad-btn" data-id="${childId}" data-object-name-attr-id="${childId}" data-name="${childNameHtml}" style="display:none;">Create CAD</button>`;
 
                         tableHtml += `<tr class="child-expanded-row" data-parent-group="${groupIndex}" data-child-id="${childId}" data-pcm-id="${pcmId || ''}" style="display: none;">
                             <td style="padding: 8px; border-bottom: 1px solid #eee; padding-left: 20px; color: #666;">
-                                <span class="child-link-expanded" data-group="${groupIndex}" data-sub="${subIndex}">${childName}</span>
+                                <span class="child-link-expanded" data-group="${groupIndex}" data-sub="${subIndex}" data-object-name-id="${childId}">${childNameHtml}</span>
                             </td>
                             <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: center;">
                                 <input type="number" class="child-depth-input expanded-depth" 
@@ -568,7 +653,7 @@ function renderObjectFullDetails(data) {
             const count = counts && counts[id] > 1 ? counts[id] : null;
             const countBadge = count ? ` <span class="child-count-badge" title="Количество вхождений">&times;${count}</span>` : '';
             listHtml += `<li>
-                <a href="/basic_object/${id}" id="related-${listId}-${id}">${window.objectNamesCache[id] || id}</a>${countBadge}
+                <a href="/basic_object/${id}" id="related-${listId}-${id}" data-object-name-id="${id}">${escapeHtml(getCachedObjectName(id))}</a>${countBadge}
                 <button class="load-freecad-btn" data-id="${id}" style="display: none;">Load FreeCad</button>
             </li>`;
         });
@@ -777,6 +862,8 @@ function renderObjectFullDetails(data) {
     `;
     detailsHtml += `</div>`;
 
+    scheduleObjectNamesLoad(collectObjectNameIdsFromDetails(data));
+
     return detailsHtml;
 }
 
@@ -810,7 +897,8 @@ function renderExternalRolesTable(data, loadObjectNames) {
                     href="/basic_object/${edge.parent_id}"
                     class="external-role-parent-name"
                     data-parent-id="${edge.parent_id}"
-                >${window.objectNamesCache[edge.parent_id] || edge.parent_id}</a>
+                    data-object-name-id="${edge.parent_id}"
+                >${escapeHtml(getCachedObjectName(edge.parent_id))}</a>
             </td>
             <td>${edge.role_name ? renderRoleLink(edge.role_id, edge.role_name) : '—'}</td>
             <td>${edge.role_description ? escapeHtml(edge.role_description) : '—'}</td>
@@ -3046,7 +3134,7 @@ function buildRolesMatrixTable(data, editMode, parentId) {
         const group = groupedChildren[childId];
         const hasCopies = group.length > 1;
         const groupExpanded = hasCopies && childrenCollapsed.has(childId);
-        const name = window.objectNamesCache && window.objectNamesCache[childId] ? escapeHtml(window.objectNamesCache[childId]) : childId;
+        const name = escapeHtml(getCachedObjectName(childId));
         const toggleBtn = hasCopies
             ? `<button class="roles-matrix__collapse-btn" onclick="rolesMatrixToggleChildGroup('${childId}')" title="${groupExpanded ? 'Collapse copies' : 'Expand copies'}">${groupExpanded ? '▾' : '▸'}</button>`
             : '';
@@ -3069,7 +3157,7 @@ function buildRolesMatrixTable(data, editMode, parentId) {
             <td class="roles-matrix__child-name">
                 <div style="display:flex; align-items:center; gap:6px;">
                     ${toggleBtn}
-                    <a href="/basic_object/${childId}">${name}</a>
+                    <a href="/basic_object/${childId}" data-object-name-id="${childId}">${name}</a>
                     ${hasCopies ? `<span class="child-count-badge" title="Copies">&times;${group.length}</span>` : ''}
                 </div>
             </td>
@@ -3446,6 +3534,8 @@ async function rolesMatrixRefreshCurrentData(parentId) {
         });
         if (!res.ok) throw new Error(await res.text());
         window.currentObjectData = await res.json();
+        seedObjectNamesFromDetails(window.currentObjectData);
+        scheduleObjectNamesLoad(collectObjectNameIdsFromDetails(window.currentObjectData));
     } catch (err) {
         showToast('Ошибка обновления данных ролей: ' + err.message, 'error');
     }
