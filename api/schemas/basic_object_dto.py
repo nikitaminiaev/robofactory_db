@@ -26,6 +26,7 @@ class BasicObjectDTO(BaseModel):
     bounding_contour: Optional[BoundingContourDTO] = None
     children: List[str] = []
     parents: List[str] = []
+    object_names: Dict[str, str] = {}
     children_counts: Dict[str, int] = {}
     parent_counts: Dict[str, int] = {}
     children_coordinates: Dict[str, Optional[dict]] = {}
@@ -52,8 +53,15 @@ class BasicObjectDTO(BaseModel):
         """
         module_dict = module.to_dict()
 
-        module_dict["children"] = [str(child["id"]) for child in module_dict.get("children", [])]
-        module_dict["parents"] = [str(parent["id"]) for parent in module_dict.get("parents", [])]
+        children = module_dict.get("children", [])
+        parents = module_dict.get("parents", [])
+        module_dict["object_names"] = {
+            str(item["id"]): item["name"]
+            for item in [*children, *parents]
+            if item.get("id") and item.get("name")
+        }
+        module_dict["children"] = [str(child["id"]) for child in children]
+        module_dict["parents"] = [str(parent["id"]) for parent in parents]
         module_dict["children_counts"] = children_counts or {}
         module_dict["parent_counts"] = parent_counts or {}
 
