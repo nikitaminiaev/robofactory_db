@@ -1,7 +1,7 @@
 import json
 from typing import Optional, List, Dict, Any
 from service.web_soket_server import get_server_instance
-from service.freecad.function import load_object_in_new_doc, save_brep, save_position
+from service.freecad.function import load_object_in_new_doc, save_brep, save_position, create_empty_part
 
 
 class PartLoader:
@@ -24,6 +24,12 @@ class PartLoader:
             )
         except Exception as e:
             raise Exception(f"Ошибка при загрузке объекта во FreeCAD: {str(e)}")
+
+    def create_empty_part_in_freecad(self, module_id: str, module_name: str) -> bool:
+        try:
+            return self.server.send_message(create_empty_part(module_id, module_name))
+        except Exception as e:
+            raise Exception(f"Ошибка при отправке команды Create CAD во FreeCAD: {str(e)}")
 
     def trigger_save_brep(self, module_id: str) -> bool:
         try:

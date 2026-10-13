@@ -2,3 +2,5 @@ from .base_repository import BaseRepository
 from .module_repository import ModuleRepository
 from .bounding_contour_repository import BoundingContourRepository
 from .role_repository import RoleRepository
+from .stream_repository import StreamRepository
+from .interface_repository import InterfaceRepository, InterfaceMappingRepository

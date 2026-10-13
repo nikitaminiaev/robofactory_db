@@ -3,6 +3,9 @@
 1. remove_child_relations — удаление конкретных связей по parent_child_module_id
 2. child_depths в load_freecad — передача глубины загрузки детей
 3. removed_child_relations в PATCH — удаление конкретных связей через API
+4. create_cad — создание пустого CAD документа во FreeCAD
+5. create_empty_part — формирование JSON команды
+6. has_brep — индикатор наличия BREP у дочерних модулей
 """
 import pytest
 import json
@@ -13,6 +16,7 @@ from fastapi.testclient import TestClient
 
 from routes.create_basic_object import router as basic_object_router
 from routes.freecad.load_freecad import router as freecad_router
+from routes.freecad.create_cad import router as create_cad_router
 from repository.module_repository import ModuleRepository
 from repository.role_repository import RoleRepository
 
@@ -33,6 +37,7 @@ def app():
     application = FastAPI()
     application.include_router(basic_object_router)
     application.include_router(freecad_router)
+    application.include_router(create_cad_router)
     return application
 
 
@@ -348,3 +353,283 @@ class TestPartLoaderWithChildDepths:
 
         assert result is True
         mock_server.send_message.assert_called_once()
+
+
+# ===========================================================================
+# Тесты для create_empty_part (function.py)
+# ===========================================================================
+
+class TestEmptyPartFunction:
+    """Тесты функции create_empty_part в function.py."""
+
+    def test_create_empty_part_returns_valid_json(self):
+        """Формирование корректного JSON."""
+        from service.freecad.function import create_empty_part
+
+        result = create_empty_part(PARENT_ID, "test-module")
+
+        data = json.loads(result)
+        assert data["function_call"] == "create_empty_part_in_new_doc"
+        assert data["arguments"]["module_id"] == PARENT_ID
+        assert data["arguments"]["module_name"] == "test-module"
+
+    def test_create_empty_part_with_russian_name(self):
+        """Формирование JSON с русским названием модуля."""
+        from service.freecad.function import create_empty_part
+
+        result = create_empty_part(PARENT_ID, "тестовый модуль")
+
+        data = json.loads(result)
+        assert data["function_call"] == "create_empty_part_in_new_doc"
+        assert data["arguments"]["module_id"] == PARENT_ID
+        assert data["arguments"]["module_name"] == "тестовый модуль"
+
+
+# ===========================================================================
+# Тесты для PartLoader.create_empty_part_in_freecad
+# ===========================================================================
+
+class TestPartLoaderCreateEmptyPart:
+    """Тесты PartLoader.create_empty_part_in_freecad."""
+
+    @patch('service.freecad.part_loader.get_server_instance')
+    def test_create_empty_part_in_freecad_success(self, mock_get_server):
+        """Успешная отправка команды Create CAD."""
+        mock_server = MagicMock()
+        mock_server.send_message.return_value = True
+        mock_get_server.return_value = mock_server
+
+        from service.freecad.part_loader import PartLoader
+        loader = PartLoader()
+
+        result = loader.create_empty_part_in_freecad(PARENT_ID, "test-module")
+
+        assert result is True
+        mock_server.send_message.assert_called_once()
+
+    @patch('service.freecad.part_loader.get_server_instance')
+    def test_create_empty_part_in_freecad_sends_correct_message(self, mock_get_server):
+        """Проверка содержимого отправленного сообщения."""
+        mock_server = MagicMock()
+        mock_server.send_message.return_value = True
+        mock_get_server.return_value = mock_server
+
+        from service.freecad.part_loader import PartLoader
+        loader = PartLoader()
+
+        loader.create_empty_part_in_freecad(PARENT_ID, "test-module")
+
+        sent_message = mock_server.send_message.call_args[0][0]
+        data = json.loads(sent_message)
+        assert data["function_call"] == "create_empty_part_in_new_doc"
+        assert data["arguments"]["module_id"] == PARENT_ID
+        assert data["arguments"]["module_name"] == "test-module"
+
+
+# ===========================================================================
+# Тесты для эндпоинта POST /api/basic_object/{module_id}/create_cad
+# ===========================================================================
+
+class TestCreateCadRoute:
+    """Тесты эндпоинта create_cad."""
+
+    MODULE_ID = "dddddddd-dddd-dddd-dddd-dddddddddddd"
+    MODULE_NAME = "test-module"
+
+    def _make_module_mock(self):
+        mock = MagicMock()
+        mock.id = UUID(self.MODULE_ID)
+        mock.name = self.MODULE_NAME
+        return mock
+
+    @patch('routes.freecad.create_cad._loader')
+    def test_create_cad_success(self, mock_loader, client):
+        """Успешное создание CAD."""
+        mock_loader.create_empty_part_in_freecad.return_value = True
+
+        app = client._transport.app
+        repo_mock = MagicMock()
+        repo_mock.get_module_with_relations_by_id.return_value = self._make_module_mock()
+        app.dependency_overrides[ModuleRepository] = lambda: repo_mock
+
+        try:
+            response = client.post(f"/api/basic_object/{self.MODULE_ID}/create_cad")
+        finally:
+            app.dependency_overrides.clear()
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert "test-module" in data["message"]
+
+        mock_loader.create_empty_part_in_freecad.assert_called_once_with(
+            self.MODULE_ID, self.MODULE_NAME
+        )
+
+    @patch('routes.freecad.create_cad._loader')
+    def test_create_cad_module_not_found(self, mock_loader, client):
+        """Модуль не найден — 404."""
+        app = client._transport.app
+        repo_mock = MagicMock()
+        repo_mock.get_module_with_relations_by_id.return_value = None
+        app.dependency_overrides[ModuleRepository] = lambda: repo_mock
+
+        try:
+            response = client.post(f"/api/basic_object/{self.MODULE_ID}/create_cad")
+        finally:
+            app.dependency_overrides.clear()
+
+        assert response.status_code == 404
+        mock_loader.create_empty_part_in_freecad.assert_not_called()
+
+    @patch('routes.freecad.create_cad._loader')
+    def test_create_cad_loader_error(self, mock_loader, client):
+        """Ошибка PartLoader — 500."""
+        mock_loader.create_empty_part_in_freecad.side_effect = Exception("Connection failed")
+
+        app = client._transport.app
+        repo_mock = MagicMock()
+        repo_mock.get_module_with_relations_by_id.return_value = self._make_module_mock()
+        app.dependency_overrides[ModuleRepository] = lambda: repo_mock
+
+        try:
+            response = client.post(f"/api/basic_object/{self.MODULE_ID}/create_cad")
+        finally:
+            app.dependency_overrides.clear()
+
+        assert response.status_code == 500
+
+
+# ===========================================================================
+# Тесты для has_brep в get_children_coordinates
+# ===========================================================================
+
+class TestHasBrepInChildrenCoordinates:
+    """Тесты поля has_brep в get_children_coordinates."""
+
+    MODULE_WITH_BREP = "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeee1"
+    MODULE_WITHOUT_BREP = "ffffffff-ffff-ffff-ffff-fffffffffff2"
+
+    @patch('repository.base_repository.Db_session')
+    def test_has_brep_true_when_brep_files_exist(self, mock_db_class):
+        """has_brep=True когда есть brep_files."""
+        mock_db_session_instance = MagicMock()
+        mock_db_class.return_value = mock_db_session_instance
+        mock_db = MagicMock()
+        mock_db_session_instance.session.return_value.__enter__.return_value = mock_db
+
+        parent_child_rows = [
+            MagicMock(id=UUID(PCM_ID_1), child_id=UUID(self.MODULE_WITH_BREP),
+                      coordinates={"x": 0}, role_id=None),
+        ]
+        mock_db.execute.return_value.fetchall.side_effect = [
+            parent_child_rows,
+            [],
+            [MagicMock(module_id=UUID(self.MODULE_WITH_BREP),
+                       brep_files={"brep_string": "path/to/file.brep"})],
+        ]
+
+        repo = ModuleRepository()
+        result = repo.get_children_coordinates(UUID(PARENT_ID))
+
+        assert len(result) == 1
+        assert result[0]["has_brep"] is True
+
+    @patch('repository.base_repository.Db_session')
+    def test_has_brep_false_when_brep_files_empty(self, mock_db_class):
+        """has_brep=False когда brep_files пустой."""
+        mock_db_session_instance = MagicMock()
+        mock_db_class.return_value = mock_db_session_instance
+        mock_db = MagicMock()
+        mock_db_session_instance.session.return_value.__enter__.return_value = mock_db
+
+        parent_child_rows = [
+            MagicMock(id=UUID(PCM_ID_1), child_id=UUID(self.MODULE_WITHOUT_BREP),
+                      coordinates={"x": 0}, role_id=None),
+        ]
+        mock_db.execute.return_value.fetchall.side_effect = [
+            parent_child_rows,
+            [],
+            [MagicMock(module_id=UUID(self.MODULE_WITHOUT_BREP),
+                       brep_files={})],
+        ]
+
+        repo = ModuleRepository()
+        result = repo.get_children_coordinates(UUID(PARENT_ID))
+
+        assert len(result) == 1
+        assert result[0]["has_brep"] is False
+
+    @patch('repository.base_repository.Db_session')
+    def test_has_brep_false_when_brep_files_none(self, mock_db_class):
+        """has_brep=False когда brep_files=None."""
+        mock_db_session_instance = MagicMock()
+        mock_db_class.return_value = mock_db_session_instance
+        mock_db = MagicMock()
+        mock_db_session_instance.session.return_value.__enter__.return_value = mock_db
+
+        parent_child_rows = [
+            MagicMock(id=UUID(PCM_ID_1), child_id=UUID(self.MODULE_WITHOUT_BREP),
+                      coordinates={"x": 0}, role_id=None),
+        ]
+        mock_db.execute.return_value.fetchall.side_effect = [
+            parent_child_rows,
+            [],
+            [MagicMock(module_id=UUID(self.MODULE_WITHOUT_BREP),
+                       brep_files=None)],
+        ]
+
+        repo = ModuleRepository()
+        result = repo.get_children_coordinates(UUID(PARENT_ID))
+
+        assert len(result) == 1
+        assert result[0]["has_brep"] is False
+
+    @patch('repository.base_repository.Db_session')
+    def test_has_brep_mixed_children(self, mock_db_class):
+        """Разные значения has_brep для разных детей."""
+        mock_db_session_instance = MagicMock()
+        mock_db_class.return_value = mock_db_session_instance
+        mock_db = MagicMock()
+        mock_db_session_instance.session.return_value.__enter__.return_value = mock_db
+
+        parent_child_rows = [
+            MagicMock(id=UUID(PCM_ID_1), child_id=UUID(self.MODULE_WITH_BREP),
+                      coordinates={"x": 0}, role_id=None),
+            MagicMock(id=UUID(PCM_ID_2), child_id=UUID(self.MODULE_WITHOUT_BREP),
+                      coordinates={"x": 1}, role_id=None),
+        ]
+        mock_db.execute.return_value.fetchall.side_effect = [
+            parent_child_rows,
+            [],
+            [
+                MagicMock(module_id=UUID(self.MODULE_WITH_BREP),
+                          brep_files={"brep_string": "path.brep"}),
+                MagicMock(module_id=UUID(self.MODULE_WITHOUT_BREP),
+                          brep_files={}),
+            ],
+        ]
+
+        repo = ModuleRepository()
+        result = repo.get_children_coordinates(UUID(PARENT_ID))
+
+        assert len(result) == 2
+        by_id = {r["child_id"]: r["has_brep"] for r in result}
+        assert by_id[self.MODULE_WITH_BREP] is True
+        assert by_id[self.MODULE_WITHOUT_BREP] is False
+
+    @patch('repository.base_repository.Db_session')
+    def test_has_brep_no_children(self, mock_db_class):
+        """Пустой список детей."""
+        mock_db_session_instance = MagicMock()
+        mock_db_class.return_value = mock_db_session_instance
+        mock_db = MagicMock()
+        mock_db_session_instance.session.return_value.__enter__.return_value = mock_db
+        mock_db.execute.return_value.fetchall.side_effect = [
+            [],
+        ]
+
+        repo = ModuleRepository()
+        result = repo.get_children_coordinates(UUID(PARENT_ID))
+
+        assert result == []

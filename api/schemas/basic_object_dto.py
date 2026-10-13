@@ -1,6 +1,16 @@
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any
 from pydantic import BaseModel
 from .bounding_contour_dto import BoundingContourDTO
+
+
+class ParentEdgeRoleDTO(BaseModel):
+    parent_child_module_id: str
+    parent_id: str
+    role_id: Optional[str] = None
+    role_name: Optional[str] = None
+    role_description: Optional[str] = None
+    ports: List[Dict[str, Any]] = []
+
 
 class BasicObjectDTO(BaseModel):
     id: str
@@ -16,12 +26,18 @@ class BasicObjectDTO(BaseModel):
     bounding_contour: Optional[BoundingContourDTO] = None
     children: List[str] = []
     parents: List[str] = []
+    object_names: Dict[str, str] = {}
     children_counts: Dict[str, int] = {}
     parent_counts: Dict[str, int] = {}
     children_coordinates: Dict[str, Optional[dict]] = {}
     children_with_coordinates: List[dict] = []
+    parent_edges: List[ParentEdgeRoleDTO] = []
     roles: List[Dict] = []
     children_roles: Dict[str, List[str]] = {}
+    role_streams: List[Dict] = []
+    external_role_streams: List[Dict] = []
+    interfaces: List[Dict] = []
+    interface_mappings: List[Dict] = []
     created_ts: Optional[str] = None
     updated_ts: Optional[str] = None
 
@@ -37,8 +53,15 @@ class BasicObjectDTO(BaseModel):
         """
         module_dict = module.to_dict()
 
-        module_dict["children"] = [str(child["id"]) for child in module_dict.get("children", [])]
-        module_dict["parents"] = [str(parent["id"]) for parent in module_dict.get("parents", [])]
+        children = module_dict.get("children", [])
+        parents = module_dict.get("parents", [])
+        module_dict["object_names"] = {
+            str(item["id"]): item["name"]
+            for item in [*children, *parents]
+            if item.get("id") and item.get("name")
+        }
+        module_dict["children"] = [str(child["id"]) for child in children]
+        module_dict["parents"] = [str(parent["id"]) for parent in parents]
         module_dict["children_counts"] = children_counts or {}
         module_dict["parent_counts"] = parent_counts or {}
 

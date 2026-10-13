@@ -6,7 +6,7 @@ import subprocess
 import os
 import signal
 import time
-from service.web_soket_server import get_server_instance, get_message_history
+from service.web_soket_server import get_server_instance, get_message_history, send_message_to_websocket
 
 router = APIRouter()
 
@@ -347,4 +347,38 @@ async def stop_websocket_server():
         return JSONResponse({
             "success": False,
             "message": f"Ошибка при остановке сервера: {str(e)}"
-        }) 
+        })
+
+@router.post("/api/websocket/send")
+async def send_websocket_message(message: dict):
+    """
+    Отправляет сообщение через WebSocket-сервер подключенным клиентам (например, FreeCAD плагину)
+    """
+    import json
+    server = get_server_instance()
+    
+    if not server.is_running():
+        return JSONResponse({
+            "success": False,
+            "error": "WebSocket сервер не запущен"
+        })
+    
+    try:
+        message_json = json.dumps(message)
+        result = send_message_to_websocket(message_json)
+        
+        if result:
+            return JSONResponse({
+                "success": True,
+                "message": "Сообщение отправлено"
+            })
+        else:
+            return JSONResponse({
+                "success": False,
+                "error": "Не удалось отправить сообщение"
+            })
+    except Exception as e:
+        return JSONResponse({
+            "success": False,
+            "error": f"Ошибка: {str(e)}"
+        })

@@ -1,0 +1,587 @@
+{% extends "base.html" %}
+
+{% block title %}Role details{% endblock %}
+
+{% block extra_head %}
+<style>
+    .role-page-layout { display: grid; gap: 18px; }
+    .role-card {
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 16px;
+        background: #fff;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    }
+    .role-card__header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 12px;
+    }
+    .role-card__header h2 { margin: 0; }
+    .role-actions { display: flex; gap: 8px; align-items: center; }
+    .role-detail-table th { width: 180px; }
+    .role-edit-form {
+        display: none;
+        gap: 12px;
+        margin-top: 12px;
+    }
+    .role-edit-form.active { display: grid; }
+    .role-edit-form textarea {
+        min-height: 90px;
+        resize: vertical;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-family: inherit;
+        font-size: 14px;
+    }
+    .role-edit-form input {
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+    }
+    .role-muted { color: #777; font-size: 13px; }
+    .role-inline-arrow { color: #777; text-align: center; }
+    .role-port-form {
+        display: grid;
+        gap: 10px;
+        margin: 12px 0;
+        padding: 12px;
+        border: 1px solid #eee;
+        border-radius: 6px;
+        background: #fafafa;
+    }
+    .role-port-form[hidden] { display: none; }
+    .role-port-form input,
+    .role-port-form select,
+    .role-port-form textarea {
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-family: inherit;
+        font-size: 14px;
+    }
+    .role-port-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .role-port-tree-prefix { color: #777; }
+</style>
+{% endblock %}
+
+{% block breadcrumb %}
+<nav class="breadcrumb">
+    <a href="/">Home</a>
+    <span class="breadcrumb-separator">›</span>
+    <a href="/roles">Search Roles</a>
+    <span class="breadcrumb-separator">›</span>
+    <span class="breadcrumb-current" id="breadcrumb-role-name">Загрузка...</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="role-page-layout">
+    <h1 id="role-title">Role details</h1>
+    <div id="role-details"></div>
+</div>
+
+<script>
+function getRoleId() {
+    return window.location.pathname.split('/').pop();
+}
+
+function escapeRoleDetailsHtml(value) {
+    if (!value) return '';
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function renderRoleStreams(streamUsages, roleId) {
+    if (!streamUsages || streamUsages.length === 0) {
+        return '<div class="info-message">Нет потоков, где участвует эта роль.</div>';
+    }
+
+    const rows = streamUsages.map(usage => {
+        const sourceRole = usage.source_role_id === roleId
+            ? `<strong>${escapeRoleDetailsHtml(usage.source_role_name)}</strong>`
+            : `<a href="/roles/${usage.source_role_id}">${escapeRoleDetailsHtml(usage.source_role_name)}</a>`;
+        const targetRole = usage.target_role_id === roleId
+            ? `<strong>${escapeRoleDetailsHtml(usage.target_role_name)}</strong>`
+            : `<a href="/roles/${usage.target_role_id}">${escapeRoleDetailsHtml(usage.target_role_name)}</a>`;
+        const sourcePort = usage.source_port_name
+            ? `<div class="role-muted">port: ${escapeRoleDetailsHtml(usage.source_port_name)}</div>`
+            : '';
+        const targetPort = usage.target_port_name
+            ? `<div class="role-muted">port: ${escapeRoleDetailsHtml(usage.target_port_name)}</div>`
+            : '';
+
+        return `
+            <tr>
+                <td><a href="/basic_object/${usage.module_id}">${escapeRoleDetailsHtml(usage.module_name)}</a></td>
+                <td>${sourceRole}${sourcePort}</td>
+                <td class="role-inline-arrow">→</td>
+                <td>${targetRole}${targetPort}</td>
+                <td>
+                    <strong>${escapeRoleDetailsHtml(usage.stream_name)}</strong>
+                    ${usage.stream_description ? `<div class="role-muted">${escapeRoleDetailsHtml(usage.stream_description)}</div>` : ''}
+                </td>
+            </tr>
+        `;
+    }).join('');
+
+    return `
+        <table>
+            <thead>
+                <tr>
+                    <th>Module</th>
+                    <th>From role</th>
+                    <th></th>
+                    <th>To role</th>
+                    <th>Stream</th>
+                </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+        </table>
+    `;
+}
+
+function getRolePorts() {
+    return window.currentRoleData?.ports || [];
+}
+
+function renderPortParentOptions(selectedParentId = null, editingPortId = null) {
+    const options = ['<option value="">Без родителя</option>'];
+    getRolePorts()
+        .filter(port => port.id !== editingPortId)
+        .forEach(port => {
+            const selected = port.id === selectedParentId ? ' selected' : '';
+            options.push(`<option value="${port.id}"${selected}>${escapeRoleDetailsHtml(port.name)}</option>`);
+        });
+    return options.join('');
+}
+
+function renderPortLabel(port) {
+    const prefix = port.parent_id ? '<span class="role-port-tree-prefix">↳ </span>' : '';
+    return `${prefix}<strong>${escapeRoleDetailsHtml(port.name)}</strong>`;
+}
+
+function renderRolePorts(ports) {
+    const form = `
+        <div id="role-port-form" class="role-port-form" hidden>
+            <input type="hidden" id="role-port-id">
+            <div class="form-group">
+                <label for="role-port-name">Name</label>
+                <input id="role-port-name" type="text" placeholder="port name">
+            </div>
+            <div class="form-group">
+                <label for="role-port-direction">Direction</label>
+                <select id="role-port-direction">
+                    <option value="bidirectional">bidirectional</option>
+                    <option value="input">input</option>
+                    <option value="output">output</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="role-port-parent">Parent port</label>
+                <select id="role-port-parent">${renderPortParentOptions()}</select>
+            </div>
+            <div class="form-group">
+                <label for="role-port-description">Description</label>
+                <textarea id="role-port-description"></textarea>
+            </div>
+            <div class="form-group">
+                <label for="role-port-ttx">TTX</label>
+                <textarea id="role-port-ttx"></textarea>
+            </div>
+            <div class="role-port-actions">
+                <button type="button" onclick="saveRolePort()">Save port</button>
+                <button type="button" onclick="hideRolePortForm()">Cancel</button>
+            </div>
+        </div>
+    `;
+
+    if (!ports || ports.length === 0) {
+        return `
+            ${form}
+            <div class="info-message">У роли пока нет портов.</div>
+        `;
+    }
+
+    const rows = ports.map(port => `
+        <tr>
+            <td>${renderPortLabel(port)}</td>
+            <td>${escapeRoleDetailsHtml(port.direction)}</td>
+            <td>${escapeRoleDetailsHtml(port.description || '-')}</td>
+            <td>${escapeRoleDetailsHtml(port.ttx || '-')}</td>
+            <td class="role-actions">
+                <button type="button" onclick="editRolePort('${port.id}')">Edit</button>
+                <button type="button" class="danger-btn" onclick="deleteRolePort('${port.id}')">Delete</button>
+            </td>
+        </tr>
+    `).join('');
+
+    return `
+        ${form}
+        <table>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Direction</th>
+                    <th>Description</th>
+                    <th>TTX</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+        </table>
+    `;
+}
+
+function renderRoleDetails(role) {
+    const roleId = getRoleId();
+    const modulesHtml = (Array.isArray(role.modules) && role.modules.length > 0)
+        ? role.modules.map(m => `<li><a href="/basic_object/${m.id}">${escapeRoleDetailsHtml(m.name)}</a></li>`).join('')
+        : '<li>Нет связанных модулей</li>';
+
+    return `
+        <section class="role-card">
+            <div class="role-card__header">
+                <h2>${escapeRoleDetailsHtml(role.name)}</h2>
+                <div class="role-actions">
+                    <button type="button" id="role-edit-btn" onclick="toggleRoleEdit(true)">Edit</button>
+                    <button type="button" id="role-delete-btn" class="danger-btn" onclick="deleteRole()" style="display:none;">Delete</button>
+                    <button type="button" id="role-save-btn" onclick="saveRole()" style="display:none;">Save</button>
+                    <button type="button" id="role-cancel-btn" onclick="toggleRoleEdit(false)" style="display:none;">Cancel</button>
+                </div>
+            </div>
+            <table class="role-detail-table">
+                <tbody>
+                    <tr><th>ID</th><td>${escapeRoleDetailsHtml(role.id)}</td></tr>
+                    <tr><th>Name</th><td id="role-name-field">${escapeRoleDetailsHtml(role.name)}</td></tr>
+                    <tr><th>Description</th><td id="role-description-field">${escapeRoleDetailsHtml(role.description || '-')}</td></tr>
+                    <tr><th>Created</th><td>${role.created_ts ? new Date(role.created_ts).toLocaleString() : '-'}</td></tr>
+                </tbody>
+            </table>
+            <div id="role-edit-form" class="role-edit-form">
+                <div class="form-group">
+                    <label for="role-name-input">Name</label>
+                    <input id="role-name-input" type="text" value="${escapeRoleDetailsHtml(role.name)}">
+                </div>
+                <div class="form-group">
+                    <label for="role-description-input">Description</label>
+                    <textarea id="role-description-input">${escapeRoleDetailsHtml(role.description || '')}</textarea>
+                </div>
+            </div>
+        </section>
+
+        <section class="role-card">
+            <h2>Modules</h2>
+            <ul>${modulesHtml}</ul>
+        </section>
+
+        <section class="role-card">
+            <div class="role-card__header">
+                <h2>Ports</h2>
+                <button type="button" onclick="showRolePortForm()">Add port</button>
+            </div>
+            ${renderRolePorts(role.ports || [])}
+        </section>
+
+        <section class="role-card">
+            <h2>Streams</h2>
+            ${renderRoleStreams(role.stream_usages, roleId)}
+        </section>
+
+        <section class="role-card">
+            <h2>Linked Interfaces</h2>
+            <div id="role-linked-interfaces">Загрузка...</div>
+        </section>
+    `;
+}
+
+function showRolePortForm(port = null) {
+    const form = document.getElementById('role-port-form');
+    if (!form) return;
+
+    document.getElementById('role-port-id').value = port?.id || '';
+    document.getElementById('role-port-name').value = port?.name || '';
+    document.getElementById('role-port-direction').value = port?.direction || 'bidirectional';
+    document.getElementById('role-port-parent').innerHTML = renderPortParentOptions(port?.parent_id || null, port?.id || null);
+    document.getElementById('role-port-description').value = port?.description || '';
+    document.getElementById('role-port-ttx').value = port?.ttx || '';
+    form.hidden = false;
+}
+
+function hideRolePortForm() {
+    const form = document.getElementById('role-port-form');
+    if (!form) return;
+    form.hidden = true;
+}
+
+function editRolePort(portId) {
+    const port = getRolePorts().find(item => item.id === portId);
+    if (!port) {
+        alert('Порт не найден');
+        return;
+    }
+    showRolePortForm(port);
+}
+
+async function saveRolePort() {
+    const portId = document.getElementById('role-port-id').value;
+    const name = document.getElementById('role-port-name').value.trim();
+    const direction = document.getElementById('role-port-direction').value;
+    const parentId = document.getElementById('role-port-parent').value || null;
+    const description = document.getElementById('role-port-description').value.trim() || null;
+    const ttx = document.getElementById('role-port-ttx').value.trim() || null;
+
+    if (!name) {
+        alert('Название порта не может быть пустым');
+        return;
+    }
+
+    const url = portId
+        ? `/api/roles/${getRoleId()}/ports/${portId}`
+        : `/api/roles/${getRoleId()}/ports`;
+    const method = portId ? 'PATCH' : 'POST';
+
+    try {
+        const response = await fetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, direction, parent_id: parentId, description, ttx }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || response.status);
+        await loadRoleDetails();
+    } catch (error) {
+        alert(`Ошибка сохранения порта: ${error.message}`);
+    }
+}
+
+async function deleteRolePort(portId) {
+    const port = getRolePorts().find(item => item.id === portId);
+    if (!confirm(`Удалить порт "${port?.name || portId}"? Потоки останутся у роли без этого порта.`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/roles/${getRoleId()}/ports/${portId}`, { method: 'DELETE' });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || response.status);
+        await loadRoleDetails();
+    } catch (error) {
+        alert(`Ошибка удаления порта: ${error.message}`);
+    }
+}
+
+function toggleRoleEdit(enable) {
+    const form = document.getElementById('role-edit-form');
+    document.getElementById('role-edit-btn').style.display = enable ? 'none' : 'inline-block';
+    document.getElementById('role-delete-btn').style.display = enable ? 'inline-block' : 'none';
+    document.getElementById('role-save-btn').style.display = enable ? 'inline-block' : 'none';
+    document.getElementById('role-cancel-btn').style.display = enable ? 'inline-block' : 'none';
+    form.classList.toggle('active', enable);
+}
+
+async function saveRole() {
+    const name = document.getElementById('role-name-input').value.trim();
+    const description = document.getElementById('role-description-input').value.trim() || null;
+
+    if (!name) {
+        alert('Название роли не может быть пустым');
+        return;
+    }
+
+    const saveBtn = document.getElementById('role-save-btn');
+    saveBtn.disabled = true;
+
+    try {
+        const response = await fetch(`/api/roles/${getRoleId()}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, description }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || response.status);
+        await loadRoleDetails();
+    } catch (error) {
+        alert(`Ошибка сохранения роли: ${error.message}`);
+    } finally {
+        saveBtn.disabled = false;
+    }
+}
+
+async function deleteRole() {
+    const role = window.currentRoleData;
+    const roleName = role?.name || getRoleId();
+    if (!confirm(`Удалить роль "${roleName}" и все её связи?`)) {
+        return;
+    }
+
+    const deleteBtn = document.getElementById('role-delete-btn');
+    deleteBtn.disabled = true;
+
+    try {
+        const response = await fetch(`/api/roles/${getRoleId()}`, {
+            method: 'DELETE',
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || response.status);
+        window.location.href = '/roles';
+    } catch (error) {
+        alert(`Ошибка удаления роли: ${error.message}`);
+        deleteBtn.disabled = false;
+    }
+}
+
+async function loadRoleDetails() {
+    const container = document.getElementById('role-details');
+    container.innerHTML = '<div class="info-message">Загрузка...</div>';
+
+    try {
+        const response = await fetch(`/api/roles/${getRoleId()}`);
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || response.status);
+
+        window.currentRoleData = data;
+        document.getElementById('role-title').textContent = `Role: ${data.name}`;
+        document.getElementById('breadcrumb-role-name').textContent = data.name;
+        container.innerHTML = renderRoleDetails(data);
+        loadRoleLinkedInterfaces(data);
+    } catch (error) {
+        container.innerHTML = `<div class="error-message">Ошибка загрузки роли: ${escapeRoleDetailsHtml(error.message)}</div>`;
+    }
+}
+
+async function loadRoleLinkedInterfaces(role) {
+    const container = document.getElementById('role-linked-interfaces');
+    const ports = role.ports || [];
+    const moduleUsages = role.module_usages || [];
+    if (!container || ports.length === 0) {
+        if (container) container.innerHTML = '<div class="info-message">У этой роли нет портов.</div>';
+        return;
+    }
+    if (moduleUsages.length === 0) {
+        container.innerHTML = '<div class="info-message">Ни один модуль пока не играет эту роль в родительском модуле.</div>';
+        return;
+    }
+
+    try {
+        const usagesByChildId = {};
+        moduleUsages.forEach(usage => {
+            if (!usagesByChildId[usage.child_id]) {
+                usagesByChildId[usage.child_id] = {
+                    module: { id: usage.child_id, name: usage.child_name },
+                    parents: [],
+                };
+            }
+            usagesByChildId[usage.child_id].parents.push(usage.parent_name || usage.parent_id);
+        });
+
+        const moduleData = await Promise.all(Object.values(usagesByChildId).map(async usage => {
+            const module = usage.module;
+            const [ifacesRes, mappingsRes] = await Promise.all([
+                fetch(`/api/modules/${module.id}/interfaces`),
+                fetch(`/api/modules/${module.id}/interface-mappings`),
+            ]);
+            return {
+                module,
+                parents: usage.parents,
+                interfaces: ifacesRes.ok ? await ifacesRes.json() : [],
+                mappings: mappingsRes.ok ? await mappingsRes.json() : [],
+            };
+        }));
+
+        const rows = [];
+        moduleData.forEach(({ module, parents, interfaces, mappings }) => {
+            ports.forEach(port => {
+                const portMappings = mappings.filter(m => m.role_port_id === port.id);
+                const mappedInterfaceIds = new Set(portMappings.map(m => m.interface_id));
+                const linkedHtml = portMappings.length > 0
+                    ? portMappings.map(m => `
+                        <div style="display:flex;gap:6px;align-items:center;margin:2px 0;">
+                            <span>${escapeRoleDetailsHtml(m.interface_name || m.interface_id)}</span>
+                            <button type="button" class="danger-btn" onclick="unlinkRolePortInterface('${module.id}', '${m.id}')">Unlink</button>
+                        </div>
+                    `).join('')
+                    : '<span class="role-muted">Не связан</span>';
+                const available = interfaces.filter(iface => !mappedInterfaceIds.has(iface.id));
+                const actionHtml = available.length > 0
+                    ? `<select id="link-select-${module.id}-${port.id}">
+                            ${available.map(iface => `<option value="${iface.id}">${escapeRoleDetailsHtml(iface.name)}</option>`).join('')}
+                       </select>
+                       <button type="button" onclick="linkRolePortInterface('${module.id}', '${port.id}')">Link</button>`
+                    : '<span class="role-muted">Нет доступных интерфейсов</span>';
+                rows.push(`
+                <tr>
+                    <td>
+                        <a href="/basic_object/${module.id}">${escapeRoleDetailsHtml(module.name || module.id)}</a>
+                        <div class="role-muted">parents: ${escapeRoleDetailsHtml([...new Set(parents)].join(', '))}</div>
+                    </td>
+                    <td><strong>${escapeRoleDetailsHtml(port.name)}</strong></td>
+                    <td>${escapeRoleDetailsHtml(port.direction || '—')}</td>
+                    <td>${linkedHtml}</td>
+                    <td>${actionHtml}</td>
+                </tr>
+                `);
+            });
+        });
+
+        container.innerHTML = `
+            <table class="detail-table">
+                <thead>
+                    <tr>
+                        <th>Module</th>
+                        <th>Port</th>
+                        <th>Direction</th>
+                        <th>Linked interfaces</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>${rows.join('')}</tbody>
+            </table>
+        `;
+    } catch (error) {
+        container.innerHTML = `<div class="error-message">Ошибка загрузки: ${error.message}</div>`;
+    }
+}
+
+async function linkRolePortInterface(moduleId, portId) {
+    const select = document.getElementById(`link-select-${moduleId}-${portId}`);
+    const interfaceId = select?.value;
+    if (!interfaceId) return;
+
+    try {
+        const response = await fetch(`/api/modules/${moduleId}/interface-mappings`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ role_port_id: portId, interface_id: interfaceId }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || response.status);
+        await loadRoleDetails();
+    } catch (error) {
+        alert(`Ошибка привязки интерфейса: ${error.message}`);
+    }
+}
+
+async function unlinkRolePortInterface(moduleId, mappingId) {
+    try {
+        const response = await fetch(`/api/modules/${moduleId}/interface-mappings/${mappingId}`, { method: 'DELETE' });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || response.status);
+        await loadRoleDetails();
+    } catch (error) {
+        alert(`Ошибка отвязки интерфейса: ${error.message}`);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', loadRoleDetails);
+</script>
+{% endblock %}

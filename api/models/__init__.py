@@ -10,8 +10,12 @@ from .platform import Platform
 from .service import Service
 from .associations import module_platform
 from .associations import module_stream
+from .associations import module_role_stream
 from .associations import module_boundary
 from .associations import parent_child_module
 from .associations import module_role_assignment
+from .associations import parent_child_module_role_assignment
 from .module_role import ModuleRole
+from .role_port import RolePort
+from .interface_mapping import InterfaceMapping
 

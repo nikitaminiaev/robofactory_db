@@ -1,10 +1,11 @@
-from routes.freecad import load_freecad, freecad_actions
+from routes.freecad import load_freecad, freecad_actions, create_cad
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from routes import get_all_basic_objects, get_basic_object, create_basic_object
 from routes import websocket_routes, copy_module, module_versions, brep_files, cad_agent_proxy, module_files
-from routes import module_roles
+from routes import module_roles, module_streams
+from routes import module_interfaces
 import threading
 from service.web_soket_server import get_server_instance
 
@@ -18,6 +19,7 @@ app.include_router(get_basic_object.router)
 app.include_router(create_basic_object.router)
 app.include_router(load_freecad.router)
 app.include_router(freecad_actions.router)
+app.include_router(create_cad.router)
 app.include_router(websocket_routes.router)
 app.include_router(copy_module.router, prefix="/api")
 app.include_router(module_versions.router, prefix="/api")
@@ -25,6 +27,8 @@ app.include_router(brep_files.router, prefix="/api")
 app.include_router(cad_agent_proxy.router, prefix="/api")
 app.include_router(module_files.router, prefix="/api")
 app.include_router(module_roles.router, prefix="/api")
+app.include_router(module_streams.router, prefix="/api")
+app.include_router(module_interfaces.router)
 
 # Функция для запуска WebSocket-сервера в отдельном потоке
 def start_websocket_server_thread():
@@ -66,6 +70,16 @@ async def basic_object_page(request: Request):
 @app.get("/basic_object/{id}")
 async def basic_object_details(request: Request, id: str):
     return templates.TemplateResponse("basic_object_details.html", {"request": request, "id": id})
+
+
+@app.get("/roles")
+async def roles_page(request: Request):
+    return templates.TemplateResponse("role_search.html", {"request": request})
+
+
+@app.get("/roles/{role_id}")
+async def role_details_page(request: Request, role_id: str):
+    return templates.TemplateResponse("role_details.html", {"request": request, "role_id": role_id})
 
 
 @app.get("/git_history/{module_id}")

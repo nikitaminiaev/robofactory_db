@@ -103,6 +103,27 @@ function updateFreeCadButtonsVisibility() {
         }
     });
 
+    // Create CAD кнопки
+    document.querySelectorAll('.create-cad-btn').forEach(button => {
+        if (connected) {
+            button.style.display = 'inline-block';
+            applyFreeCadButtonStyle(button);
+
+            if (!button.hasAttribute('data-initialized')) {
+                button.setAttribute('data-initialized', 'true');
+
+                button.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const moduleId = this.getAttribute('data-id');
+                    const moduleName = this.getAttribute('data-name') || moduleId;
+                    createCadForModule(moduleId, moduleName);
+                });
+            }
+        } else {
+            button.style.display = 'none';
+        }
+    });
+
     // Кнопки действий FreeCAD на странице деталей (Save, To Supersystem, To Subsystem)
     document.querySelectorAll('.freecad-action-btn').forEach(el => {
         el.style.display = connected ? 'inline-block' : 'none';
@@ -111,6 +132,12 @@ function updateFreeCadButtonsVisibility() {
     // Разделитель между обычными кнопками и кнопками FreeCAD
     const sep = document.getElementById('freecad-btn-separator');
     if (sep) sep.style.display = connected ? 'inline-block' : 'none';
+    
+    // Кнопка перехода к модулю в хлебных крошках
+    const breadcrumbFreecad = document.getElementById('breadcrumb-freecad-container');
+    if (breadcrumbFreecad) {
+        breadcrumbFreecad.style.display = connected ? 'inline-flex' : 'none';
+    }
 
     // Wire-up кнопок действий (однократно)
     _initFreeCadActionButtons();
@@ -386,6 +413,26 @@ function showNotification(message, type = 'info') {
     }, 1000);
 }
 
+function createCadForModule(moduleId, moduleName) {
+    if (!serverRunning || connectedClientsCount === 0) {
+        showNotification('FreeCAD не подключён', 'error');
+        return;
+    }
+
+    showNotification(`Отправка команды Create CAD для модуля "${moduleName}"...`, 'info');
+
+    fetch(`/api/basic_object/${moduleId}/create_cad`, { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                showNotification(`CAD документ создаётся для "${moduleName}"`, 'success');
+            } else {
+                showNotification(data.detail || 'Ошибка при создании CAD', 'error');
+            }
+        })
+        .catch(err => showNotification(`Ошибка сети: ${err.message}`, 'error'));
+}
+
 function saveBrepToFreeCad(moduleId) {
     if (!serverRunning || connectedClientsCount === 0) {
         showNotification('FreeCAD не подключён', 'error');
@@ -464,4 +511,98 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Wire-up навигационных кнопок если они уже в DOM
     initLastNavButtons();
-}); 
+    
+    // Инициализация кнопки перехода к модулю в FreeCAD
+    initFreecadBreadcrumbButton();
+});
+
+// Инициализация кнопки перехода к модулю в FreeCAD из хлебных крошек
+function initFreecadBreadcrumbButton() {
+    const btn = document.getElementById('btn-go-to-freecad-module');
+    if (!btn) return;
+    
+    // При загрузке страницы один раз получаем текущий module_id из FreeCAD
+    fetchFreecadModuleIdOnce();
+    
+    btn.addEventListener('click', async function() {
+        try {
+            // Отправляем запрос на получение active_module_id через WebSocket
+            const response = await fetch('/api/websocket/send', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ "function_call": "get_active_module_id" })
+            });
+            
+            const data = await response.json();
+            
+            if (!data.success) {
+                showNotification('WebSocket сервер не запущен', 'error');
+                return;
+            }
+            
+            // Ждем немного чтобы получить ответ
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            // Проверяем статус сервера на наличие клиентов
+            const clientsRes = await fetch('/api/websocket/clients');
+            const clientsData = await clientsRes.json();
+            
+            if (clientsData.count === 0) {
+                showNotification('FreeCAD не подключен к WebSocket', 'error');
+                return;
+            }
+            
+            // Получаем историю сообщений чтобы найти ответ
+            const messagesRes = await fetch('/api/websocket/messages?limit=10');
+            const messagesData = await messagesRes.json();
+            
+            if (messagesData.messages && messagesData.messages.length > 0) {
+                // Ищем последнее сообщение с результатом от клиента (incoming)
+                const messages = messagesData.messages.reverse();
+                for (const msg of messages) {
+                    if (msg.direction === 'incoming' && msg.message) {
+                        try {
+                            const parsed = JSON.parse(msg.message);
+                            // Ищем function_response с result содержащим module_id
+                            if (parsed.function_response === 'get_active_module_id' && parsed.result && parsed.result.success) {
+                                const moduleId = parsed.result.module_id;
+                                if (moduleId) {
+                                    window.location.href = '/basic_object/' + moduleId;
+                                    return;
+                                }
+                            }
+                        } catch (e) {}
+                    }
+                }
+            }
+            
+            showNotification('Не удалось получить ID модуля из FreeCAD', 'error');
+            
+        } catch (err) {
+            showNotification('Ошибка: ' + err.message, 'error');
+        }
+    });
+}
+
+// Получает ID модуля из FreeCAD один раз при загрузке страницы
+async function fetchFreecadModuleIdOnce() {
+    try {
+        // Проверяем что сервер запущен и есть клиенты
+        const serverRes = await fetch('/api/websocket/status');
+        const serverData = await serverRes.json();
+        if (!serverData.running) return;
+        
+        const clientsRes = await fetch('/api/websocket/clients');
+        const clientsData = await clientsRes.json();
+        if (!clientsData.count || clientsData.count === 0) return;
+        
+        // Отправляем запрос
+        await fetch('/api/websocket/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ "function_call": "get_active_module_id" })
+        });
+    } catch (e) {
+        // Silent fail - кнопка просто не обновится
+    }
+} 
