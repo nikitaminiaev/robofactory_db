@@ -11,3 +11,5 @@ api/resources/*
 db/resources/*
 opencode.json
 .env
+/build/
+/dist/
