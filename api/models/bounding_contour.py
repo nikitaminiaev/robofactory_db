@@ -57,31 +57,43 @@ class BoundingContour(Base):
     def to_dict(self):
         # Читаем содержимое BREP файлов вместо возврата путей
         brep_files_content = {}
-        if self.brep_files:
-            for filename, relative_path in self.brep_files.items():
-                try:
-                    full_path = resolve_brep_absolute_path(relative_path)
-                    if full_path.exists():
-                        content = full_path.read_text()
-                        # Всегда возвращаем brep_string если файл существует
-                        if filename == 'brep_string':
-                            brep_files_content['path'] = str(full_path)
-                            brep_files_content['brep_string'] = content
-                        else:
-                            brep_files_content[filename] = content
-                    else:
-                        # Файл не существует - возвращаем только path
-                        if filename == 'brep_string':
-                            brep_files_content['path'] = str(full_path)
-                            # brep_string не записываем - файл не существует
-                        else:
-                            brep_files_content[filename] = ""
-                except Exception as e:
-                    if filename == 'brep_string':
-                        brep_files_content['path'] = None
-                    else:
-                        brep_files_content[filename] = ""
+        first_found_path = None
+        first_found_content = None
+        if not self.brep_files:
+            return self._as_dict_body(brep_files_content)
 
+        for filename, relative_path in self.brep_files.items():
+            try:
+                full_path = resolve_brep_absolute_path(relative_path)
+                content = full_path.read_text() if full_path.exists() else ""
+            except Exception:
+                full_path = None
+                content = ""
+
+            if filename == 'brep_string':
+                brep_files_content['path'] = str(full_path) if full_path else None
+                if content:
+                    brep_files_content['brep_string'] = content
+                continue
+
+            brep_files_content[filename] = content
+            # Модули, созданные через web-форму, хранят BREP под реальным
+            # именем файла — запоминаем первый прочитанный файл как фолбэк,
+            # чтобы клиенты всегда получали ключи brep_string/path.
+            if first_found_content is None and content and full_path:
+                first_found_path = str(full_path)
+                first_found_content = content
+
+        # Совместимость форматов: даже без ключа 'brep_string' в БД
+        # отдаём brep_string/path для первого существующего BREP файла.
+        if 'brep_string' not in brep_files_content and first_found_content:
+            brep_files_content['path'] = first_found_path
+            brep_files_content['brep_string'] = first_found_content
+
+        return self._as_dict_body(brep_files_content)
+
+    def _as_dict_body(self, brep_files_content):
+        """Собирает итоговый словарь контура с содержимым BREP файлов."""
         return {
             "id": str(self.id),
             "module_id": str(self.module_id) if self.module_id else None,
