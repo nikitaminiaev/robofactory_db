@@ -6,8 +6,9 @@ Comment[ru]=База данных робототехнических модул�
 Exec=robofactory-db
 Icon=robofactory-db
 Terminal=false
+StartupNotify=true
 Categories=Development;Database;Engineering;
-Actions=Stop;Status;UpdatePlugin;
+Actions=Stop;Status;UpdatePlugin;Uninstall;
 
 [Desktop Action Stop]
 Name=Stop
@@ -23,3 +24,8 @@ Exec=robofactory-db --status
 Name=Update FreeCAD plugin
 Name[ru]=Обновить плагин FreeCAD
 Exec=robofactory-db --update-plugin
+
+[Desktop Action Uninstall]
+Name=Uninstall
+Name[ru]=Удалить
+Exec=robofactory-db --uninstall
