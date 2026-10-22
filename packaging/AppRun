@@ -1,0 +1,767 @@
+#!/usr/bin/env bash
+# AppRun для AppImage RoboFactory DB.
+#
+# Команды:
+#   ./RoboFactory-DB-x86_64.AppImage              — запуск сервисов + открытие браузера
+#   ./RoboFactory-DB-x86_64.AppImage start        — то же самое
+#   ./RoboFactory-DB-x86_64.AppImage --stop        — остановка сервисов
+#   ./RoboFactory-DB-x86_64.AppImage --status      — статус (версия, контейнеры, API)
+#   ./RoboFactory-DB-x86_64.AppImage --update-plugin — переустановка PLMplugin в FreeCAD
+#   ./RoboFactory-DB-x86_64.AppImage --uninstall   — удаление сервисов (спросит про данные)
+#   ./RoboFactory-DB-x86_64.AppImage --no-browser  — запуск без открытия браузера
+#   ./RoboFactory-DB-x86_64.AppImage --gui / --no-gui — принудительно вкл/выкл окно прогресса
+#
+# Данные хранятся вне AppImage (AppImage монтируется read-only):
+#   ~/.local/share/robofactory-db/
+#     app/            — код приложения (обновляется при смене версии AppImage)
+#     data/storage/   — том postgres
+#     data/resources/ — BREP-файлы и git-репозитории модулей
+#     logs/app.log    — журнал запусков
+#
+# Порты настраиваются в app/.env: RF_API_PORT (18000), RF_DB_PORT (15433), RF_WS_PORT (18765).
+# Дефолты нестандартные (не 8000/5433/8765), чтобы не конфликтовать с dev-стеком;
+# если порт занят, при запуске автоматически подбирается свободный и сохраняется в .env.
+
+set -euo pipefail
+
+APP_TITLE="RoboFactory DB"
+DATA_ROOT="${XDG_DATA_HOME:-$HOME/.local/share}/robofactory-db"
+APP_DIR="$DATA_ROOT/app"
+DATA_DIR="$DATA_ROOT/data"
+LOG_DIR="$DATA_ROOT/logs"
+LOG_FILE="$LOG_DIR/app.log"
+LOCK_FILE="$DATA_ROOT/.app.lock"
+
+# Каталог FreeCAD Mod: env FREECAD_MOD_DIR приоритетнее кандидатов
+# (стандартный XDG, старый ~/.FreeCAD/Mod, Flatpak, Snap). Пусто — FreeCAD не найден.
+FREECAD_MOD_DIR=""
+PLUGIN_DST=""
+# Бэкапы хранятся ВНЕ FreeCAD Mod: FreeCAD загружает все каталоги с InitGui.py
+# из Mod/ как плагины — бэкап в Mod/ вызывает конфликт ('MyWorkbench' already exists)
+PLUGIN_BACKUP_DIR="$DATA_ROOT/plugin-backups"
+PLUGIN_BACKUP_KEEP=3
+
+COMPOSE_FILE="docker-compose.app.yaml"
+
+# Нестандартные дефолты: не занимаем 8000/5433/8765 (dev-стек и другие сервисы).
+DEFAULT_API_PORT=18000
+DEFAULT_DB_PORT=15433
+DEFAULT_WS_PORT=18765
+PORT_SCAN_RANGE=200
+
+ACTION="start"
+NO_BROWSER=0
+DETACHED=0
+WAS_UPDATED=0
+
+# --- окно прогресса ---
+GUI_ARG="auto"   # auto | 1 | 0
+GUI=0
+GUI_TOOL=""
+GUI_FIFO=""
+GUI_PID=""
+
+# --- uninstall ---
+PURGE_DATA=0
+KEEP_DATA=0
+
+# --- утилиты ---
+
+log_line() {
+    printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"
+}
+
+# При detached-запуске stdout уже перенаправлен в журнал — пишем в файл только один раз.
+say() {
+    log_line "$*"
+    gui_say "$*"
+    [ "$DETACHED" = "1" ] && return 0
+    log_line "$*" >>"$LOG_FILE" 2>/dev/null || true
+}
+
+notify() {
+    command -v notify-send >/dev/null 2>&1 || return 0
+    notify-send -a "$APP_TITLE" "$1" "$2" >/dev/null 2>&1 || true
+}
+
+die() {
+    say "ОШИБКА: $*"
+    gui_progress_stop
+    gui_error "Ошибка: $APP_TITLE" "$*"
+    notify "Ошибка: $APP_TITLE" "$*"
+    exit 1
+}
+
+self_dir() {
+    if [ -n "${APPDIR:-}" ]; then printf '%s\n' "$APPDIR"; return 0; fi
+    cd "$(dirname "$0")" && pwd
+}
+
+self_path() {
+    printf '%s\n' "${APPIMAGE:-$0}"
+}
+
+# --- GUI (zenity → kdialog → yad); нет дисплея/инструмента — тихий откат на notify-send ---
+
+has_display() {
+    [ -n "${DISPLAY:-}" ] || [ -n "${WAYLAND_DISPLAY:-}" ]
+}
+
+gui_tool() {
+    has_display || return 1
+    command -v zenity >/dev/null 2>&1 && { printf 'zenity\n'; return 0; }
+    command -v kdialog >/dev/null 2>&1 && { printf 'kdialog\n'; return 0; }
+    command -v yad >/dev/null 2>&1 && { printf 'yad\n'; return 0; }
+    return 1
+}
+
+init_gui() {
+    case "$GUI_ARG" in
+        1) GUI=1 ;;
+        0) GUI=0; return 0 ;;
+        *) if [ ! -t 1 ]; then GUI=1; else GUI=0; fi ;;
+    esac
+    [ "$GUI" = 1 ] || return 0
+    GUI_TOOL="$(gui_tool || true)"
+    [ -n "$GUI_TOOL" ] || GUI=0
+    return 0
+}
+
+# Окно «идёт установка». zenity/yad читают строки статуса из FIFO (fd 8) и закрываются
+# по EOF; kdialog D-Bus-прогрессбар не поддерживает поток текста — показываем как есть.
+gui_progress_start() {
+    [ "$GUI" = 1 ] && [ -n "$GUI_TOOL" ] || return 0
+    mkdir -p "$DATA_ROOT"
+    case "$GUI_TOOL" in
+        zenity)
+            GUI_FIFO="$(mktemp -u "$DATA_ROOT/.gui.XXXXXX")"
+            mkfifo "$GUI_FIFO"
+            zenity --progress --pulsate --no-cancel --auto-close \
+                --title="$APP_TITLE" --text="Идёт установка $APP_TITLE..." \
+                --width=460 <"$GUI_FIFO" 2>/dev/null &
+            GUI_PID=$!
+            exec 8>"$GUI_FIFO"
+            ;;
+        yad)
+            GUI_FIFO="$(mktemp -u "$DATA_ROOT/.gui.XXXXXX")"
+            mkfifo "$GUI_FIFO"
+            yad --progress --pulsate --no-buttons --auto-close \
+                --title="$APP_TITLE" --text="Идёт установка $APP_TITLE..." \
+                --width=460 <"$GUI_FIFO" 2>/dev/null &
+            GUI_PID=$!
+            exec 8>"$GUI_FIFO"
+            ;;
+        kdialog)
+            kdialog --title "$APP_TITLE" \
+                --progressbar "Идёт установка $APP_TITLE... Это может занять несколько минут." 0 \
+                >/dev/null 2>&1 &
+            GUI_PID=$!
+            ;;
+    esac
+    return 0
+}
+
+gui_say() {
+    [ -n "$GUI_FIFO" ] || return 0
+    printf '%s\n' "$*" >&8 2>/dev/null || true
+}
+
+gui_progress_stop() {
+    if [ -n "$GUI_FIFO" ]; then
+        exec 8>&- 2>/dev/null || true
+        rm -f "$GUI_FIFO" 2>/dev/null || true
+        GUI_FIFO=""
+    fi
+    if [ -n "$GUI_PID" ]; then
+        kill "$GUI_PID" 2>/dev/null || true
+        wait "$GUI_PID" 2>/dev/null || true
+        GUI_PID=""
+    fi
+    return 0
+}
+
+gui_info() {
+    [ "$GUI" = 1 ] && [ -n "$GUI_TOOL" ] || return 0
+    case "$GUI_TOOL" in
+        zenity) zenity --info --title="$1" --text="$2" --width=460 >/dev/null 2>&1 || true ;;
+        yad) yad --info --title="$1" --text="$2" --width=460 >/dev/null 2>&1 || true ;;
+        kdialog) kdialog --title "$1" --msgbox "$2" >/dev/null 2>&1 || true ;;
+    esac
+    return 0
+}
+
+gui_error() {
+    [ "$GUI" = 1 ] && [ -n "$GUI_TOOL" ] || return 0
+    case "$GUI_TOOL" in
+        zenity) zenity --error --title="$1" --text="$2" --width=460 >/dev/null 2>&1 || true ;;
+        yad) yad --error --title="$1" --text="$2" --width=460 >/dev/null 2>&1 || true ;;
+        kdialog) kdialog --title "$1" --error "$2" >/dev/null 2>&1 || true ;;
+    esac
+    return 0
+}
+
+# 0 — пользователь подтвердил; 1 — отказался/нет GUI
+gui_confirm() {
+    [ "$GUI" = 1 ] && [ -n "$GUI_TOOL" ] || return 1
+    case "$GUI_TOOL" in
+        zenity) zenity --question --title="$1" --text="$2" --width=460 \
+            --ok-label="Удалить" --cancel-label="Отмена" >/dev/null 2>&1 ;;
+        yad) yad --question --title="$1" --text="$2" \
+            --button="Отмена:1" --button="Удалить:0" >/dev/null 2>&1 ;;
+        kdialog) kdialog --title "$1" --yesno "$2" >/dev/null 2>&1 ;;
+    esac
+}
+
+detect_freecad_mod_dir() {
+    # Определяет каталог FreeCAD Mod (Linux): env → XDG → старый → flatpak → snap.
+    local xdg candidate
+    candidates=()
+
+    [ -n "${FREECAD_MOD_DIR:-}" ] && { printf '%s\n' "$FREECAD_MOD_DIR"; return 0; }
+
+    xdg="${XDG_DATA_HOME:-$HOME/.local/share}"
+    candidates=(
+        "$xdg/FreeCAD/Mod"
+        "$HOME/.FreeCAD/Mod"
+        "$HOME/.var/app/org.freecadweb.FreeCAD/data/FreeCAD/Mod"
+        "$HOME/snap/freecad/current/.local/share/FreeCAD/Mod"
+    )
+    for candidate in "${candidates[@]}"; do
+        [ -d "$candidate" ] || continue
+        printf '%s\n' "$candidate"
+        return 0
+    done
+    return 1
+}
+
+# --- блокировка одиночного запуска ---
+
+acquire_lock() {
+    mkdir -p "$DATA_ROOT"
+    exec 9>"$LOCK_FILE"
+    flock -n 9 || return 1
+    return 0
+}
+
+# --- docker/compose обёртки ---
+
+compose() {
+    (cd "$APP_DIR" && RF_DATA_DIR="$DATA_DIR" docker compose -f "$COMPOSE_FILE" "$@")
+}
+
+require_docker() {
+    command -v docker >/dev/null 2>&1 || die "docker не найден. Установите Docker: https://docs.docker.com/engine/install/"
+    docker info >/dev/null 2>&1 || die "docker недоступен. Нет прав? Выполните: sudo usermod -aG docker \$USER и перелогиньтесь"
+}
+
+require_installed() {
+    [ -f "$APP_DIR/$COMPOSE_FILE" ] || die "приложение ещё не установлено. Сначала выполните обычный запуск (start)."
+}
+
+port_busy() {
+    (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null || return 1
+    return 0
+}
+
+# Первый свободный порт, начиная с $1 (сканирует PORT_SCAN_RANGE вверх).
+find_free_port() {
+    local p="$1" max=$(( $1 + PORT_SCAN_RANGE ))
+    while [ "$p" -le "$max" ]; do
+        port_busy "$p" || { printf '%s\n' "$p"; return 0; }
+        p=$((p + 1))
+    done
+    return 1
+}
+
+# Устанавливает KEY=VALUE в $APP_DIR/.env (обновляет строку или дописывает).
+set_env_var() {
+    local key="$1" val="$2" tmp
+    [ -f "$APP_DIR/.env" ] || return 0
+    if grep -q "^$key=" "$APP_DIR/.env" 2>/dev/null; then
+        tmp="$(mktemp)"
+        while IFS= read -r line; do
+            case "$line" in
+                "$key"=*) printf '%s=%s\n' "$key" "$val" ;;
+                *) printf '%s\n' "$line" ;;
+            esac
+        done <"$APP_DIR/.env" >"$tmp"
+        mv "$tmp" "$APP_DIR/.env"
+    else
+        printf '%s=%s\n' "$key" "$val" >>"$APP_DIR/.env"
+    fi
+    return 0
+}
+
+api_up() {
+    curl -fsS -o /dev/null "http://localhost:${RF_API_PORT:-$DEFAULT_API_PORT}/" 2>/dev/null
+}
+
+read_env() {
+    local val
+    val="$(grep -E "^$1=" "$APP_DIR/.env" 2>/dev/null | tail -n 1 | cut -d= -f2- || true)"
+    printf '%s\n' "${val:-$2}"
+}
+
+load_ports() {
+    RF_API_PORT="$(read_env RF_API_PORT "$DEFAULT_API_PORT")"
+    RF_DB_PORT="$(read_env RF_DB_PORT "$DEFAULT_DB_PORT")"
+    RF_WS_PORT="$(read_env RF_WS_PORT "$DEFAULT_WS_PORT")"
+}
+
+# Разово переносим старые дефолты (8000/5433/8765), которые проставила ранняя версия
+# AppRun, на новые нестандартные. Пользовательские (не совпадающие) значения не трогаем.
+migrate_legacy_ports() {
+    [ "$RF_API_PORT" = "8000" ] && [ "$RF_DB_PORT" = "5433" ] && [ "$RF_WS_PORT" = "8765" ] || return 0
+    say "Перевожу дефолтные порты 8000/5433/8765 на нестандартные $DEFAULT_API_PORT/$DEFAULT_DB_PORT/$DEFAULT_WS_PORT"
+    set_env_var RF_API_PORT "$DEFAULT_API_PORT"
+    set_env_var RF_DB_PORT "$DEFAULT_DB_PORT"
+    set_env_var RF_WS_PORT "$DEFAULT_WS_PORT"
+    RF_API_PORT="$DEFAULT_API_PORT"
+    RF_DB_PORT="$DEFAULT_DB_PORT"
+    RF_WS_PORT="$DEFAULT_WS_PORT"
+    return 0
+}
+
+# --- установка/обновление кода ---
+
+prune_old_app_dirs() {
+    local stale
+    for stale in "$DATA_ROOT"/app.old-*; do
+        [ -d "$stale" ] || continue
+        rm -rf "$stale" 2>/dev/null || true
+    done
+}
+
+ensure_app_files() {
+    local src bundled_ver old_dir
+    src="$(self_dir)"
+    bundled_ver="$(cat "$src/VERSION" 2>/dev/null || echo unknown)"
+    BUNDLED_VER="$bundled_ver"
+
+    mkdir -p "$APP_DIR" "$DATA_DIR/storage" "$DATA_DIR/resources" "$LOG_DIR"
+    prune_old_app_dirs
+
+    [ "$bundled_ver" = "$(cat "$APP_DIR/VERSION" 2>/dev/null || true)" ] && [ -f "$APP_DIR/$COMPOSE_FILE" ] && return 0
+
+    say "Разворачиваю приложение v$bundled_ver в $APP_DIR ..."
+    rm -rf "$APP_DIR.tmp"
+    mkdir -p "$APP_DIR.tmp"
+    cp -a "$src/api" "$src/docker" "$src/$COMPOSE_FILE" "$src/VERSION" "$APP_DIR.tmp/"
+    [ -f "$src/.env.example" ] && cp -a "$src/.env.example" "$APP_DIR.tmp/"
+    [ -d "$src/PLMplugin" ] && cp -a "$src/PLMplugin" "$APP_DIR.tmp/"
+    [ -f "$APP_DIR/.env" ] && cp -a "$APP_DIR/.env" "$APP_DIR.tmp/.env"
+
+    # прежний каталог переименовывается (rename работает и с файлами root), удаление — не фатально
+    old_dir="$APP_DIR.old-$(date '+%Y%m%d-%H%M%S')"
+    [ -d "$APP_DIR" ] && mv "$APP_DIR" "$old_dir"
+    mv "$APP_DIR.tmp" "$APP_DIR"
+    rm -rf "$old_dir" 2>/dev/null \
+        || say "ПРЕДУПРЕЖДЕНИЕ: не удалось удалить $old_dir (файлы root из __pycache__). Удалите: docker run --rm -v '$old_dir:/w' alpine sh -c 'find /w -mindepth 1 -delete' && rmdir '$old_dir'"
+
+    [ -f "$APP_DIR/.env" ] || cp "$APP_DIR/.env.example" "$APP_DIR/.env"
+    grep -q '^RF_API_PORT=' "$APP_DIR/.env" 2>/dev/null \
+        || printf '\n# Порты AppImage-сборки (нестандартные дефолты; при конфликте подбираются автоматически)\nRF_API_PORT=%s\nRF_DB_PORT=%s\nRF_WS_PORT=%s\n' \
+            "$DEFAULT_API_PORT" "$DEFAULT_DB_PORT" "$DEFAULT_WS_PORT" >>"$APP_DIR/.env"
+    WAS_UPDATED=1
+    say "Код приложения развёрнут (v$bundled_ver)"
+}
+
+ensure_images() {
+    [ -f "$APP_DIR/.build-$BUNDLED_VER" ] && return 0
+    say "Сборка docker-образов (при первом запуске занимает несколько минут)..."
+    compose build || die "не удалось собрать docker-образы. Подробности: docker compose -f $APP_DIR/$COMPOSE_FILE build"
+    touch "$APP_DIR/.build-$BUNDLED_VER"
+}
+
+# Разрешает конфликты имён контейнеров/сетей, оставшиеся от прошлых (в т.ч. параллельных) запусков:
+# docker допускает дубликаты имён сетей, из-за чего compose падает с "network ... is ambiguous".
+recover_conflicts() {
+    [ -n "$(compose ps -q 2>/dev/null || true)" ] && return 0
+    say "Проверяю конфликты docker (контейнеры/сети)..."
+    compose down --remove-orphans >/dev/null 2>&1 || true
+    local c net nets
+    for c in rf-app-db rf-app-api; do
+        docker rm -f "$c" >/dev/null 2>&1 || true
+    done
+    nets="$(docker network ls --filter 'name=^robofactory-app_default$' -q 2>/dev/null || true)"
+    for net in $nets; do
+        docker network rm "$net" >/dev/null 2>&1 || true
+    done
+}
+
+# Занятые порты не роняют запуск: подбираем свободные и сохраняем их в .env.
+ensure_ports_free() {
+    [ -n "$(compose ps -q 2>/dev/null || true)" ] && return 0
+    local var p newp changed=0
+    for var in RF_API_PORT RF_DB_PORT RF_WS_PORT; do
+        p="${!var}"
+        port_busy "$p" || continue
+        newp="$(find_free_port $((p + 1)) || true)"
+        [ -n "$newp" ] || die "порты $p–$((p + PORT_SCAN_RANGE)) заняты. Измените порты вручную в $APP_DIR/.env (RF_API_PORT / RF_DB_PORT / RF_WS_PORT)"
+        say "Порт $p занят — использую свободный $newp ($var)"
+        set_env_var "$var" "$newp"
+        eval "$var=$newp"
+        changed=1
+    done
+    [ "$changed" = 1 ] && say "Порты сохранены в $APP_DIR/.env"
+    return 0
+}
+
+# --- ожидание готовности и миграции ---
+
+wait_db() {
+    local i=30
+    until compose exec -T db pg_isready -U admin >/dev/null 2>&1; do
+        i=$((i - 1))
+        [ "$i" -le 0 ] && die "PostgreSQL не стартовал за 30 сек. Лог: docker logs rf-app-db"
+        sleep 1
+    done
+}
+
+# script_location в alembic.ini относительный: запускать из /usr/src/api/database,
+# иначе alembic ищет миграции в /usr/src/api/alembic. PYTHONPATH нужен для импортов в env.py.
+run_migrations() {
+    compose exec -T api sh -c "cd /usr/src/api/database && PYTHONPATH=/usr/src/api alembic upgrade head" \
+        >>"$LOG_FILE" 2>&1 \
+        || say "ПРЕДУПРЕЖДЕНИЕ: миграции Alembic не применились (возможно, уже применены)"
+}
+
+wait_api() {
+    local i=60 url="http://localhost:${RF_API_PORT}/"
+    until curl -fsS -o /dev/null "$url" 2>/dev/null; do
+        i=$((i - 1))
+        [ "$i" -le 0 ] && die "API не ответил за 60 сек. Лог: docker logs rf-app-api"
+        sleep 1
+    done
+}
+
+# --- PLMplugin ---
+
+plugin_up_to_date() {
+    [ -f "$PLUGIN_DST/.rf-version" ] || return 1
+    [ "$(cat "$PLUGIN_DST/.rf-version" 2>/dev/null || true)" = "$BUNDLED_VER" ]
+}
+
+count_plugin_backups() {
+    ls -1d "$PLUGIN_BACKUP_DIR"/PLMplugin.bak-* 2>/dev/null | wc -l
+}
+
+prune_plugin_backups() {
+    local oldest
+    while [ "$(count_plugin_backups)" -gt "$PLUGIN_BACKUP_KEEP" ]; do
+        oldest="$(ls -1d "$PLUGIN_BACKUP_DIR"/PLMplugin.bak-* 2>/dev/null | head -n 1)"
+        [ -z "$oldest" ] && break
+        rm -rf "$oldest"
+    done
+}
+
+# Нефатально: при нехватке прав (владелец root) предупреждаем, но не роняем запуск.
+backup_old_plugin() {
+    [ -d "$PLUGIN_DST" ] || return 0
+    if [ ! -w "$(dirname "$PLUGIN_DST")" ] || [ ! -w "$PLUGIN_DST" ]; then
+        say "ПРЕДУПРЕЖДЕНИЕ: нет прав на $PLUGIN_DST (владелец root?). Исправьте: sudo chown -R \$USER '$FREECAD_MOD_DIR'"
+        return 1
+    fi
+    mkdir -p "$PLUGIN_BACKUP_DIR" || return 1
+    local bak="$PLUGIN_BACKUP_DIR/PLMplugin.bak-$(date '+%Y%m%d-%H%M%S')"
+    if mv "$PLUGIN_DST" "$bak" 2>/dev/null; then
+        say "Прежняя версия плагина сохранена: $bak"
+        prune_plugin_backups
+        return 0
+    fi
+    if cp -a "$PLUGIN_DST" "$bak" 2>/dev/null && rm -rf "$PLUGIN_DST" 2>/dev/null; then
+        say "Прежняя версия плагина сохранена (копированием): $bak"
+        prune_plugin_backups
+        return 0
+    fi
+    say "ПРЕДУПРЕЖДЕНИЕ: не удалось сохранить прежний плагин ($PLUGIN_DST)"
+    return 1
+}
+
+install_plugin() {
+    local src="$APP_DIR/PLMplugin"
+    [ -d "$src" ] || { say "PLMplugin не входит в сборку — установка пропущена"; return 0; }
+    [ -n "$FREECAD_MOD_DIR" ] || {
+        say "FreeCAD не найден (нет ~/.local/share/FreeCAD/Mod и др.) — плагин не установлен. Задайте путь при запуске: FREECAD_MOD_DIR=/путь/до/Mod <AppImage> start"
+        return 0
+    }
+    plugin_up_to_date && { say "PLMplugin уже актуален (v$BUNDLED_VER)"; return 0; }
+
+    backup_old_plugin || true
+
+    if [ -d "$PLUGIN_DST" ]; then
+        cp -a "$src/." "$PLUGIN_DST/" 2>/dev/null || {
+            say "ПРЕДУПРЕЖДЕНИЕ: нет прав записать PLMplugin в $PLUGIN_DST. Исправьте владельца: sudo chown -R \$USER '$FREECAD_MOD_DIR'"
+            return 1
+        }
+    else
+        cp -a "$src" "$PLUGIN_DST" 2>/dev/null || {
+            say "ПРЕДУПРЕЖДЕНИЕ: нет прав записать PLMplugin в $PLUGIN_DST. Исправьте владельца: sudo chown -R \$USER '$FREECAD_MOD_DIR'"
+            return 1
+        }
+    fi
+    echo "$BUNDLED_VER" >"$PLUGIN_DST/.rf-version" 2>/dev/null || true
+    say "PLMplugin установлен в $PLUGIN_DST (v$BUNDLED_VER)"
+    notify "PLMplugin" "Плагин FreeCAD обновлён до v$BUNDLED_VER"
+    return 0
+}
+
+install_plugin_safe() {
+    install_plugin || say "ПРЕДУПРЕЖДЕНИЕ: PLMplugin не установлен (см. сообщения выше). Приложение работает без плагина."
+}
+
+# --- действия ---
+
+open_in_browser() {
+    [ "$NO_BROWSER" = "1" ] && return 0
+    command -v xdg-open >/dev/null 2>&1 || return 0
+    xdg-open "http://localhost:${RF_API_PORT}/" >/dev/null 2>&1 || true
+}
+
+# При обновлении кода контейнеры пересоздаются: bind mount привязан к inode каталога,
+# и живой контейнер продолжил бы работать со свапнутым (удалённым) деревом app.
+compose_up() {
+    if [ "$WAS_UPDATED" = "1" ]; then
+        compose up -d --force-recreate
+        return 0
+    fi
+    compose up -d
+}
+
+# Вызывается, когда flock занят: другой процесс уже запускает приложение.
+handle_already_running() {
+    load_ports
+    if api_up; then
+        say "Приложение уже запущено — открываю web-интерфейс"
+        open_in_browser
+        gui_info "$APP_TITLE" "$(printf 'Приложение уже работает.\n\nWeb-интерфейс: http://localhost:%s/' "$RF_API_PORT")"
+    else
+        say "Запуск уже выполняется другим процессом — подождите"
+        gui_info "$APP_TITLE" "Установка/запуск уже идёт. Подождите несколько минут и повторите."
+    fi
+    return 0
+}
+
+cmd_start() {
+    require_docker
+    gui_progress_start
+    ensure_app_files
+    load_ports
+    migrate_legacy_ports
+    recover_conflicts
+    ensure_ports_free
+    ensure_images
+    say "Запускаю контейнеры (rf-app-db, rf-app-api)..."
+    compose_up
+    wait_db
+    run_migrations
+    wait_api
+    install_plugin_safe
+    open_in_browser
+    say "Готово! Web-интерфейс: http://localhost:${RF_API_PORT}/"
+    gui_progress_stop
+    gui_info "Готово: $APP_TITLE" "$(printf 'Web-интерфейс: http://localhost:%s/\n\nЖурнал: %s' "$RF_API_PORT" "$LOG_FILE")"
+    notify "Готово: $APP_TITLE" "Web-интерфейс: http://localhost:${RF_API_PORT}/"
+}
+
+cmd_stop() {
+    require_docker
+    require_installed
+    compose down
+    say "Сервисы остановлены"
+    gui_info "$APP_TITLE" "Сервисы остановлены"
+    notify "$APP_TITLE" "Сервисы остановлены"
+    return 0
+}
+
+cmd_status() {
+    local out
+    out="$(
+        printf '%s %s\n' "$APP_TITLE" "${BUNDLED_VER:-?}"
+        echo "Каталог данных: $DATA_ROOT"
+        if [ ! -f "$APP_DIR/$COMPOSE_FILE" ]; then
+            echo "Статус: не установлен (первый запуск ещё не выполнялся)"
+        else
+            echo "Контейнеры:"
+            compose ps 2>/dev/null || true
+            load_ports
+            if api_up; then
+                echo "API: доступен на http://localhost:${RF_API_PORT}/"
+            else
+                echo "API: недоступен на http://localhost:${RF_API_PORT}/"
+            fi
+            if [ -f "$PLUGIN_DST/.rf-version" ]; then
+                echo "PLMplugin: установлен (v$(cat "$PLUGIN_DST/.rf-version"))"
+            else
+                echo "PLMplugin: не установлен"
+            fi
+        fi
+    )"
+    printf '%s\n' "$out"
+    gui_info "$APP_TITLE — статус" "$out"
+    return 0
+}
+
+cmd_update_plugin() {
+    gui_progress_start
+    ensure_app_files
+    load_ports
+    install_plugin_safe
+    gui_progress_stop
+    gui_info "$APP_TITLE" "PLMplugin обновлён (если найден FreeCAD)."
+    return 0
+}
+
+# --- удаление ---
+
+# 0 — удалять данные; 1 — оставить
+confirm_uninstall_data() {
+    [ "$PURGE_DATA" = 1 ] && return 0
+    [ "$KEEP_DATA" = 1 ] && return 1
+    if [ "$GUI" = 1 ] && [ -n "$GUI_TOOL" ]; then
+        gui_confirm "Удаление $APP_TITLE" "$(printf 'Удалить также каталог данных?\n\n%s\n\n(база PostgreSQL, BREP-файлы, git-репозитории модулей — восстановить нельзя)' "$DATA_ROOT")"
+        return $?
+    fi
+    local ans=""
+    printf 'Удалить каталог данных %s (БД + BREP + git)? [y/N] ' "$DATA_ROOT" >&2
+    read -r ans || true
+    case "$ans" in
+        [yYдД]*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+remove_app_containers() {
+    command -v docker >/dev/null 2>&1 || { say "Docker не найден — пропускаю удаление контейнеров"; return 0; }
+    docker info >/dev/null 2>&1 || { say "Docker недоступен — пропускаю удаление контейнеров"; return 0; }
+
+    say "Останавливаю и удаляю контейнеры..."
+    [ -f "$APP_DIR/$COMPOSE_FILE" ] && compose down --remove-orphans >/dev/null 2>&1 || true
+    local c net nets
+    for c in rf-app-db rf-app-api; do
+        docker rm -f "$c" >/dev/null 2>&1 || true
+    done
+    nets="$(docker network ls --filter 'name=^robofactory-app_default$' -q 2>/dev/null || true)"
+    for net in $nets; do
+        docker network rm "$net" >/dev/null 2>&1 || true
+    done
+    say "Удаляю docker-образ приложения..."
+    docker image rm robofactory-app-api >/dev/null 2>&1 || true
+    return 0
+}
+
+remove_plugin() {
+    [ -d "$PLUGIN_DST" ] || return 0
+    [ -f "$PLUGIN_DST/.rf-version" ] || {
+        say "PLMplugin в $PLUGIN_DST не ставился приложением — оставляю"
+        return 0
+    }
+    say "Удаляю PLMplugin из FreeCAD: $PLUGIN_DST"
+    rm -rf "$PLUGIN_DST" 2>/dev/null \
+        || say "ПРЕДУПРЕЖДЕНИЕ: не удалось удалить плагин (права). Удалите вручную: sudo rm -rf '$PLUGIN_DST'"
+    return 0
+}
+
+cmd_uninstall() {
+    local remove_data=0 app_path
+    confirm_uninstall_data && remove_data=1
+
+    gui_progress_start
+    remove_app_containers
+    remove_plugin
+    rm -rf "$PLUGIN_BACKUP_DIR" 2>/dev/null || true
+
+    if [ "$remove_data" = 1 ]; then
+        say "Удаляю каталог данных: $DATA_ROOT"
+        rm -rf "$DATA_ROOT" 2>/dev/null \
+            || say "ПРЕДУПРЕЖДЕНИЕ: не удалось полностью удалить $DATA_ROOT (права root?). Удалите: sudo rm -rf '$DATA_ROOT'"
+    else
+        say "Каталог данных сохранён: $DATA_ROOT"
+    fi
+
+    app_path="$(self_path)"
+    say "Файл AppImage можно удалить вручную: $app_path"
+
+    gui_progress_stop
+    if [ "$remove_data" = 1 ]; then
+        gui_info "Удаление завершено" "$(printf '%s удалён вместе с данными.\n\nФайл AppImage можно удалить: %s' "$APP_TITLE" "$app_path")"
+    else
+        gui_info "Удаление завершено" "$(printf '%s: сервисы удалены, данные сохранены в %s.' "$APP_TITLE" "$DATA_ROOT")"
+    fi
+    notify "$APP_TITLE" "Удаление завершено"
+    return 0
+}
+
+usage() {
+    cat <<EOF
+$APP_TITLE (AppImage)
+
+Использование:
+  (без аргументов) | start   — запуск сервисов и открытие web-интерфейса
+  --no-browser               — запуск без открытия браузера
+  --gui | --no-gui           — принудительно вкл/выкл окно прогресса
+  --stop | stop              — остановка сервисов
+  --status | status          — статус приложения
+  --update-plugin            — переустановка PLMplugin в FreeCAD
+  --uninstall                — удаление сервисов (спросит про каталог данных)
+  --uninstall --purge        — удаление вместе с каталогом данных (БД, BREP, git)
+  --uninstall --keep-data    — удаление сервисов, данные сохранить
+
+Если AppImage не запускается из-за отсутствия libfuse2:
+  ./$(basename "$(self_path)") --appimage-extract-and-run start
+EOF
+}
+
+run_detached() {
+    nohup "$(self_path)" start --detached >>"$LOG_FILE" 2>&1 &
+    notify "Запуск: $APP_TITLE" "Сервисы запускаются, подождите..."
+    echo "Запускается в фоне. Журнал: $LOG_FILE"
+    exit 0
+}
+
+parse_args() {
+    local arg
+    [ $# -eq 0 ] && return 0
+    for arg in "$@"; do
+        case "$arg" in
+            start|"") ;;
+            stop|--stop) ACTION="stop" ;;
+            status|--status) ACTION="status" ;;
+            update-plugin|--update-plugin) ACTION="update-plugin" ;;
+            uninstall|--uninstall) ACTION="uninstall" ;;
+            --purge) PURGE_DATA=1 ;;
+            --keep-data) KEEP_DATA=1 ;;
+            --no-browser) NO_BROWSER=1 ;;
+            --gui) GUI_ARG=1 ;;
+            --no-gui) GUI_ARG=0 ;;
+            --detached) DETACHED=1 ;;
+            help|--help|-h) ACTION="help" ;;
+            *) printf 'Неизвестный аргумент: %s\n\n' "$arg" >&2; ACTION="help"; return 0 ;;
+        esac
+    done
+}
+
+main() {
+    parse_args "$@"
+    mkdir -p "$LOG_DIR"
+    BUNDLED_VER="$(cat "$(self_dir)/VERSION" 2>/dev/null || echo unknown)"
+    FREECAD_MOD_DIR="$(detect_freecad_mod_dir || true)"
+    PLUGIN_DST="$FREECAD_MOD_DIR/PLMplugin"
+    init_gui
+
+    case "$ACTION" in
+        start|update-plugin)
+            # двойной клик в файловом менеджере — без терминала: уходим в фон, пишем в журнал
+            if [ ! -t 1 ] && [ "$DETACHED" = "0" ]; then run_detached; fi
+            # защита от параллельных запусков (лечит конфликты контейнеров/сетей)
+            acquire_lock || { handle_already_running; return 0; }
+            if [ "$ACTION" = "update-plugin" ]; then cmd_update_plugin; else cmd_start; fi
+            ;;
+        uninstall) cmd_uninstall ;;
+        stop) cmd_stop ;;
+        status) cmd_status ;;
+        help) usage ;;
+    esac
+}
+
+main "$@"

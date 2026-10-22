@@ -1,0 +1,31 @@
+[Desktop Entry]
+Type=Application
+Name=RoboFactory DB
+Comment=Robotic modules database: API + PostgreSQL + FreeCAD PLMplugin
+Comment[ru]=База данных робототехнических модулей: API + PostgreSQL + плагин FreeCAD
+Exec=robofactory-db
+Icon=robofactory-db
+Terminal=false
+StartupNotify=true
+Categories=Development;Database;Engineering;
+Actions=Stop;Status;UpdatePlugin;Uninstall;
+
+[Desktop Action Stop]
+Name=Stop
+Name[ru]=Остановить
+Exec=robofactory-db --stop
+
+[Desktop Action Status]
+Name=Status
+Name[ru]=Статус
+Exec=robofactory-db --status
+
+[Desktop Action UpdatePlugin]
+Name=Update FreeCAD plugin
+Name[ru]=Обновить плагин FreeCAD
+Exec=robofactory-db --update-plugin
+
+[Desktop Action Uninstall]
+Name=Uninstall
+Name[ru]=Удалить
+Exec=robofactory-db --uninstall
